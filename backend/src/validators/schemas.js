@@ -1,0 +1,274 @@
+const Joi = require('joi');
+
+const login = Joi.object({
+  email: Joi.string().email().required(),
+  password: Joi.string().required(),
+});
+
+const refresh = Joi.object({
+  refreshToken: Joi.string().optional(),
+});
+
+const otpSend = Joi.object({
+  phone: Joi.string().required(),
+});
+
+const otpVerify = Joi.object({
+  phone: Joi.string().required(),
+  code: Joi.string().length(6).required(),
+});
+
+const createUser = Joi.object({
+  name: Joi.string().required(),
+  email: Joi.string().email().required(),
+  password: Joi.string().min(8).required(),
+  phone: Joi.string().required(),
+  role: Joi.string().hex().length(24).required(),
+  permissionIds: Joi.array().items(Joi.string().hex().length(24)).optional(),
+});
+
+const updateUser = Joi.object({
+  name: Joi.string(),
+  email: Joi.string().email(),
+  phone: Joi.string(),
+  isActive: Joi.boolean(),
+  fcmToken: Joi.string().allow('', null),
+  password: Joi.string().min(8),
+}).min(1);
+
+const userPermissions = Joi.object({
+  permissionIds: Joi.array().items(Joi.string().hex().length(24)).required(),
+});
+
+const createRole = Joi.object({
+  name: Joi.string().required(),
+  description: Joi.string().allow(''),
+  permissionIds: Joi.array().items(Joi.string().hex().length(24)).required(),
+});
+
+const sessionBody = Joi.object({
+  name: Joi.string().required(),
+  startDate: Joi.date().required(),
+  endDate: Joi.date().required(),
+  isActive: Joi.boolean(),
+});
+
+const classBody = Joi.object({
+  name: Joi.string().required(),
+  session: Joi.string().hex().length(24).required(),
+  classTeacher: Joi.string().hex().length(24).allow(null),
+  order: Joi.number(),
+});
+
+const sectionBody = Joi.object({
+  name: Joi.string().required(),
+  class: Joi.string().hex().length(24).required(),
+  teacher: Joi.string().hex().length(24).allow(null),
+  maxStudents: Joi.number(),
+});
+
+const subjectBody = Joi.object({
+  name: Joi.string().required(),
+  code: Joi.string().required(),
+  class: Joi.string().hex().length(24).required(),
+  teacher: Joi.string().hex().length(24).allow(null),
+  totalMarks: Joi.number(),
+  passingMarks: Joi.number(),
+});
+
+const registerStudent = Joi.object({
+  studentName: Joi.string().required(),
+  fatherName: Joi.string().required(),
+  motherName: Joi.string().allow(''),
+  cnicOrBForm: Joi.string().required(),
+  contactNumber: Joi.string().required(),
+  desiredClass: Joi.string().hex().length(24).required(),
+  previousSchool: Joi.string().allow(''),
+  dateOfBirth: Joi.date().required(),
+  gender: Joi.string().valid('male', 'female', 'other').required(),
+  address: Joi.string().allow(''),
+  session: Joi.string().hex().length(24).required(),
+});
+
+const activateStudent = Joi.object({
+  sectionId: Joi.string().hex().length(24).required(),
+  classId: Joi.string().hex().length(24).optional(),
+  parentName: Joi.string().required(),
+  parentEmail: Joi.string().email().required(),
+  parentPhone: Joi.string().required(),
+  parentPassword: Joi.string().min(8).optional(),
+  studentPassword: Joi.string().min(8).optional(),
+  admissionFeeAmount: Joi.number().optional(),
+  paymentDate: Joi.date().optional(),
+  paymentMethod: Joi.string().optional(),
+  receiptNumber: Joi.string().optional(),
+});
+
+const studentStatus = Joi.object({
+  status: Joi.string().valid('pending_fee', 'active', 'inactive', 'expelled', 'rejected').required(),
+});
+
+const markAttendance = Joi.object({
+  classId: Joi.string().hex().length(24).required(),
+  sectionId: Joi.string().hex().length(24).required(),
+  date: Joi.date().required(),
+  entries: Joi.array()
+    .items(
+      Joi.object({
+        studentId: Joi.string().hex().length(24).required(),
+        status: Joi.string().valid('present', 'absent', 'leave', 'late').required(),
+        reason: Joi.string().allow(''),
+      })
+    )
+    .min(1)
+    .required(),
+});
+
+const attendanceCorrect = Joi.object({
+  status: Joi.string().valid('present', 'absent', 'leave', 'late').required(),
+  reason: Joi.string().allow(''),
+});
+
+const feeStructureBody = Joi.object({
+  name: Joi.string().required(),
+  class: Joi.string().hex().length(24).required(),
+  session: Joi.string().hex().length(24).required(),
+  type: Joi.string().valid('monthly', 'one_time', 'annual').required(),
+  amount: Joi.number().required(),
+  dueDay: Joi.number().min(1).max(28),
+  finePerDay: Joi.number().min(0),
+  isActive: Joi.boolean(),
+});
+
+const feeVoucherGenerate = Joi.object({
+  month: Joi.number().min(1).max(12),
+  year: Joi.number(),
+  sessionId: Joi.string().hex().length(24).optional(),
+  sync: Joi.boolean(),
+});
+
+const feePay = Joi.object({
+  paymentMethod: Joi.string().valid('cash', 'bank_transfer', 'online').required(),
+});
+
+const examBody = Joi.object({
+  title: Joi.string().required(),
+  type: Joi.string().required(),
+  class: Joi.string().hex().length(24).required(),
+  session: Joi.string().hex().length(24).required(),
+  startDate: Joi.date().required(),
+  endDate: Joi.date().required(),
+  dateSheet: Joi.array().optional(),
+});
+
+const examMarks = Joi.object({
+  marks: Joi.array()
+    .items(
+      Joi.object({
+        studentId: Joi.string().hex().length(24).required(),
+        subjectMarks: Joi.array()
+          .items(
+            Joi.object({
+              subject: Joi.string().hex().length(24).required(),
+              obtained: Joi.number().required(),
+              total: Joi.number().required(),
+              grade: Joi.string().allow(''),
+              remarks: Joi.string().allow(''),
+            })
+          )
+          .required(),
+        proofImages: Joi.array().items(Joi.string()).optional(),
+      })
+    )
+    .required(),
+});
+
+const announcementBody = Joi.object({
+  title: Joi.string().required(),
+  body: Joi.string().required(),
+  type: Joi.string().valid('holiday', 'fee_reminder', 'test_schedule', 'event', 'urgent', 'general'),
+  targetAudience: Joi.string().valid('all', 'class', 'section', 'teachers', 'parents'),
+  targetClass: Joi.string().hex().length(24).allow(null),
+  targetSection: Joi.string().hex().length(24).allow(null),
+  isPinned: Joi.boolean(),
+  publishedAt: Joi.date().allow(null),
+  expiresAt: Joi.date().allow(null),
+});
+
+const assignmentBody = Joi.object({
+  title: Joi.string().required(),
+  description: Joi.string().allow(''),
+  subject: Joi.string().hex().length(24).required(),
+  class: Joi.string().hex().length(24).required(),
+  section: Joi.string().hex().length(24).allow(null),
+  dueDate: Joi.date().required(),
+  totalMarks: Joi.number().allow(null),
+});
+
+const assignmentSubmit = Joi.object({
+  fileUrl: Joi.string().uri().required(),
+});
+
+const conversationBody = Joi.object({
+  type: Joi.string().valid('direct', 'class_group', 'subject_group', 'teacher_group', 'staff_group').required(),
+  participantIds: Joi.array().items(Joi.string().hex().length(24)).min(2).required(),
+  name: Joi.string().when('type', {
+    is: Joi.string().valid('class_group', 'subject_group', 'teacher_group', 'staff_group'),
+    then: Joi.required(),
+    otherwise: Joi.optional(),
+  }),
+  classId: Joi.string().hex().length(24).allow(null),
+  subjectId: Joi.string().hex().length(24).allow(null),
+});
+
+const messageBody = Joi.object({
+  type: Joi.string().valid('text', 'image', 'file', 'voice_note', 'system').default('text'),
+  content: Joi.string().allow(''),
+  fileUrl: Joi.string().uri().allow('', null),
+  fileName: Joi.string().allow('', null),
+});
+
+const timetableBody = Joi.object({
+  class: Joi.string().hex().length(24).required(),
+  section: Joi.string().hex().length(24).required(),
+  session: Joi.string().hex().length(24).required(),
+  schedule: Joi.array().required(),
+  effectiveFrom: Joi.date().required(),
+  isActive: Joi.boolean(),
+});
+
+const readMessages = Joi.object({
+  messageIds: Joi.array().items(Joi.string().hex().length(24)).min(1).required(),
+});
+
+module.exports = {
+  login,
+  refresh,
+  otpSend,
+  otpVerify,
+  createUser,
+  updateUser,
+  userPermissions,
+  createRole,
+  sessionBody,
+  classBody,
+  sectionBody,
+  subjectBody,
+  registerStudent,
+  activateStudent,
+  studentStatus,
+  markAttendance,
+  attendanceCorrect,
+  feeStructureBody,
+  feeVoucherGenerate,
+  feePay,
+  examBody,
+  examMarks,
+  announcementBody,
+  assignmentBody,
+  assignmentSubmit,
+  conversationBody,
+  messageBody,
+  timetableBody,
+  readMessages,
+};

@@ -137,34 +137,39 @@ function backendActionsToPermLevel(actions: string[]): PermLevel {
   return "none";
 }
 
+function emptyPanelMatrix(): Record<ModuleKey, PermLevel> {
+  const o = {} as Record<ModuleKey, PermLevel>;
+  (Object.keys(DEFAULT_PERMISSIONS.admin) as ModuleKey[]).forEach((k) => {
+    o[k] = "none";
+  });
+  return o;
+}
+
+/**
+ * Combine default/local role matrix with modulePermissions from `/auth/me`.
+ * When the API sends real module rows, the menu is built from that payload only (no extra modules from local defaults).
+ * When the payload is empty, keep `rolePerms` (defaults + admin localStorage matrix).
+ */
 export function applyBackendModulePermissions(
   rolePerms: Record<ModuleKey, PermLevel>,
   backendPerms?: Record<string, string[]>,
 ): Record<ModuleKey, PermLevel> {
   if (!backendPerms || typeof backendPerms !== "object") return rolePerms;
-  const next: Record<ModuleKey, PermLevel> = {
-    dashboard: rolePerms.dashboard ?? "full",
-    users: "none",
-    students: "none",
-    attendance: "none",
-    timetable: "none",
-    assignments: "none",
-    exams: "none",
-    fees: "none",
-    salary: "none",
-    library: "none",
-    chat: "none",
-    announcements: "none",
-    reports: "none",
-    datasheets: "none",
-    settings: "none",
-    permissions: "none",
-    "permission-catalog": "none",
-  };
+
+  const hasExplicitBackend = Object.entries(backendPerms).some(
+    ([, actions]) => Array.isArray(actions) && actions.length > 0,
+  );
+  if (!hasExplicitBackend) return rolePerms;
+
+  const next: Record<ModuleKey, PermLevel> = emptyPanelMatrix();
 
   Object.entries(backendPerms).forEach(([moduleName, actions]) => {
     const key = BACKEND_MODULE_KEY_MAP[moduleName];
-    if (!key || !Array.isArray(actions) || actions.length === 0) return;
+    if (!key || !Array.isArray(actions)) return;
+    if (actions.length === 0) {
+      next[key] = "none";
+      return;
+    }
     const level = backendActionsToPermLevel(actions);
     if (level !== "none") next[key] = level;
   });

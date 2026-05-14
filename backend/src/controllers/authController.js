@@ -25,13 +25,20 @@ function toPlainModulePermissions(modulePermissions) {
   return {};
 }
 
+function hasExplicitModulePermissions(plain) {
+  return Object.values(plain).some(
+    (actions) => Array.isArray(actions) && actions.length > 0,
+  );
+}
+
+/** Session module map for the panel: role baseline, unless the user has their own module rows (then use user only — no union with role). */
 function collectSessionModulePermissions(user) {
   const userModulePermissions = toPlainModulePermissions(user.modulePermissions);
   const roleModulePermissions = toPlainModulePermissions(user.role?.modulePermissions);
-  if (Object.keys(userModulePermissions).length === 0) {
-    return roleModulePermissions;
+  if (hasExplicitModulePermissions(userModulePermissions)) {
+    return userModulePermissions;
   }
-  return { ...roleModulePermissions, ...userModulePermissions };
+  return roleModulePermissions;
 }
 
 function issueTokens(user) {

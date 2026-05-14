@@ -1,13 +1,13 @@
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Store, useStore } from "@/lib/store";
-import { canWrite, PermLevel } from "@/lib/permissions";
+import { ModuleActionCaps, PermLevel } from "@/lib/permissions";
 import { useToast } from "@/hooks/use-toast";
 
-const ExamsModule = ({ perm }: { perm: PermLevel }) => {
+const ExamsModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActionCaps }) => {
   const exams = useStore(() => Store.listExams());
   const students = useStore(() => Store.listStudents());
-  const writable = canWrite(perm);
+  const canEditMarks = caps.canEdit;
   const { toast } = useToast();
   const studentName = (id: string) => students.find((s) => s.id === id)?.name ?? "—";
 
@@ -35,7 +35,7 @@ const ExamsModule = ({ perm }: { perm: PermLevel }) => {
                   <td className="px-4 py-3 font-medium text-primary">{studentName(e.studentId)}</td>
                   <td className="px-4 py-3">{e.subject}</td>
                   <td className="px-4 py-3">
-                    {writable ? (
+                    {canEditMarks ? (
                       <Input type="number" className="h-8 w-24" value={e.marks}
                         onChange={(ev) => setMarks(e.id, Number(ev.target.value))}
                         onBlur={() => toast({ title: "Marks saved" })} />

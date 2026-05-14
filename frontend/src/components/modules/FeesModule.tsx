@@ -1,13 +1,13 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Store, useStore } from "@/lib/store";
-import { canCRUD, PermLevel } from "@/lib/permissions";
+import { ModuleActionCaps, PermLevel } from "@/lib/permissions";
 import { useToast } from "@/hooks/use-toast";
 
-const FeesModule = ({ perm }: { perm: PermLevel }) => {
+const FeesModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActionCaps }) => {
   const fees = useStore(() => Store.listFees());
   const students = useStore(() => Store.listStudents());
-  const writable = canCRUD(perm);
+  const canCollect = caps.canEdit;
   const { toast } = useToast();
   const studentName = (id: string) => students.find((s) => s.id === id)?.name ?? "—";
 
@@ -39,7 +39,7 @@ const FeesModule = ({ perm }: { perm: PermLevel }) => {
                 <th className="text-left px-4 py-3">Amount</th>
                 <th className="text-left px-4 py-3">Status</th>
                 <th className="text-left px-4 py-3 hidden sm:table-cell">Paid On</th>
-                {writable && <th className="px-4 py-3"></th>}
+                {canCollect && <th className="px-4 py-3"></th>}
               </tr>
             </thead>
             <tbody>
@@ -52,7 +52,7 @@ const FeesModule = ({ perm }: { perm: PermLevel }) => {
                     <span className={`text-xs font-semibold rounded-full px-2 py-0.5 ${f.status === "paid" ? "bg-accent/15 text-accent" : "bg-destructive/15 text-destructive"}`}>{f.status}</span>
                   </td>
                   <td className="px-4 py-3 hidden sm:table-cell text-muted-foreground">{f.paidOn || "—"}</td>
-                  {writable && (
+                  {canCollect && (
                     <td className="px-4 py-3 text-right">
                       {f.status === "due" && <Button size="sm" variant="hero" onClick={() => collect(f.id)}>Collect</Button>}
                     </td>

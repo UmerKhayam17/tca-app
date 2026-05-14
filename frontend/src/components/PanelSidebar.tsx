@@ -29,7 +29,7 @@ const PanelSidebar = ({ user }: { user: SessionUser }) => {
   const HeadIcon = head.Icon;
   const { perms } = usePermissions();
   const rolePerms = applyBackendModulePermissions(perms[user.role], user.modulePermissions);
-  const items = buildMenu(rolePerms);
+  const items = buildMenu(rolePerms, user.modulePermissions);
   const rootPath = panelPathFor(user.role);
 
   return (

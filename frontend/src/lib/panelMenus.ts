@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { Role } from "./auth";
 import {
-  MODULES, ModuleKey, ModuleDef, PermLevel, canRead,
+  MODULES, ModuleKey, ModuleDef, PermLevel, resolveModuleCaps,
 } from "./permissions";
 
 export const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -30,11 +30,15 @@ export const roleMeta: Record<Role, {
   student:    { title: "Student Panel",       accentLabel: "My Learning",       Icon: School },
 };
 
-/** Build the visible menu for a role given its current permission map. */
+/** Build the visible menu for a role given its current permission map and optional session module actions. */
 export const buildMenu = (
   rolePerms: Record<ModuleKey, PermLevel>,
+  backendModulePerms?: Record<string, string[]>,
 ): MenuItem[] =>
-  MODULES.filter((m) => m.key === "dashboard" || canRead(rolePerms[m.key]))
+  MODULES.filter((m) => {
+    if (m.key === "dashboard") return true;
+    return resolveModuleCaps(m.key, rolePerms[m.key], backendModulePerms).canView;
+  })
     .map((m) => ({ ...m, Icon: ICONS[m.icon] || LayoutDashboard }));
 
 export const findModule = (slug: string | undefined): ModuleDef | undefined =>

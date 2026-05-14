@@ -3,23 +3,28 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { Store, useStore, newId, Student } from "@/lib/store";
-import { canCRUD, PermLevel } from "@/lib/permissions";
+import { ModuleActionCaps, PermLevel } from "@/lib/permissions";
 import { useToast } from "@/hooks/use-toast";
 
 const empty: Student = { id: "", name: "", class: "", rollNo: "", guardian: "", phone: "" };
 
-const StudentsModule = ({ perm }: { perm: PermLevel }) => {
+const StudentsModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActionCaps }) => {
   const students = useStore(() => Store.listStudents());
-  const writable = canCRUD(perm);
+  const anyWrite = caps.canCreate || caps.canEdit || caps.canDelete;
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Student>(empty);
   const [query, setQuery] = useState("");
   const { toast } = useToast();
 
   const save = () => {
+    if (editing.id) {
+      if (!caps.canEdit) return;
+    } else if (!caps.canCreate) {
+      return;
+    }
     if (!editing.name.trim()) return;
     const list = Store.listStudents();
     if (editing.id) {
@@ -45,11 +50,13 @@ const StudentsModule = ({ perm }: { perm: PermLevel }) => {
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-4">
       <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
         <Input placeholder="Search students..." value={query} onChange={(e) => setQuery(e.target.value)} className="max-w-md" />
-        {writable && (
+        {(caps.canCreate || caps.canEdit) && (
           <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button variant="hero" onClick={() => setEditing(empty)}><Plus className="h-4 w-4" /> Add Student</Button>
-            </DialogTrigger>
+            {caps.canCreate ? (
+              <Button variant="hero" onClick={() => { setEditing(empty); setOpen(true); }}>
+                <Plus className="h-4 w-4" /> Add Student
+              </Button>
+            ) : null}
             <DialogContent>
               <DialogHeader><DialogTitle>{editing.id ? "Edit" : "Add"} Student</DialogTitle></DialogHeader>
               <div className="grid grid-cols-2 gap-3">
@@ -75,7 +82,7 @@ const StudentsModule = ({ perm }: { perm: PermLevel }) => {
                 <th className="text-left font-medium px-4 py-3 hidden sm:table-cell">Roll</th>
                 <th className="text-left font-medium px-4 py-3 hidden md:table-cell">Guardian</th>
                 <th className="text-left font-medium px-4 py-3 hidden md:table-cell">Phone</th>
-                {writable && <th className="px-4 py-3"></th>}
+                {anyWrite && <th className="px-4 py-3"></th>}
               </tr>
             </thead>
             <tbody>
@@ -86,10 +93,14 @@ const StudentsModule = ({ perm }: { perm: PermLevel }) => {
                   <td className="px-4 py-3 hidden sm:table-cell">{s.rollNo}</td>
                   <td className="px-4 py-3 hidden md:table-cell">{s.guardian}</td>
                   <td className="px-4 py-3 hidden md:table-cell">{s.phone}</td>
-                  {writable && (
+                  {anyWrite && (
                     <td className="px-4 py-3 text-right whitespace-nowrap">
-                      <Button size="sm" variant="ghost" onClick={() => { setEditing(s); setOpen(true); }}><Pencil className="h-4 w-4" /></Button>
-                      <Button size="sm" variant="ghost" onClick={() => remove(s.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                      {caps.canEdit && (
+                        <Button size="sm" variant="ghost" onClick={() => { setEditing(s); setOpen(true); }}><Pencil className="h-4 w-4" /></Button>
+                      )}
+                      {caps.canDelete && (
+                        <Button size="sm" variant="ghost" onClick={() => remove(s.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                      )}
                     </td>
                   )}
                 </tr>
@@ -101,7 +112,7 @@ const StudentsModule = ({ perm }: { perm: PermLevel }) => {
           </table>
         </div>
       </Card>
-      {!writable && <p className="text-xs text-muted-foreground">Read-only view based on your role permissions.</p>}
+      {!anyWrite && <p className="text-xs text-muted-foreground">Read-only view based on your role permissions.</p>}
     </div>
   );
 };

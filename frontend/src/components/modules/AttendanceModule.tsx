@@ -1,15 +1,15 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Store, useStore, newId } from "@/lib/store";
-import { canWrite, PermLevel } from "@/lib/permissions";
+import { ModuleActionCaps, PermLevel } from "@/lib/permissions";
 import { useToast } from "@/hooks/use-toast";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-const AttendanceModule = ({ perm }: { perm: PermLevel }) => {
+const AttendanceModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActionCaps }) => {
   const students = useStore(() => Store.listStudents());
   const attendance = useStore(() => Store.listAttendance());
-  const writable = canWrite(perm);
+  const canMark = caps.canCreate || caps.canEdit;
   const { toast } = useToast();
 
   const todayMap = new Map(attendance.filter((a) => a.date === today()).map((a) => [a.studentId, a]));
@@ -47,7 +47,7 @@ const AttendanceModule = ({ perm }: { perm: PermLevel }) => {
                 <th className="text-left px-4 py-3">Student</th>
                 <th className="text-left px-4 py-3">Class</th>
                 <th className="text-left px-4 py-3">Status</th>
-                {writable && <th className="text-right px-4 py-3">Mark</th>}
+                {canMark && <th className="text-right px-4 py-3">Mark</th>}
               </tr>
             </thead>
             <tbody>
@@ -64,7 +64,7 @@ const AttendanceModule = ({ perm }: { perm: PermLevel }) => {
                         cur === "leave" ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
                       }`}>{cur || "unmarked"}</span>
                     </td>
-                    {writable && (
+                    {canMark && (
                       <td className="px-4 py-3 text-right whitespace-nowrap space-x-1">
                         <Button size="sm" variant={cur === "present" ? "hero" : "outline"} onClick={() => mark(s.id, "present")}>P</Button>
                         <Button size="sm" variant={cur === "absent" ? "hero" : "outline"} onClick={() => mark(s.id, "absent")}>A</Button>

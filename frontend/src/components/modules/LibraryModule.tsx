@@ -6,19 +6,19 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Plus } from "lucide-react";
 import { Store, useStore, newId, Book } from "@/lib/store";
-import { canCRUD, PermLevel } from "@/lib/permissions";
+import { ModuleActionCaps, PermLevel } from "@/lib/permissions";
 import { useToast } from "@/hooks/use-toast";
 
 const empty: Book = { id: "", title: "", author: "", copies: 1, available: 1 };
 
-const LibraryModule = ({ perm }: { perm: PermLevel }) => {
+const LibraryModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActionCaps }) => {
   const books = useStore(() => Store.listBooks());
-  const writable = canCRUD(perm);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Book>(empty);
   const { toast } = useToast();
 
   const save = () => {
+    if (!caps.canCreate) return;
     if (!editing.title.trim()) return;
     Store.saveBooks([{ ...editing, id: newId() }, ...Store.listBooks()]);
     toast({ title: "Book added" });
@@ -41,7 +41,7 @@ const LibraryModule = ({ perm }: { perm: PermLevel }) => {
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-4">
-      {writable && (
+      {caps.canCreate && (
         <div className="flex justify-end">
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild><Button variant="hero"><Plus className="h-4 w-4" /> Add Book</Button></DialogTrigger>
@@ -64,7 +64,7 @@ const LibraryModule = ({ perm }: { perm: PermLevel }) => {
             <div className="font-semibold text-primary">{b.title}</div>
             <div className="text-xs text-muted-foreground">by {b.author}</div>
             <div className="text-sm">Available: <span className="font-semibold text-accent">{b.available}</span> / {b.copies}</div>
-            {writable && (
+            {caps.canEdit && (
               <div className="flex gap-2 pt-1">
                 <Button size="sm" variant="outline" className="flex-1" onClick={() => issue(b.id)} disabled={b.available === 0}>Issue</Button>
                 <Button size="sm" variant="outline" className="flex-1" onClick={() => ret(b.id)} disabled={b.available === b.copies}>Return</Button>

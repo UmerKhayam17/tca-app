@@ -14,7 +14,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Pencil } from "lucide-react";
-import { canCRUD, PermLevel } from "@/lib/permissions";
+import { ModuleActionCaps, PermLevel } from "@/lib/permissions";
 import { useToast } from "@/hooks/use-toast";
 import {
   fetchAllUsers,
@@ -63,12 +63,12 @@ function groupCatalogByModule(rows: PermissionDefinition[]): Record<string, Perm
   }, {});
 }
 
-const PermissionsModule = ({ perm }: { perm: PermLevel }) => {
-  const writable = canCRUD(perm);
+const PermissionsModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActionCaps }) => {
+  const canEditMatrix = caps.canEdit;
   const { toast } = useToast();
   const { user: session } = useAuth();
   const qc = useQueryClient();
-  useStaffRealtime(writable);
+  useStaffRealtime(canEditMatrix);
 
   const { data: users = [], isLoading: usersLoading } = useQuery({
     queryKey: ALL_USERS_QUERY,
@@ -93,6 +93,7 @@ const PermissionsModule = ({ perm }: { perm: PermLevel }) => {
   const [modulePerms, setModulePerms] = useState<Record<string, string[]>>({});
 
   const openEdit = (u: UserWithAccess) => {
+    if (!canEditMatrix) return;
     setEditing(u);
     const ids = new Set<string>();
     (u.permissions ?? []).forEach((p) => {
@@ -120,6 +121,7 @@ const PermissionsModule = ({ perm }: { perm: PermLevel }) => {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      if (!canEditMatrix) throw new Error("Not allowed.");
       if (!editing) throw new Error("No user selected");
       const id = editing._id;
       const ids = [...apiPermIds];
@@ -187,19 +189,19 @@ const PermissionsModule = ({ perm }: { perm: PermLevel }) => {
                 <th className="text-left font-medium px-4 py-3">Role</th>
                 <th className="text-left font-medium px-4 py-3 min-w-[200px]">API permissions</th>
                 <th className="text-left font-medium px-4 py-3">Modules</th>
-                {writable ? <th className="text-right font-medium px-4 py-3 w-24">Actions</th> : null}
+                {canEditMatrix ? <th className="text-right font-medium px-4 py-3 w-24">Actions</th> : null}
               </tr>
             </thead>
             <tbody>
               {usersLoading ? (
                 <tr>
-                  <td colSpan={writable ? 6 : 5} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={canEditMatrix ? 6 : 5} className="px-4 py-8 text-center text-muted-foreground">
                     Loading…
                   </td>
                 </tr>
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={writable ? 6 : 5} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={canEditMatrix ? 6 : 5} className="px-4 py-8 text-center text-muted-foreground">
                     No users found.
                   </td>
                 </tr>
@@ -213,7 +215,7 @@ const PermissionsModule = ({ perm }: { perm: PermLevel }) => {
                       {apiPermissionSummary(u)}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{moduleSummary(u)}</td>
-                    {writable ? (
+                    {canEditMatrix ? (
                       <td className="px-4 py-3 text-right whitespace-nowrap">
                         <Button
                           size="sm"

@@ -1,13 +1,13 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Store, useStore } from "@/lib/store";
-import { PermLevel, PERM_RANK } from "@/lib/permissions";
+import { ModuleActionCaps, PermLevel } from "@/lib/permissions";
 import { useToast } from "@/hooks/use-toast";
 
-const SalaryModule = ({ perm }: { perm: PermLevel }) => {
+const SalaryModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActionCaps }) => {
   const salary = useStore(() => Store.listSalary());
   const staff = useStore(() => Store.listStaff());
-  const canProcess = PERM_RANK[perm] >= PERM_RANK.process;
+  const canProcess = caps.canEdit;
   const { toast } = useToast();
   const staffName = (id: string) => staff.find((s) => s.id === id)?.name ?? "—";
 

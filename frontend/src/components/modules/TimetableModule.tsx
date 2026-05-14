@@ -1,7 +1,9 @@
 import { Card } from "@/components/ui/card";
 import { Store, useStore } from "@/lib/store";
 
-const TimetableModule = () => {
+import { ModuleActionCaps } from "@/lib/permissions";
+
+const TimetableModule = ({ caps }: { caps: ModuleActionCaps }) => {
   const rows = useStore(() => Store.listTimetable());
   const days = ["Mon", "Tue", "Wed", "Thu", "Fri"];
   const periods = Array.from(new Set(rows.map((r) => r.period))).sort();
@@ -12,7 +14,12 @@ const TimetableModule = () => {
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6">
       <Card className="overflow-hidden">
-        <div className="px-4 py-3 border-b border-border font-semibold text-primary">Class 10-A — Weekly Timetable</div>
+        <div className="px-4 py-3 border-b border-border font-semibold text-primary flex items-center justify-between gap-2">
+          <span>Class 10-A — Weekly Timetable</span>
+          {!caps.canEdit && caps.canView ? (
+            <span className="text-xs font-normal text-muted-foreground">Read-only</span>
+          ) : null}
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-secondary/50 text-muted-foreground">

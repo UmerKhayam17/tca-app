@@ -123,18 +123,113 @@ export const BACKEND_MODULE_KEY_MAP: Record<string, ModuleKey> = {
   user: "users",
 };
 
-function backendActionsToPermLevel(actions: string[]): PermLevel {
-  const set = new Set(actions.filter(Boolean).map((a) => String(a).toLowerCase()));
-  if (set.has("create") || set.has("edit") || set.has("delete") || set.has("publish") || set.has("process") || set.has("generate") || set.has("record") || set.has("correct") || set.has("submit") || set.has("activate") || set.has("suspend")) {
-    return "crud";
+const PANEL_MODULE_TO_BACKEND_KEY: Partial<Record<ModuleKey, string>> = (() => {
+  const m: Partial<Record<ModuleKey, string>> = {};
+  (Object.entries(BACKEND_MODULE_KEY_MAP) as [string, ModuleKey][]).forEach(([backendKey, panelKey]) => {
+    m[panelKey] = backendKey;
+  });
+  return m;
+})();
+
+/** Fine-grained UI gates from backend `modulePermissions` action lists or from coarse `PermLevel` defaults. */
+export interface ModuleActionCaps {
+  canView: boolean;
+  canCreate: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
+  /** Chat: send messages (backend action `participate`). */
+  canParticipate: boolean;
+}
+
+export function emptyActionCaps(): ModuleActionCaps {
+  return {
+    canView: false,
+    canCreate: false,
+    canEdit: false,
+    canDelete: false,
+    canParticipate: false,
+  };
+}
+
+export function sessionHasExplicitModulePayload(
+  backendPerms?: Record<string, string[]>,
+): boolean {
+  if (!backendPerms || typeof backendPerms !== "object") return false;
+  return Object.values(backendPerms).some(
+    (actions) => Array.isArray(actions) && actions.length > 0,
+  );
+}
+
+/** Map Mongo action strings to UI capabilities (matrix toggles are independent). */
+export function capsFromBackendActions(actions: string[]): ModuleActionCaps {
+  const s = new Set((actions || []).map((a) => String(a).toLowerCase()));
+  const has = (x: string) => s.has(x);
+  const canParticipate = has("participate");
+  const canCreate = has("create") || has("generate") || has("publish");
+  const canEdit =
+    has("edit")
+    || has("correct")
+    || has("record")
+    || has("mark")
+    || has("grade")
+    || has("process")
+    || has("submit")
+    || has("activate")
+    || has("suspend");
+  const canDelete = has("delete");
+  const canView =
+    has("view")
+    || canParticipate
+    || canCreate
+    || canEdit
+    || canDelete;
+  return { canView, canCreate, canEdit, canDelete, canParticipate };
+}
+
+/** When there is no per-action payload, infer caps from the legacy level matrix. */
+export function capsFromPermLevel(p: PermLevel): ModuleActionCaps {
+  if (!p || p === "none") return emptyActionCaps();
+  if (p === "full" || p === "crud") {
+    return { canView: true, canCreate: true, canEdit: true, canDelete: true, canParticipate: true };
   }
-  if (set.has("mark") || set.has("grade")) {
-    return "crud";
+  if (p === "view") {
+    return { canView: true, canCreate: false, canEdit: false, canDelete: false, canParticipate: false };
   }
-  if (set.has("view") || set.has("participate")) {
-    return "view";
+  if (p === "mark") {
+    return { canView: true, canCreate: false, canEdit: true, canDelete: false, canParticipate: false };
   }
-  return "none";
+  if (p === "grade") {
+    return { canView: true, canCreate: true, canEdit: true, canDelete: false, canParticipate: false };
+  }
+  if (p === "process") {
+    return { canView: true, canCreate: false, canEdit: true, canDelete: false, canParticipate: false };
+  }
+  return emptyActionCaps();
+}
+
+/** Minimal `PermLevel` for routing / coarse checks; use `ModuleActionCaps` for buttons. */
+export function permLevelFromActionCaps(caps: ModuleActionCaps): PermLevel {
+  if (!caps.canView) return "none";
+  if (caps.canDelete) return "crud";
+  if (caps.canCreate || caps.canEdit || caps.canParticipate) return "mark";
+  return "view";
+}
+
+export function resolveModuleCaps(
+  moduleKey: ModuleKey,
+  rolePermLevel: PermLevel,
+  backendPerms?: Record<string, string[]>,
+): ModuleActionCaps {
+  const explicit = sessionHasExplicitModulePayload(backendPerms);
+  const backendKey = PANEL_MODULE_TO_BACKEND_KEY[moduleKey];
+  if (explicit && backendKey !== undefined && backendPerms) {
+    if (Object.prototype.hasOwnProperty.call(backendPerms, backendKey)) {
+      const arr = backendPerms[backendKey];
+      return capsFromBackendActions(Array.isArray(arr) ? arr : []);
+    }
+    return emptyActionCaps();
+  }
+  return capsFromPermLevel(rolePermLevel);
 }
 
 function emptyPanelMatrix(): Record<ModuleKey, PermLevel> {
@@ -170,7 +265,8 @@ export function applyBackendModulePermissions(
       next[key] = "none";
       return;
     }
-    const level = backendActionsToPermLevel(actions);
+    const caps = capsFromBackendActions(actions);
+    const level = permLevelFromActionCaps(caps);
     if (level !== "none") next[key] = level;
   });
 

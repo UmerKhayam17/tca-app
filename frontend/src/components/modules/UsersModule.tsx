@@ -12,7 +12,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Plus, Pencil, UserX, ImageIcon } from "lucide-react";
-import { canCRUD, PermLevel } from "@/lib/permissions";
+import { ModuleActionCaps, PermLevel } from "@/lib/permissions";
 import { useToast } from "@/hooks/use-toast";
 import {
   emptyUserForm,
@@ -145,11 +145,11 @@ const STAFF_QUERY = ["staff"] as const;
 const ROLES_QUERY = ["staffRoles"] as const;
 const REGISTRY_QUERY = ["moduleRegistry"] as const;
 
-const UsersModule = ({ perm }: { perm: PermLevel }) => {
-  const writable = canCRUD(perm);
+const UsersModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActionCaps }) => {
+  const anyWrite = caps.canCreate || caps.canEdit || caps.canDelete;
   const { toast } = useToast();
   const qc = useQueryClient();
-  useStaffRealtime(writable);
+  useStaffRealtime(anyWrite);
 
   const { data: staff = [], isLoading: staffLoading } = useQuery({
     queryKey: STAFF_QUERY,
@@ -178,6 +178,8 @@ const UsersModule = ({ perm }: { perm: PermLevel }) => {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      if (mode === "create" && !caps.canCreate) throw new Error("You do not have permission to create staff.");
+      if (mode === "edit" && !caps.canEdit) throw new Error("You do not have permission to edit staff.");
       const fields = visibleFormFields(mode);
       for (const f of fields) {
         const v = (form[f.key] || "").trim();
@@ -237,7 +239,10 @@ const UsersModule = ({ perm }: { perm: PermLevel }) => {
   });
 
   const deactivateMutation = useMutation({
-    mutationFn: (id: string) => updateStaffUser(id, { isActive: false }),
+    mutationFn: (id: string) => {
+      if (!caps.canEdit) throw new Error("Not allowed.");
+      return updateStaffUser(id, { isActive: false });
+    },
     onSuccess: () => {
       toast({ title: "Staff member deactivated" });
       void qc.invalidateQueries({ queryKey: STAFF_QUERY });
@@ -259,12 +264,14 @@ const UsersModule = ({ perm }: { perm: PermLevel }) => {
   };
 
   const openCreate = () => {
+    if (!caps.canCreate) return;
     setMode("create");
     clearFormState();
     setOpen(true);
   };
 
   const openEdit = (u: StaffUser) => {
+    if (!caps.canEdit) return;
     setMode("edit");
     setEditingId(u._id);
     setForm(userToFormValues(u));
@@ -306,11 +313,12 @@ const UsersModule = ({ perm }: { perm: PermLevel }) => {
 
       <div className="flex justify-between items-center flex-wrap gap-2">
         <h2 className="font-semibold text-primary">Teachers & accountants</h2>
-        {writable && (
-          <>
-            <Button variant="hero" onClick={openCreate}>
-              <Plus className="h-4 w-4" /> Add staff
-            </Button>
+        {caps.canCreate && (
+          <Button variant="hero" onClick={openCreate}>
+            <Plus className="h-4 w-4" /> Add staff
+          </Button>
+        )}
+        {(caps.canCreate || caps.canEdit) && (
             <Dialog
               open={open}
               onOpenChange={(o) => {
@@ -382,7 +390,6 @@ const UsersModule = ({ perm }: { perm: PermLevel }) => {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-          </>
         )}
       </div>
 
@@ -398,7 +405,7 @@ const UsersModule = ({ perm }: { perm: PermLevel }) => {
                   </th>
                 ))}
                 <th className="text-left font-medium px-4 py-3">Modules</th>
-                {writable && <th className="px-4 py-3 w-24" />}
+                {(caps.canEdit || caps.canDelete) && <th className="px-4 py-3 w-24" />}
               </tr>
             </thead>
             <tbody>
@@ -439,12 +446,14 @@ const UsersModule = ({ perm }: { perm: PermLevel }) => {
                         </td>
                       ))}
                       <td className="px-4 py-3 text-muted-foreground">{modCount ? `${modCount} module(s)` : "—"}</td>
-                      {writable && (
+                      {(caps.canEdit || caps.canDelete) && (
                         <td className="px-4 py-3 text-right whitespace-nowrap">
-                          <Button size="sm" variant="ghost" onClick={() => openEdit(u)} aria-label="Edit">
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          {u.isActive ? (
+                          {caps.canEdit && (
+                            <Button size="sm" variant="ghost" onClick={() => openEdit(u)} aria-label="Edit">
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {caps.canEdit && u.isActive ? (
                             <Button
                               size="sm"
                               variant="ghost"

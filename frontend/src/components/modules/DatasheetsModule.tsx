@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Plus, Trash2, Download, FileSpreadsheet, ArrowLeft, Save } from "lucide-react";
-import { canWrite, canCRUD, PermLevel } from "@/lib/permissions";
+import { ModuleActionCaps, PermLevel } from "@/lib/permissions";
 import { useToast } from "@/hooks/use-toast";
 
 const KEY = "tces_datasheets_v1";
@@ -59,10 +59,11 @@ const downloadCSV = (s: Datasheet) => {
   a.click(); URL.revokeObjectURL(url);
 };
 
-const DatasheetsModule = ({ perm }: { perm: PermLevel }) => {
+const DatasheetsModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActionCaps }) => {
   const { toast } = useToast();
-  const writable = canWrite(perm);
-  const crud = canCRUD(perm);
+  const canEditCells = caps.canEdit;
+  const canDelete = caps.canDelete;
+  const canCreate = caps.canCreate;
 
   const [sheets, setSheets] = useState<Datasheet[]>(() => { seedIfEmpty(); return load(); });
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -81,6 +82,7 @@ const DatasheetsModule = ({ perm }: { perm: PermLevel }) => {
   const persist = (next: Datasheet[]) => { setSheets(next); save(next); };
 
   const createSheet = () => {
+    if (!canCreate) return;
     const cols = newCols.split(",").map((c) => c.trim()).filter(Boolean);
     if (!newName.trim() || cols.length === 0) {
       toast({ title: "Name and at least one column required", variant: "destructive" });
@@ -98,6 +100,7 @@ const DatasheetsModule = ({ perm }: { perm: PermLevel }) => {
   };
 
   const deleteSheet = (id: string) => {
+    if (!canDelete) return;
     if (!confirm("Delete this datasheet?")) return;
     persist(sheets.filter((s) => s.id !== id));
     if (activeId === id) setActiveId(null);
@@ -119,7 +122,7 @@ const DatasheetsModule = ({ perm }: { perm: PermLevel }) => {
             <h2 className="font-display text-xl font-bold text-primary">My Datasheets</h2>
             <p className="text-sm text-muted-foreground">Create custom spreadsheets for any data you need.</p>
           </div>
-          {crud && (
+          {canCreate && (
             <Button onClick={() => setCreating(true)} className="gap-2">
               <Plus className="h-4 w-4" /> New Datasheet
             </Button>
@@ -156,7 +159,7 @@ const DatasheetsModule = ({ perm }: { perm: PermLevel }) => {
                   <Button size="sm" variant="outline" onClick={() => downloadCSV(s)} className="gap-1">
                     <Download className="h-3.5 w-3.5" /> CSV
                   </Button>
-                  {crud && (
+                  {canDelete && (
                     <Button size="sm" variant="ghost" onClick={() => deleteSheet(s.id)} className="ml-auto text-destructive">
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -203,7 +206,7 @@ const DatasheetsModule = ({ perm }: { perm: PermLevel }) => {
           <Button variant="outline" size="sm" onClick={() => setActiveId(null)} className="gap-1">
             <ArrowLeft className="h-4 w-4" /> Back
           </Button>
-          {writable ? (
+          {canEditCells ? (
             <Input value={active.name}
               onChange={(e) => updateActive((s) => ({ ...s, name: e.target.value }))}
               className="h-9 max-w-xs font-semibold" />
@@ -215,7 +218,7 @@ const DatasheetsModule = ({ perm }: { perm: PermLevel }) => {
           <Button variant="outline" size="sm" onClick={() => downloadCSV(active)} className="gap-1">
             <Download className="h-4 w-4" /> Export CSV
           </Button>
-          {writable && (
+          {canEditCells && (
             <>
               <Button size="sm" variant="outline" onClick={() => updateActive((s) => ({
                 ...s, columns: [...s.columns, `Col ${s.columns.length + 1}`],
@@ -241,13 +244,13 @@ const DatasheetsModule = ({ perm }: { perm: PermLevel }) => {
                 <th className="w-10 px-2 py-2 text-xs text-muted-foreground border-b border-border">#</th>
                 {active.columns.map((c, ci) => (
                   <th key={ci} className="px-2 py-2 border-b border-border min-w-[140px] text-left">
-                    {writable ? (
+                    {canEditCells ? (
                       <div className="flex items-center gap-1">
                         <Input value={c} className="h-8 font-semibold"
                           onChange={(e) => updateActive((s) => {
                             const cols = [...s.columns]; cols[ci] = e.target.value; return { ...s, columns: cols };
                           })} />
-                        {crud && active.columns.length > 1 && (
+                        {canDelete && active.columns.length > 1 && (
                           <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0"
                             onClick={() => updateActive((s) => ({
                               ...s, columns: s.columns.filter((_, i) => i !== ci),
@@ -260,7 +263,7 @@ const DatasheetsModule = ({ perm }: { perm: PermLevel }) => {
                     ) : <span className="font-semibold text-primary">{c}</span>}
                   </th>
                 ))}
-                {writable && <th className="w-10 border-b border-border"></th>}
+                {canDelete && <th className="w-10 border-b border-border"></th>}
               </tr>
             </thead>
             <tbody>
@@ -269,7 +272,7 @@ const DatasheetsModule = ({ perm }: { perm: PermLevel }) => {
                   <td className="px-2 py-1 text-xs text-muted-foreground text-center">{ri + 1}</td>
                   {active.columns.map((_, ci) => (
                     <td key={ci} className="px-1 py-1">
-                      {writable ? (
+                      {canEditCells ? (
                         <Input value={row[ci] ?? ""} className="h-8 border-transparent hover:border-input focus:border-input"
                           onChange={(e) => updateActive((s) => {
                             const rows = s.rows.map((r) => [...r]);
@@ -279,7 +282,7 @@ const DatasheetsModule = ({ perm }: { perm: PermLevel }) => {
                       ) : <span className="px-2">{row[ci]}</span>}
                     </td>
                   ))}
-                  {writable && (
+                  {canDelete && (
                     <td className="px-1">
                       <Button size="icon" variant="ghost" className="h-7 w-7"
                         onClick={() => updateActive((s) => ({ ...s, rows: s.rows.filter((_, i) => i !== ri) }))}>
@@ -297,7 +300,7 @@ const DatasheetsModule = ({ perm }: { perm: PermLevel }) => {
         </div>
       </Card>
 
-      {writable && (
+      {(canEditCells || canDelete) && (
         <p className="text-xs text-muted-foreground flex items-center gap-1">
           <Save className="h-3 w-3" /> Changes auto-save to your browser.
         </p>

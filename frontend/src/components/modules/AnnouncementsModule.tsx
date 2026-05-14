@@ -6,12 +6,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Plus, Trash2 } from "lucide-react";
 import { Store, useStore, newId, Announcement } from "@/lib/store";
-import { canCRUD, PermLevel } from "@/lib/permissions";
+import { ModuleActionCaps, PermLevel } from "@/lib/permissions";
 import { useToast } from "@/hooks/use-toast";
 
-const AnnouncementsModule = ({ perm }: { perm: PermLevel }) => {
+const AnnouncementsModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActionCaps }) => {
   const list = useStore(() => Store.listAnnouncements()).slice().sort((a, b) => b.ts - a.ts);
-  const writable = canCRUD(perm);
   const [draft, setDraft] = useState<Announcement>({ id: "", title: "", body: "", audience: "all", ts: 0 });
   const { toast } = useToast();
 
@@ -26,7 +25,7 @@ const AnnouncementsModule = ({ perm }: { perm: PermLevel }) => {
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-4">
-      {writable && (
+      {caps.canCreate && (
         <Card className="p-4 space-y-3">
           <div className="grid sm:grid-cols-3 gap-3">
             <div className="sm:col-span-2"><Label>Title</Label><Input value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} /></div>
@@ -55,7 +54,7 @@ const AnnouncementsModule = ({ perm }: { perm: PermLevel }) => {
                 <div className="text-sm text-muted-foreground mt-1">{a.body}</div>
                 <div className="text-[11px] text-muted-foreground mt-2">{new Date(a.ts).toLocaleString()}</div>
               </div>
-              {writable && <Button size="sm" variant="ghost" onClick={() => remove(a.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>}
+              {caps.canDelete && <Button size="sm" variant="ghost" onClick={() => remove(a.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>}
             </div>
           </Card>
         ))}

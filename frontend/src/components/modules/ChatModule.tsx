@@ -5,7 +5,12 @@ import { Input } from "@/components/ui/input";
 import { Send } from "lucide-react";
 import { Store, useStore, newId } from "@/lib/store";
 import { SessionUser } from "@/lib/auth";
-import { PermLevel, PERM_RANK } from "@/lib/permissions";
+import {
+  ModuleActionCaps,
+  PermLevel,
+  canRead,
+  sessionHasExplicitModulePayload,
+} from "@/lib/permissions";
 
 const ROOMS = [
   { id: "general", label: "General", roles: ["admin", "accountant", "teacher", "parent", "student"] },
@@ -13,12 +18,13 @@ const ROOMS = [
   { id: "parents", label: "Parents ↔ Teachers", roles: ["admin", "teacher", "parent", "student"] },
 ];
 
-const ChatModule = ({ user, perm }: { user: SessionUser; perm: PermLevel }) => {
+const ChatModule = ({ user, perm, caps }: { user: SessionUser; perm: PermLevel; caps: ModuleActionCaps }) => {
   const messages = useStore(() => Store.listChat());
   const visibleRooms = ROOMS.filter((r) => r.roles.includes(user.role));
   const [room, setRoom] = useState(visibleRooms[0]?.id ?? "general");
   const [text, setText] = useState("");
-  const canSend = PERM_RANK[perm] >= PERM_RANK.view; // view-or-higher can chat
+  const explicit = sessionHasExplicitModulePayload(user.modulePermissions);
+  const canSend = caps.canParticipate || (!explicit && canRead(perm));
   const endRef = useRef<HTMLDivElement>(null);
 
   const roomMsgs = messages.filter((m) => m.room === room).sort((a, b) => a.ts - b.ts);

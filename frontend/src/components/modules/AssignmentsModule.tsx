@@ -6,19 +6,19 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Plus } from "lucide-react";
 import { Store, useStore, newId, Assignment } from "@/lib/store";
-import { canWrite, PermLevel } from "@/lib/permissions";
+import { ModuleActionCaps, PermLevel } from "@/lib/permissions";
 import { useToast } from "@/hooks/use-toast";
 
 const empty: Assignment = { id: "", class: "10-A", subject: "Math", title: "", dueDate: "", submitted: 0, total: 24 };
 
-const AssignmentsModule = ({ perm }: { perm: PermLevel }) => {
+const AssignmentsModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActionCaps }) => {
   const list = useStore(() => Store.listAssignments());
-  const writable = canWrite(perm);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Assignment>(empty);
   const { toast } = useToast();
 
   const save = () => {
+    if (!caps.canCreate) return;
     if (!editing.title.trim()) return;
     const all = Store.listAssignments();
     Store.saveAssignments([{ ...editing, id: newId() }, ...all]);
@@ -35,7 +35,7 @@ const AssignmentsModule = ({ perm }: { perm: PermLevel }) => {
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-4">
-      {writable && (
+      {caps.canCreate && (
         <div className="flex justify-end">
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild><Button variant="hero"><Plus className="h-4 w-4" /> New Assignment</Button></DialogTrigger>
@@ -66,7 +66,7 @@ const AssignmentsModule = ({ perm }: { perm: PermLevel }) => {
             <div className="h-2 bg-secondary rounded-full overflow-hidden">
               <div className="h-full bg-accent" style={{ width: `${(a.submitted / a.total) * 100}%` }} />
             </div>
-            {writable && (
+            {caps.canEdit && (
               <Button size="sm" variant="outline" className="w-full" onClick={() => grade(a.id)}>Grade next submission</Button>
             )}
           </Card>

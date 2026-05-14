@@ -3,7 +3,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { Role } from "@/lib/auth";
 import { roleMeta, findModule, buildMenu, moduleHref } from "@/lib/panelMenus";
 import { usePermissions } from "@/hooks/usePermissions";
-import { applyBackendModulePermissions, canRead, ModuleKey } from "@/lib/permissions";
+import {
+  applyBackendModulePermissions, ModuleKey, resolveModuleCaps,
+} from "@/lib/permissions";
 import { Card } from "@/components/ui/card";
 import SEO from "@/components/SEO";
 import ModuleHeader from "@/components/modules/ModuleHeader";
@@ -38,7 +40,7 @@ const Dashboard = ({
   const HeaderIcon = cfg.Icon;
   const { perms } = usePermissions();
   const rolePerms = applyBackendModulePermissions(perms[role], modulePermissions);
-  const items = buildMenu(rolePerms).filter((m) => m.key !== "dashboard");
+  const items = buildMenu(rolePerms, modulePermissions).filter((m) => m.key !== "dashboard");
 
   // Live stats from real store data
   const students = useStore(() => Store.listStudents());
@@ -174,7 +176,8 @@ const Panel = () => {
 
   const rolePerms = applyBackendModulePermissions(perms[r], session.modulePermissions);
   const perm = rolePerms[mod.key as ModuleKey];
-  if (!canRead(perm)) {
+  const caps = resolveModuleCaps(mod.key as ModuleKey, perm, session.modulePermissions);
+  if (!caps.canView) {
     return (
       <div className="px-6 py-12 text-center">
         <h2 className="font-display text-2xl font-bold text-primary">Access denied</h2>
@@ -185,20 +188,20 @@ const Panel = () => {
 
   const renderModule = () => {
     switch (mod.key) {
-      case "users":         return <UsersModule perm={perm} />;
-      case "students":      return <StudentsModule perm={perm} />;
-      case "attendance":    return <AttendanceModule perm={perm} />;
-      case "timetable":     return <TimetableModule />;
-      case "assignments":   return <AssignmentsModule perm={perm} />;
-      case "exams":         return <ExamsModule perm={perm} />;
-      case "fees":          return <FeesModule perm={perm} />;
-      case "salary":        return <SalaryModule perm={perm} />;
-      case "library":       return <LibraryModule perm={perm} />;
-      case "chat":          return <ChatModule user={session} perm={perm} />;
-      case "announcements": return <AnnouncementsModule perm={perm} />;
+      case "users":         return <UsersModule perm={perm} caps={caps} />;
+      case "students":      return <StudentsModule perm={perm} caps={caps} />;
+      case "attendance":    return <AttendanceModule perm={perm} caps={caps} />;
+      case "timetable":     return <TimetableModule caps={caps} />;
+      case "assignments":   return <AssignmentsModule perm={perm} caps={caps} />;
+      case "exams":         return <ExamsModule perm={perm} caps={caps} />;
+      case "fees":          return <FeesModule perm={perm} caps={caps} />;
+      case "salary":        return <SalaryModule perm={perm} caps={caps} />;
+      case "library":       return <LibraryModule perm={perm} caps={caps} />;
+      case "chat":          return <ChatModule user={session} perm={perm} caps={caps} />;
+      case "announcements": return <AnnouncementsModule perm={perm} caps={caps} />;
       case "reports":       return <ReportsModule />;
-      case "datasheets":    return <DatasheetsModule perm={perm} />;
-      case "permissions":   return <PermissionsModule perm={perm} />;
+      case "datasheets":    return <DatasheetsModule perm={perm} caps={caps} />;
+      case "permissions":   return <PermissionsModule perm={perm} caps={caps} />;
       case "permission-catalog": return <PermissionCatalogModule role={r} />;
       case "settings":      return <SettingsModule />;
       default:              return <div className="p-6 text-muted-foreground">Module coming soon.</div>;

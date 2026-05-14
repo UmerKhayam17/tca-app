@@ -7,6 +7,7 @@ export interface SessionUser {
   email: string;
   name: string;
   role: Role;
+  modulePermissions?: Record<string, string[]>;
 }
 
 const USER_KEY = "tces_user";
@@ -78,7 +79,13 @@ async function fetchMe(accessToken: string): Promise<SessionUser | null> {
   if (!d?.id || !d.email) return null;
   const role = normalizeRole(d.role as string);
   if (!role) return null;
-  return { id: String(d.id), email: d.email, name: d.name, role };
+  return {
+    id: String(d.id),
+    email: d.email,
+    name: d.name,
+    role,
+    modulePermissions: d.modulePermissions,
+  };
 }
 
 async function fetchRefresh(): Promise<string | null> {
@@ -142,7 +149,7 @@ export async function loginWithPassword(email: string, password: string): Promis
   const body = await parseJson<{
     success?: boolean;
     message?: string;
-    data?: { accessToken?: string; user?: { id: string; name: string; email: string; role?: string } };
+    data?: { accessToken?: string; user?: { id: string; name: string; email: string; role?: string; modulePermissions?: Record<string, string[]> } };
   }>(res);
   if (!res.ok || !body.success || !body.data?.accessToken || !body.data?.user) {
     const msg = body.message || (res.status === 401 ? "Invalid email or password." : "Sign-in failed.");
@@ -151,7 +158,13 @@ export async function loginWithPassword(email: string, password: string): Promis
   const { accessToken, user: u } = body.data;
   const role = normalizeRole(u.role);
   if (!role) throw new Error("Unknown account role.");
-  const session: SessionUser = { id: String(u.id), email: u.email, name: u.name, role };
+  const session: SessionUser = {
+    id: String(u.id),
+    email: u.email,
+    name: u.name,
+    role,
+    modulePermissions: u.modulePermissions,
+  };
   setAccessToken(accessToken);
   persistUser(session);
   dispatch();

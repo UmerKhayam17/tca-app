@@ -92,9 +92,10 @@ const createUser = catchAsync(async (req, res) => {
     ...(profileImage ? { profileImage } : {}),
   });
 
-  const populatedUser = await user.populate('role').populate('permissions');
+  await user.populate('role');
+  await user.populate('permissions');
   notifyStaff(req);
-  res.status(201).json({ success: true, data: serializeUser(populatedUser) });
+  res.status(201).json({ success: true, data: serializeUser(user) });
 });
 
 const updateUser = catchAsync(async (req, res) => {

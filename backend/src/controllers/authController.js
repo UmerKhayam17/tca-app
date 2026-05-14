@@ -14,6 +14,26 @@ const env = require('../config/env');
 
 const otpStore = new Map();
 
+function toPlainModulePermissions(modulePermissions) {
+  if (!modulePermissions) return {};
+  if (modulePermissions instanceof Map) {
+    return Object.fromEntries(modulePermissions);
+  }
+  if (typeof modulePermissions === 'object' && !Array.isArray(modulePermissions)) {
+    return modulePermissions;
+  }
+  return {};
+}
+
+function collectSessionModulePermissions(user) {
+  const userModulePermissions = toPlainModulePermissions(user.modulePermissions);
+  const roleModulePermissions = toPlainModulePermissions(user.role?.modulePermissions);
+  if (Object.keys(userModulePermissions).length === 0) {
+    return roleModulePermissions;
+  }
+  return { ...roleModulePermissions, ...userModulePermissions };
+}
+
 function issueTokens(user) {
   const roleObj = user.role && typeof user.role === 'object' ? user.role : null;
   const roleName = roleObj?.name || String(user.role || '');
@@ -45,6 +65,8 @@ const login = catchAsync(async (req, res) => {
     maxAge,
   });
 
+  const modulePermissions = collectSessionModulePermissions(user);
+
   res.json({
     success: true,
     data: {
@@ -55,6 +77,7 @@ const login = catchAsync(async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role?.name,
+        modulePermissions,
       },
     },
   });
@@ -62,6 +85,8 @@ const login = catchAsync(async (req, res) => {
 
 const me = catchAsync(async (req, res) => {
   const roleName = req.user.roleDoc?.name || req.user.role?.name;
+  const modulePermissions = collectSessionModulePermissions(req.user);
+
   res.json({
     success: true,
     data: {
@@ -69,6 +94,7 @@ const me = catchAsync(async (req, res) => {
       name: req.user.name,
       email: req.user.email,
       role: roleName,
+      modulePermissions,
     },
   });
 });
@@ -96,7 +122,15 @@ const refresh = catchAsync(async (req, res) => {
     sameSite: 'lax',
     maxAge,
   });
-  res.json({ success: true, data: { accessToken, expiresIn: env.jwtAccessExpires } });
+  const modulePermissions = collectSessionModulePermissions(user);
+  res.json({
+    success: true,
+    data: {
+      accessToken,
+      expiresIn: env.jwtAccessExpires,
+      modulePermissions,
+    },
+  });
 });
 
 const logout = catchAsync(async (req, res) => {
@@ -157,11 +191,17 @@ const verifyOtp = catchAsync(async (req, res) => {
     sameSite: 'lax',
     maxAge,
   });
+  const modulePermissions = collectSessionModulePermissions(user);
   res.json({
     success: true,
     data: {
       accessToken,
-      user: { id: user._id, name: user.name, role: user.role?.name },
+      user: {
+        id: user._id,
+        name: user.name,
+        role: user.role?.name,
+        modulePermissions,
+      },
     },
   });
 });

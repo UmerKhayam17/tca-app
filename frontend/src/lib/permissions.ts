@@ -105,6 +105,73 @@ export const DEFAULT_PERMISSIONS: Record<Role, Record<ModuleKey, PermLevel>> = {
 const PERM_KEY = "tces_permissions_v1";
 const PERM_EVT = "tces-permissions-change";
 
+export const BACKEND_MODULE_KEY_MAP: Record<string, ModuleKey> = {
+  exam: "exams",
+  assignment: "assignments",
+  attendance: "attendance",
+  student: "students",
+  fee: "fees",
+  timetable: "timetable",
+  announcement: "announcements",
+  chat: "chat",
+  library: "library",
+  reports: "reports",
+  datasheets: "datasheets",
+  salary: "salary",
+  config: "settings",
+  role: "permissions",
+  user: "users",
+};
+
+function backendActionsToPermLevel(actions: string[]): PermLevel {
+  const set = new Set(actions.filter(Boolean).map((a) => String(a).toLowerCase()));
+  if (set.has("create") || set.has("edit") || set.has("delete") || set.has("publish") || set.has("process") || set.has("generate") || set.has("record") || set.has("correct") || set.has("submit") || set.has("activate") || set.has("suspend")) {
+    return "crud";
+  }
+  if (set.has("mark") || set.has("grade")) {
+    return "crud";
+  }
+  if (set.has("view") || set.has("participate")) {
+    return "view";
+  }
+  return "none";
+}
+
+export function applyBackendModulePermissions(
+  rolePerms: Record<ModuleKey, PermLevel>,
+  backendPerms?: Record<string, string[]>,
+): Record<ModuleKey, PermLevel> {
+  if (!backendPerms || typeof backendPerms !== "object") return rolePerms;
+  const next: Record<ModuleKey, PermLevel> = {
+    dashboard: rolePerms.dashboard ?? "full",
+    users: "none",
+    students: "none",
+    attendance: "none",
+    timetable: "none",
+    assignments: "none",
+    exams: "none",
+    fees: "none",
+    salary: "none",
+    library: "none",
+    chat: "none",
+    announcements: "none",
+    reports: "none",
+    datasheets: "none",
+    settings: "none",
+    permissions: "none",
+    "permission-catalog": "none",
+  };
+
+  Object.entries(backendPerms).forEach(([moduleName, actions]) => {
+    const key = BACKEND_MODULE_KEY_MAP[moduleName];
+    if (!key || !Array.isArray(actions) || actions.length === 0) return;
+    const level = backendActionsToPermLevel(actions);
+    if (level !== "none") next[key] = level;
+  });
+
+  return next;
+}
+
 export const loadPermissions = (): Record<Role, Record<ModuleKey, PermLevel>> => {
   try {
     const raw = localStorage.getItem(PERM_KEY);

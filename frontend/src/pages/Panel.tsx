@@ -3,7 +3,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Role } from "@/lib/auth";
 import { roleMeta, findModule, buildMenu, moduleHref } from "@/lib/panelMenus";
 import { usePermissions } from "@/hooks/usePermissions";
-import { canRead, ModuleKey } from "@/lib/permissions";
+import { applyBackendModulePermissions, canRead, ModuleKey } from "@/lib/permissions";
 import { Card } from "@/components/ui/card";
 import SEO from "@/components/SEO";
 import ModuleHeader from "@/components/modules/ModuleHeader";
@@ -25,11 +25,20 @@ import PermissionsModule from "@/components/modules/PermissionsModule";
 import PermissionCatalogModule from "@/components/modules/PermissionCatalogModule";
 import { Store, useStore } from "@/lib/store";
 
-const Dashboard = ({ role, name }: { role: Role; name: string }) => {
+const Dashboard = ({
+  role,
+  name,
+  modulePermissions,
+}: {
+  role: Role;
+  name: string;
+  modulePermissions?: Record<string, string[]>;
+}) => {
   const cfg = roleMeta[role];
   const HeaderIcon = cfg.Icon;
   const { perms } = usePermissions();
-  const items = buildMenu(perms[role]).filter((m) => m.key !== "dashboard");
+  const rolePerms = applyBackendModulePermissions(perms[role], modulePermissions);
+  const items = buildMenu(rolePerms).filter((m) => m.key !== "dashboard");
 
   // Live stats from real store data
   const students = useStore(() => Store.listStudents());
@@ -155,7 +164,7 @@ const Panel = () => {
     return (
       <>
         <SEO title={`${roleMeta[r].title} | The Concept`} description={`${roleMeta[r].title} dashboard.`} />
-        <Dashboard role={r} name={session.name} />
+        <Dashboard role={r} name={session.name} modulePermissions={session.modulePermissions} />
       </>
     );
   }
@@ -163,7 +172,8 @@ const Panel = () => {
   const mod = findModule(slug);
   if (!mod) return <Navigate to={`/panel/${r}`} replace />;
 
-  const perm = perms[r][mod.key as ModuleKey];
+  const rolePerms = applyBackendModulePermissions(perms[r], session.modulePermissions);
+  const perm = rolePerms[mod.key as ModuleKey];
   if (!canRead(perm)) {
     return (
       <div className="px-6 py-12 text-center">

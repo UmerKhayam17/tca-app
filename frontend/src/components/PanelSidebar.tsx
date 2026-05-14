@@ -10,6 +10,7 @@ import {
 import { Role, SessionUser, logout, panelPathFor } from "@/lib/auth";
 import { buildMenu, moduleHref } from "@/lib/panelMenus";
 import { usePermissions } from "@/hooks/usePermissions";
+import { applyBackendModulePermissions } from "@/lib/permissions";
 import logo from "@/assets/logo.png";
 
 const roleHeader: Record<Role, { title: string; Icon: React.ComponentType<{ className?: string }> }> = {
@@ -27,7 +28,8 @@ const PanelSidebar = ({ user }: { user: SessionUser }) => {
   const head = roleHeader[user.role];
   const HeadIcon = head.Icon;
   const { perms } = usePermissions();
-  const items = buildMenu(perms[user.role]);
+  const rolePerms = applyBackendModulePermissions(perms[user.role], user.modulePermissions);
+  const items = buildMenu(rolePerms);
   const rootPath = panelPathFor(user.role);
 
   return (

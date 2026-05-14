@@ -1,7 +1,7 @@
 const Joi = require('joi');
 
 const login = Joi.object({
-  email: Joi.string().email().required(),
+  email: Joi.string().email({ tlds: { allow: false } }).required(),
   password: Joi.string().required(),
 });
 
@@ -20,29 +20,31 @@ const otpVerify = Joi.object({
 
 const createUser = Joi.object({
   name: Joi.string().required(),
-  email: Joi.string().email().required(),
+  email: Joi.string().email({ tlds: { allow: false } }).required(),
   password: Joi.string().min(8).required(),
   phone: Joi.string().required(),
   role: Joi.string().hex().length(24).required(),
   permissionIds: Joi.array().items(Joi.string().hex().length(24)).optional(),
+  modulePermissions: Joi.object().pattern(Joi.string(), Joi.array().items(Joi.string())).optional(),
+  isActive: Joi.boolean().optional(),
+  profileImage: Joi.string().max(2048).allow('').optional(),
+  salary: Joi.number().min(0).optional(),
 });
 
 const updateUser = Joi.object({
   name: Joi.string(),
-  email: Joi.string().email(),
+  email: Joi.string().email({ tlds: { allow: false } }),
   phone: Joi.string(),
+  role: Joi.string().hex().length(24),
   isActive: Joi.boolean(),
   fcmToken: Joi.string().allow('', null),
   password: Joi.string().min(8),
+  profileImage: Joi.string().max(2048).allow(''),
+  salary: Joi.number().min(0),
+  modulePermissions: Joi.object().pattern(Joi.string(), Joi.array().items(Joi.string())),
 }).min(1);
 
 const userPermissions = Joi.object({
-  permissionIds: Joi.array().items(Joi.string().hex().length(24)).required(),
-});
-
-const createRole = Joi.object({
-  name: Joi.string().required(),
-  description: Joi.string().allow(''),
   permissionIds: Joi.array().items(Joi.string().hex().length(24)).required(),
 });
 
@@ -94,7 +96,7 @@ const activateStudent = Joi.object({
   sectionId: Joi.string().hex().length(24).required(),
   classId: Joi.string().hex().length(24).optional(),
   parentName: Joi.string().required(),
-  parentEmail: Joi.string().email().required(),
+  parentEmail: Joi.string().email({ tlds: { allow: false } }).required(),
   parentPhone: Joi.string().required(),
   parentPassword: Joi.string().min(8).optional(),
   studentPassword: Joi.string().min(8).optional(),
@@ -249,7 +251,6 @@ module.exports = {
   createUser,
   updateUser,
   userPermissions,
-  createRole,
   sessionBody,
   classBody,
   sectionBody,

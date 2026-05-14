@@ -60,6 +60,19 @@ const login = catchAsync(async (req, res) => {
   });
 });
 
+const me = catchAsync(async (req, res) => {
+  const roleName = req.user.roleDoc?.name || req.user.role?.name;
+  res.json({
+    success: true,
+    data: {
+      id: req.user._id,
+      name: req.user.name,
+      email: req.user.email,
+      role: roleName,
+    },
+  });
+});
+
 const refresh = catchAsync(async (req, res) => {
   const token = req.cookies?.refreshToken || req.body?.refreshToken;
   if (!token) throw new ApiError(401, 'Refresh token required');
@@ -153,4 +166,4 @@ const verifyOtp = catchAsync(async (req, res) => {
   });
 });
 
-module.exports = { login, refresh, logout, sendOtp, verifyOtp };
+module.exports = { login, me, refresh, logout, sendOtp, verifyOtp };

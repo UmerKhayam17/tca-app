@@ -1,5 +1,6 @@
 const catchAsync = require('../utils/catchAsync');
 const ApiError = require('../utils/ApiError');
+const { getSystemModulesForApi } = require('../config/systemModules');
 const Session = require('../models/Session');
 const Class = require('../models/Class');
 const Section = require('../models/Section');
@@ -97,6 +98,11 @@ const listTimetables = catchAsync(async (req, res) => {
   res.json({ success: true, data: rows });
 });
 
+/** Canonical RBAC module list (same source as `moduleConfig` / staff matrix). */
+const listSystemModules = catchAsync(async (req, res) => {
+  res.json({ success: true, data: { modules: getSystemModulesForApi() } });
+});
+
 module.exports = {
   listSessions,
   createSession,
@@ -110,4 +116,5 @@ module.exports = {
   listSubjects,
   createTimetable,
   listTimetables,
+  listSystemModules,
 };

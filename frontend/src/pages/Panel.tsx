@@ -1,0 +1,207 @@
+import { Navigate, useParams, Link } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
+import { Role } from "@/lib/auth";
+import { roleMeta, findModule, buildMenu, moduleHref } from "@/lib/panelMenus";
+import { usePermissions } from "@/hooks/usePermissions";
+import { canRead, ModuleKey } from "@/lib/permissions";
+import { Card } from "@/components/ui/card";
+import SEO from "@/components/SEO";
+import ModuleHeader from "@/components/modules/ModuleHeader";
+import StudentsModule from "@/components/modules/StudentsModule";
+import UsersModule from "@/components/modules/UsersModule";
+import AttendanceModule from "@/components/modules/AttendanceModule";
+import TimetableModule from "@/components/modules/TimetableModule";
+import AssignmentsModule from "@/components/modules/AssignmentsModule";
+import ExamsModule from "@/components/modules/ExamsModule";
+import FeesModule from "@/components/modules/FeesModule";
+import SalaryModule from "@/components/modules/SalaryModule";
+import LibraryModule from "@/components/modules/LibraryModule";
+import ChatModule from "@/components/modules/ChatModule";
+import AnnouncementsModule from "@/components/modules/AnnouncementsModule";
+import ReportsModule from "@/components/modules/ReportsModule";
+import SettingsModule from "@/components/modules/SettingsModule";
+import DatasheetsModule from "@/components/modules/DatasheetsModule";
+import PermissionsModule from "@/components/modules/PermissionsModule";
+import PermissionCatalogModule from "@/components/modules/PermissionCatalogModule";
+import { Store, useStore } from "@/lib/store";
+
+const Dashboard = ({ role, name }: { role: Role; name: string }) => {
+  const cfg = roleMeta[role];
+  const HeaderIcon = cfg.Icon;
+  const { perms } = usePermissions();
+  const items = buildMenu(perms[role]).filter((m) => m.key !== "dashboard");
+
+  // Live stats from real store data
+  const students = useStore(() => Store.listStudents());
+  const fees = useStore(() => Store.listFees());
+  const attendance = useStore(() => Store.listAttendance());
+  const exams = useStore(() => Store.listExams());
+  const salary = useStore(() => Store.listSalary());
+
+  const today = new Date().toISOString().slice(0, 10);
+  const present = attendance.filter((a) => a.date === today && a.status === "present").length;
+  const collected = fees.filter((f) => f.status === "paid").reduce((s, f) => s + f.amount, 0);
+  const due = fees.filter((f) => f.status === "due").reduce((s, f) => s + f.amount, 0);
+  const avg = exams.length ? Math.round(exams.reduce((s, e) => s + (e.marks / e.total) * 100, 0) / exams.length) : 0;
+  const pendingSalary = salary.filter((s) => s.status === "pending").length;
+
+  const statsByRole: Record<Role, { label: string; value: string; hint: string }[]> = {
+    admin: [
+      { label: "Total Students", value: String(students.length), hint: "All institutions" },
+      { label: "Fees Collected", value: `₨ ${collected.toLocaleString()}`, hint: "All time" },
+      { label: "Outstanding",    value: `₨ ${due.toLocaleString()}`, hint: "Due fees" },
+      { label: "Avg Score",      value: `${avg}%`, hint: "Across exams" },
+    ],
+    accountant: [
+      { label: "Collected",       value: `₨ ${collected.toLocaleString()}`, hint: "Fees received" },
+      { label: "Pending Dues",    value: `₨ ${due.toLocaleString()}`, hint: "Awaiting" },
+      { label: "Pending Salary",  value: String(pendingSalary), hint: "To process" },
+      { label: "Records",         value: String(fees.length), hint: "Fee entries" },
+    ],
+    teacher: [
+      { label: "My Students", value: String(students.length), hint: "Across sections" },
+      { label: "Present Today", value: String(present), hint: today },
+      { label: "Avg Score",   value: `${avg}%`, hint: "Across exams" },
+      { label: "Assignments", value: String(Store.listAssignments().length), hint: "Active" },
+    ],
+    parent: [
+      { label: "Children", value: "1", hint: "Linked profile" },
+      { label: "Attendance", value: present ? "Present" : "Absent", hint: today },
+      { label: "Latest Avg", value: `${avg}%`, hint: "Mid term" },
+      { label: "Fee Status", value: due ? "Due" : "Paid", hint: "Current month" },
+    ],
+    student: [
+      { label: "Attendance", value: present ? "Present" : "Absent", hint: today },
+      { label: "Latest Avg", value: `${avg}%`, hint: "Across exams" },
+      { label: "Assignments", value: String(Store.listAssignments().length), hint: "Active" },
+      { label: "Fee Status", value: due ? "Due" : "Paid", hint: "Current month" },
+    ],
+  };
+
+  return (
+    <section>
+      <div className="bg-[image:var(--gradient-hero)] text-primary-foreground">
+        <div className="px-4 sm:px-6 lg:px-8 py-8 sm:py-10 flex items-center gap-4">
+          <div className="h-12 w-12 sm:h-14 sm:w-14 rounded-xl bg-accent/20 border border-accent/40 grid place-items-center shrink-0">
+            <HeaderIcon className="h-6 w-6 sm:h-7 sm:w-7 text-accent" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-[10px] sm:text-xs tracking-[0.3em] uppercase text-accent">{cfg.accentLabel}</div>
+            <h1 className="font-display text-2xl sm:text-3xl font-bold leading-tight">{cfg.title}</h1>
+            <p className="text-primary-foreground/80 text-xs sm:text-sm mt-1 truncate">
+              Welcome back, <span className="font-semibold">{name}</span>
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="px-4 sm:px-6 lg:px-8 py-6 sm:py-10 space-y-8 sm:space-y-10">
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
+          {statsByRole[role].map((s) => (
+            <Card key={s.label} className="p-4 sm:p-5 hover:shadow-elegant transition-smooth">
+              <div className="text-xs sm:text-sm text-muted-foreground">{s.label}</div>
+              <div className="font-display text-2xl sm:text-3xl font-bold text-primary mt-2 break-words">{s.value}</div>
+              <div className="text-[11px] sm:text-xs text-accent mt-1">{s.hint}</div>
+            </Card>
+          ))}
+        </div>
+
+        <div>
+          <h2 className="font-display text-xl sm:text-2xl font-bold text-primary mb-4">Modules</h2>
+          <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
+            {items.map((m) => (
+              <Link key={m.key} to={moduleHref(role, m.key)}>
+                <Card className="p-4 sm:p-5 group cursor-pointer hover:border-accent hover:shadow-elegant transition-smooth h-full">
+                  <div className="flex items-start gap-4">
+                    <div className="h-10 w-10 sm:h-11 sm:w-11 rounded-lg bg-accent/10 grid place-items-center group-hover:bg-accent transition-smooth shrink-0">
+                      <m.Icon className="h-5 w-5 text-accent group-hover:text-accent-foreground" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-semibold text-primary">{m.label}</div>
+                      <div className="text-sm text-muted-foreground mt-1">{m.desc}</div>
+                    </div>
+                  </div>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+const Panel = () => {
+  const { role, slug } = useParams<{ role: Role; slug?: string }>();
+  const { user: session, loading } = useAuth();
+  const { perms } = usePermissions();
+
+  if (loading) {
+    return (
+      <div className="min-h-[40vh] flex items-center justify-center text-muted-foreground text-sm">
+        Loading…
+      </div>
+    );
+  }
+
+  if (!session) return <Navigate to="/login" replace />;
+  if (!role || !roleMeta[role as Role]) return <Navigate to={`/panel/${session.role}`} replace />;
+  if (session.role !== role) return <Navigate to={`/panel/${session.role}`} replace />;
+
+  const r = role as Role;
+
+  // Dashboard
+  if (!slug) {
+    return (
+      <>
+        <SEO title={`${roleMeta[r].title} | The Concept`} description={`${roleMeta[r].title} dashboard.`} />
+        <Dashboard role={r} name={session.name} />
+      </>
+    );
+  }
+
+  const mod = findModule(slug);
+  if (!mod) return <Navigate to={`/panel/${r}`} replace />;
+
+  const perm = perms[r][mod.key as ModuleKey];
+  if (!canRead(perm)) {
+    return (
+      <div className="px-6 py-12 text-center">
+        <h2 className="font-display text-2xl font-bold text-primary">Access denied</h2>
+        <p className="text-muted-foreground mt-2">Your role does not have access to {mod.label}.</p>
+      </div>
+    );
+  }
+
+  const renderModule = () => {
+    switch (mod.key) {
+      case "users":         return <UsersModule perm={perm} />;
+      case "students":      return <StudentsModule perm={perm} />;
+      case "attendance":    return <AttendanceModule perm={perm} />;
+      case "timetable":     return <TimetableModule />;
+      case "assignments":   return <AssignmentsModule perm={perm} />;
+      case "exams":         return <ExamsModule perm={perm} />;
+      case "fees":          return <FeesModule perm={perm} />;
+      case "salary":        return <SalaryModule perm={perm} />;
+      case "library":       return <LibraryModule perm={perm} />;
+      case "chat":          return <ChatModule user={session} perm={perm} />;
+      case "announcements": return <AnnouncementsModule perm={perm} />;
+      case "reports":       return <ReportsModule />;
+      case "datasheets":    return <DatasheetsModule perm={perm} />;
+      case "permissions":   return <PermissionsModule perm={perm} />;
+      case "permission-catalog": return <PermissionCatalogModule role={r} />;
+      case "settings":      return <SettingsModule />;
+      default:              return <div className="p-6 text-muted-foreground">Module coming soon.</div>;
+    }
+  };
+
+  return (
+    <>
+      <SEO title={`${mod.label} | ${roleMeta[r].title}`} description={mod.desc} />
+      <ModuleHeader module={mod} role={r} />
+      {renderModule()}
+    </>
+  );
+};
+
+export default Panel;

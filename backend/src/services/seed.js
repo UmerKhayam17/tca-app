@@ -3,6 +3,7 @@ const Role = require('../models/Role');
 const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 const env = require('../config/env');
+const MODULES = require('../modules/moduleConfig');
 
 const PERMISSIONS = [
   { name: 'manage_users', module: 'user', action: 'create', description: 'Manage users' },
@@ -44,6 +45,16 @@ async function ensureDefaultAdmin() {
     return;
   }
 
+  // Get all permissions
+  const allPermissions = await Permission.find();
+  const permissionIds = allPermissions.map((p) => p._id);
+
+  // Create module permissions map with all modules and all their actions
+  const modulePermissions = new Map();
+  Object.keys(MODULES).forEach((moduleName) => {
+    modulePermissions.set(moduleName, MODULES[moduleName].actions);
+  });
+
   let user = await User.findOne({ email });
 
   if (!user) {
@@ -54,6 +65,8 @@ async function ensureDefaultAdmin() {
       password: passwordHash,
       phone: env.seedAdminPhone,
       role: adminRole._id,
+      permissions: permissionIds,
+      modulePermissions,
       isActive: true,
     });
     if (env.nodeEnv !== 'production') {
@@ -74,6 +87,16 @@ async function ensureDefaultAdmin() {
   }
   if (env.seedAdminResetPassword) {
     user.password = await bcrypt.hash(env.seedAdminPassword, 12);
+    changed = true;
+  }
+  // Always ensure admin has all permissions
+  if (!user.permissions || user.permissions.length === 0) {
+    user.permissions = permissionIds;
+    changed = true;
+  }
+  // Always ensure admin has all module permissions
+  if (!user.modulePermissions || user.modulePermissions.size === 0) {
+    user.modulePermissions = modulePermissions;
     changed = true;
   }
   if (changed) {
@@ -118,20 +141,48 @@ async function seedPermissionsAndRoles() {
       'view_timetables',
     ].map(byName);
 
-    const parentPerms = ['view_attendance', 'view_results', 'use_chat', 'view_timetables', 'submit_assignment'].map(
-      byName
-    );
-
+    // Combined Parent/Student permissions
     const studentPerms = ['view_attendance', 'view_results', 'use_chat', 'view_timetables', 'submit_assignment'].map(
       byName
     );
 
+    // Module permissions for each role
+    const adminModulePerms = new Map();
+    Object.keys(MODULES).forEach((moduleName) => {
+      adminModulePerms.set(moduleName, MODULES[moduleName].actions);
+    });
+
+    const teacherModulePerms = new Map([
+      ['attendance', ['view', 'create', 'edit', 'correct']],
+      ['exam', ['view', 'create', 'edit']],
+      ['assignment', ['view', 'create', 'edit', 'delete', 'submit']],
+      ['announcement', ['view', 'create', 'edit', 'delete']],
+      ['student', ['view']],
+      ['timetable', ['view']],
+      ['chat', ['view', 'create', 'participate']],
+    ]);
+
+    const studentModulePerms = new Map([
+      ['attendance', ['view']],
+      ['exam', ['view']],
+      ['assignment', ['view', 'submit']],
+      ['timetable', ['view']],
+      ['chat', ['view', 'create', 'participate']],
+    ]);
+
+    const accountantModulePerms = new Map([
+      ['student', ['view', 'activate']],
+      ['fee', ['view', 'create', 'edit', 'generate', 'record']],
+      ['attendance', ['view']],
+      ['exam', ['view']],
+      ['chat', ['view', 'create', 'participate']],
+    ]);
+
     await Role.insertMany([
-      { name: 'admin', permissions: allIds, description: 'Full control' },
-      { name: 'accountant', permissions: accountantPerms, description: 'Finance' },
-      { name: 'teacher', permissions: teacherPerms, description: 'Academic' },
-      { name: 'parent', permissions: parentPerms, description: 'Parent portal' },
-      { name: 'student', permissions: studentPerms, description: 'Student portal' },
+      { name: 'admin', permissions: allIds, description: 'Full control', modulePermissions: adminModulePerms },
+      { name: 'teacher', permissions: teacherPerms, description: 'Academic', modulePermissions: teacherModulePerms },
+      { name: 'student', permissions: studentPerms, description: 'Student and Parent portal', modulePermissions: studentModulePerms },
+      { name: 'accountant', permissions: accountantPerms, description: 'Finance', modulePermissions: accountantModulePerms },
     ]);
 
     if (env.nodeEnv !== 'production') {

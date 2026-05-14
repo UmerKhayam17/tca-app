@@ -1,7 +1,6 @@
 const { Router } = require('express');
 const authRoutes = require('./authRoutes');
 const userRoutes = require('./userRoutes');
-const roleRoutes = require('./roleRoutes');
 const studentRoutes = require('./studentRoutes');
 const attendanceRoutes = require('./attendanceRoutes');
 const feeRoutes = require('./feeRoutes');
@@ -10,6 +9,7 @@ const chatRoutes = require('./chatRoutes');
 const announcementRoutes = require('./announcementRoutes');
 const assignmentRoutes = require('./assignmentRoutes');
 const configRoutes = require('./configRoutes');
+const roleRoutes = require('./roleRoutes');
 
 const router = Router();
 

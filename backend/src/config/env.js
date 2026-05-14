@@ -11,6 +11,11 @@ function loadEnv() {
 
 loadEnv();
 
+const clientOrigins = (process.env.CLIENT_URL || 'http://localhost:5173,http://localhost:8080')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
 module.exports = {
   nodeEnv: process.env.NODE_ENV || 'development',
   port: Number(process.env.PORT) || 5000,
@@ -19,7 +24,9 @@ module.exports = {
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || 'dev-refresh-secret-change-in-prod-32',
   jwtAccessExpires: process.env.JWT_ACCESS_EXPIRES || '15m',
   jwtRefreshExpires: process.env.JWT_REFRESH_EXPIRES || '7d',
-  clientUrl: process.env.CLIENT_URL || 'http://localhost:5173',
+  /** @deprecated use clientOrigins — kept as first origin for Socket.io fallback */
+  clientUrl: clientOrigins[0] || 'http://localhost:5173',
+  clientOrigins,
   redisUrl: process.env.REDIS_URL || 'redis://127.0.0.1:6379',
   seedAdminEmail: (process.env.SEED_ADMIN_EMAIL || 'admin@academy.local').toLowerCase().trim(),
   seedAdminPassword: process.env.SEED_ADMIN_PASSWORD || 'Admin@123456',

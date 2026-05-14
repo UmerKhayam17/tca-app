@@ -8,6 +8,12 @@ const schemas = require('../validators/schemas');
 const router = Router();
 router.use(protect);
 
+router.get(
+  '/system-modules',
+  requireAnyPermission('manage_roles', 'manage_users'),
+  ctrl.listSystemModules
+);
+
 router.get('/sessions', requireAnyPermission('manage_sessions', 'generate_vouchers', 'temporary_register_student', 'activate_student'), ctrl.listSessions);
 router.post('/sessions', requirePermission('manage_sessions'), validate(schemas.sessionBody), ctrl.createSession);
 router.patch('/sessions/:id', requirePermission('manage_sessions'), ctrl.patchSession);

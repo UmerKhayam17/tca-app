@@ -1,0 +1,108 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700;800;900&family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* The Concept Educational System — Design System
+   Navy Blue, Gold/Yellow, White. All colors HSL.
+*/
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 220 60% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 60% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 60% 12%;
+
+    /* Navy */
+    --primary: 220 70% 18%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 220 60% 28%;
+
+    /* Soft cream / secondary */
+    --secondary: 45 40% 96%;
+    --secondary-foreground: 220 70% 18%;
+
+    --muted: 220 20% 96%;
+    --muted-foreground: 220 15% 40%;
+
+    /* Gold accent */
+    --accent: 42 90% 52%;
+    --accent-foreground: 220 70% 14%;
+    --accent-glow: 45 95% 62%;
+
+    --destructive: 0 75% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 20% 90%;
+    --input: 220 20% 90%;
+    --ring: 42 90% 52%;
+
+    --radius: 0.75rem;
+
+    /* Gradients */
+    --gradient-hero: linear-gradient(135deg, hsl(220 75% 14%) 0%, hsl(220 65% 22%) 60%, hsl(220 55% 30%) 100%);
+    --gradient-gold: linear-gradient(135deg, hsl(45 95% 60%) 0%, hsl(38 88% 48%) 100%);
+    --gradient-overlay: linear-gradient(180deg, hsl(220 75% 12% / 0.85) 0%, hsl(220 70% 18% / 0.7) 100%);
+
+    /* Shadows */
+    --shadow-elegant: 0 20px 60px -20px hsl(220 70% 18% / 0.25);
+    --shadow-gold: 0 12px 40px -8px hsl(42 90% 52% / 0.45);
+    --shadow-card: 0 4px 24px -6px hsl(220 50% 20% / 0.12);
+
+    --transition-smooth: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  html { scroll-behavior: smooth; }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+  h1, h2, h3, h4, h5 {
+    @apply font-display tracking-tight;
+  }
+}
+
+@layer utilities {
+  .bg-hero-gradient { background: var(--gradient-hero); }
+  .bg-gold-gradient { background: var(--gradient-gold); }
+  .bg-overlay-gradient { background: var(--gradient-overlay); }
+  .shadow-elegant { box-shadow: var(--shadow-elegant); }
+  .shadow-gold { box-shadow: var(--shadow-gold); }
+  .shadow-card { box-shadow: var(--shadow-card); }
+  .transition-smooth { transition: var(--transition-smooth); }
+  .transition-spring { transition: all 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
+  .text-balance { text-wrap: balance; }
+
+  /* Hover lift used across cards */
+  .hover-lift {
+    @apply transition-spring hover:-translate-y-1.5 hover:shadow-elegant;
+  }
+
+  /* Animated underline */
+  .story-link {
+    @apply relative inline-block after:content-[''] after:absolute after:w-full after:scale-x-0 after:h-0.5 after:bottom-0 after:left-0 after:bg-accent after:origin-bottom-right after:transition-transform after:duration-500 hover:after:scale-x-100 hover:after:origin-bottom-left;
+  }
+
+  /* Marquee fade mask for ticker */
+  .mask-fade-x {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+            mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+  }
+}

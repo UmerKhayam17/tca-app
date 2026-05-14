@@ -9,7 +9,7 @@ const { startCronJobs } = require('./jobs/cron');
 
 function attachSocket(server) {
   const io = new Server(server, {
-    cors: { origin: env.clientUrl, credentials: true },
+    cors: { origin: env.clientOrigins, credentials: true },
   });
 
   io.use((socket, next) => {

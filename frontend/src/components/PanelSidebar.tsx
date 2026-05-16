@@ -1,14 +1,17 @@
 import { Link, NavLink, useLocation } from "react-router-dom";
 import {
-  ShieldCheck, Calculator, GraduationCap, Users, LogOut, Home, School,
+  ShieldCheck, Calculator, GraduationCap, Users, LogOut, Home, School, ChevronDown,
 } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter,
+  SidebarMenuSub, SidebarMenuSubButton, SidebarMenuSubItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Role, SessionUser, logout, panelPathFor } from "@/lib/auth";
 import { buildMenu, moduleHref } from "@/lib/panelMenus";
+import { SYSTEM_CONFIG_SECTIONS, systemConfigHref } from "@/lib/systemConfigMenus";
 import { usePermissions } from "@/hooks/usePermissions";
 import { applyBackendModulePermissions } from "@/lib/permissions";
 import logo from "@/assets/logo.png";
@@ -31,6 +34,8 @@ const PanelSidebar = ({ user }: { user: SessionUser }) => {
   const rolePerms = applyBackendModulePermissions(perms[user.role], user.modulePermissions);
   const items = buildMenu(rolePerms, user.modulePermissions);
   const rootPath = panelPathFor(user.role);
+  const systemConfigBase = `/panel/${user.role}/system-config`;
+  const systemConfigOpen = pathname.startsWith(systemConfigBase);
 
   return (
     <Sidebar collapsible="icon">
@@ -52,6 +57,45 @@ const PanelSidebar = ({ user }: { user: SessionUser }) => {
           <SidebarGroupContent>
             <SidebarMenu>
               {items.map((m) => {
+                if (m.key === "system-config") {
+                  return (
+                    <Collapsible key={m.key} defaultOpen={systemConfigOpen} className="group/collapsible">
+                      <SidebarMenuItem>
+                        <CollapsibleTrigger asChild>
+                          <SidebarMenuButton
+                            tooltip={m.label}
+                            isActive={systemConfigOpen}
+                            className="group-data-[state=open]/collapsible:bg-sidebar-accent/50"
+                          >
+                            <m.Icon className="h-4 w-4" />
+                            <span>{m.label}</span>
+                            <ChevronDown className="ml-auto h-4 w-4 shrink-0 transition-transform group-data-[state=open]/collapsible:rotate-180" />
+                          </SidebarMenuButton>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                          <SidebarMenuSub>
+                            {SYSTEM_CONFIG_SECTIONS.map((sub) => {
+                              const subHref = systemConfigHref(user.role, sub.key);
+                              const subActive = pathname === subHref;
+                              const SubIcon = sub.icon;
+                              return (
+                                <SidebarMenuSubItem key={sub.key}>
+                                  <SidebarMenuSubButton asChild isActive={subActive}>
+                                    <NavLink to={subHref}>
+                                      <SubIcon className="h-4 w-4" />
+                                      <span>{sub.label}</span>
+                                    </NavLink>
+                                  </SidebarMenuSubButton>
+                                </SidebarMenuSubItem>
+                              );
+                            })}
+                          </SidebarMenuSub>
+                        </CollapsibleContent>
+                      </SidebarMenuItem>
+                    </Collapsible>
+                  );
+                }
+
                 const href = moduleHref(user.role, m.key);
                 const active = m.key === "dashboard" ? pathname === rootPath : pathname === href;
                 return (

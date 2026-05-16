@@ -1,52 +1,76 @@
-import { Card } from "@/components/ui/card";
-import { Store, useStore } from "@/lib/store";
-
-import { ModuleActionCaps } from "@/lib/permissions";
+import { useState } from "react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useAuth } from "@/hooks/useAuth";
+import type { ModuleActionCaps } from "@/lib/permissions";
+import SessionBar, { useActiveSessionId } from "@/components/modules/timetable/SessionBar";
+import GridTab from "@/components/modules/timetable/GridTab";
+import MyScheduleTab from "@/components/modules/timetable/MyScheduleTab";
+import ViewScheduleTab from "@/components/modules/timetable/ViewScheduleTab";
 
 const TimetableModule = ({ caps }: { caps: ModuleActionCaps }) => {
-  const rows = useStore(() => Store.listTimetable());
-  const days = ["Mon", "Tue", "Wed", "Thu", "Fri"];
-  const periods = Array.from(new Set(rows.map((r) => r.period))).sort();
+  const { user } = useAuth();
+  const [sessionId, setSessionId] = useState("");
+  useActiveSessionId(sessionId, setSessionId);
 
-  const cell = (day: string, period: string) =>
-    rows.find((r) => r.day === day && r.period === period);
+  const isTeacher = user?.role === "teacher";
+  const isStudentOrParent = user?.role === "student" || user?.role === "parent";
+  const canManage = caps.canEdit || caps.canCreate;
+
+  if (isStudentOrParent) {
+    return (
+      <>
+        <SessionBar sessionId={sessionId} onSessionChange={setSessionId} />
+        <ViewScheduleTab sessionId={sessionId} />
+      </>
+    );
+  }
+
+  if (isTeacher && !canManage) {
+    return (
+      <>
+        <SessionBar sessionId={sessionId} onSessionChange={setSessionId} />
+        <Tabs defaultValue="mine" className="w-full">
+          <div className="px-4 sm:px-6 lg:px-8 pt-4 border-b">
+            <TabsList>
+              <TabsTrigger value="mine">My schedule</TabsTrigger>
+              <TabsTrigger value="class">Class timetable</TabsTrigger>
+            </TabsList>
+          </div>
+          <TabsContent value="mine" className="mt-0">
+            <MyScheduleTab sessionId={sessionId} />
+          </TabsContent>
+          <TabsContent value="class" className="mt-0">
+            <ViewScheduleTab sessionId={sessionId} />
+          </TabsContent>
+        </Tabs>
+      </>
+    );
+  }
 
   return (
-    <div className="px-4 sm:px-6 lg:px-8 py-6">
-      <Card className="overflow-hidden">
-        <div className="px-4 py-3 border-b border-border font-semibold text-primary flex items-center justify-between gap-2">
-          <span>Class 10-A — Weekly Timetable</span>
-          {!caps.canEdit && caps.canView ? (
-            <span className="text-xs font-normal text-muted-foreground">Read-only</span>
-          ) : null}
+    <>
+      <SessionBar sessionId={sessionId} onSessionChange={setSessionId} />
+      <Tabs defaultValue={canManage ? "builder" : "view"} className="w-full">
+        <div className="px-4 sm:px-6 lg:px-8 pt-4 border-b bg-background/80 sticky top-0 z-10">
+          <TabsList className="flex flex-wrap h-auto gap-1">
+            {canManage && <TabsTrigger value="builder">Timetable builder</TabsTrigger>}
+            <TabsTrigger value="view">Class view</TabsTrigger>
+            {(isTeacher || canManage) && <TabsTrigger value="mine">My schedule</TabsTrigger>}
+          </TabsList>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-secondary/50 text-muted-foreground">
-              <tr>
-                <th className="text-left px-4 py-3">Time</th>
-                {days.map((d) => <th key={d} className="text-left px-4 py-3">{d}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {periods.map((p) => (
-                <tr key={p} className="border-t border-border">
-                  <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{p}</td>
-                  {days.map((d) => {
-                    const c = cell(d, p);
-                    return (
-                      <td key={d} className="px-4 py-3">
-                        {c ? (<div><div className="font-semibold text-primary">{c.subject}</div><div className="text-xs text-muted-foreground">{c.teacher}</div></div>) : "—"}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-    </div>
+        {canManage && (
+          <TabsContent value="builder" className="mt-0">
+            <GridTab sessionId={sessionId} caps={caps} />
+          </TabsContent>
+        )}
+        <TabsContent value="view" className="mt-0">
+          <ViewScheduleTab sessionId={sessionId} />
+        </TabsContent>
+        <TabsContent value="mine" className="mt-0">
+          <MyScheduleTab sessionId={sessionId} />
+        </TabsContent>
+      </Tabs>
+    </>
   );
 };
 

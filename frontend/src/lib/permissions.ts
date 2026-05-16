@@ -38,6 +38,7 @@ export type ModuleKey =
   | "announcements"
   | "reports"
   | "datasheets"
+  | "system-config"
   | "settings"
   | "permissions"
   | "permission-catalog";
@@ -55,7 +56,7 @@ export const MODULES: ModuleDef[] = [
   { key: "student-management", label: "Student Management", icon: "School", desc: "Classes, subjects, fees & tuition enrollment" },
   { key: "students",      label: "Student Records", icon: "GraduationCap",   desc: "Profiles & academic data" },
   { key: "attendance",    label: "Attendance",      icon: "ClipboardList",   desc: "Daily attendance" },
-  { key: "timetable",     label: "Timetable",       icon: "Calendar",        desc: "Class & exam schedule" },
+  { key: "timetable",     label: "Timetable",       icon: "Calendar",        desc: "Build, publish & view class schedules" },
   { key: "assignments",   label: "Assignments",     icon: "BookOpen",        desc: "Homework & grading" },
   { key: "exams",         label: "Exam & Results",  icon: "Award",           desc: "Marks and report cards" },
   { key: "fees",          label: "Fee Management",  icon: "Wallet",          desc: "Collect and track fees" },
@@ -65,9 +66,10 @@ export const MODULES: ModuleDef[] = [
   { key: "announcements", label: "Announcements",   icon: "Bell",            desc: "Publish notices" },
   { key: "reports",       label: "Reports",         icon: "BarChart3",       desc: "Analytics & exports" },
   { key: "datasheets",    label: "Datasheets",      icon: "FileText",        desc: "Create & manage spreadsheets" },
+  { key: "system-config", label: "System Configuration", icon: "SlidersHorizontal", desc: "Sessions, classes, timetable setup & rules" },
   { key: "permissions",   label: "Permissions",     icon: "KeyRound",        desc: "Users, roles, API & module access" },
   { key: "permission-catalog", label: "All API permissions", icon: "ListTree", desc: "Full table of permission definitions" },
-  { key: "settings",      label: "Settings",        icon: "Settings",        desc: "System configuration" },
+  { key: "settings",      label: "Settings",        icon: "Settings",        desc: "Local permission matrix (browser)" },
 ];
 
 // Default matrix — mirrors the reference spec sheet
@@ -76,31 +78,31 @@ export const DEFAULT_PERMISSIONS: Record<Role, Record<ModuleKey, PermLevel>> = {
     dashboard: "full", users: "crud", "student-management": "crud", students: "crud", attendance: "crud",
     timetable: "crud", assignments: "crud", exams: "crud", fees: "crud",
     salary: "crud", library: "crud", chat: "full", announcements: "crud",
-    reports: "full", datasheets: "full", settings: "full", permissions: "full", "permission-catalog": "full",
+    reports: "full", datasheets: "full", "system-config": "crud", settings: "full", permissions: "full", "permission-catalog": "full",
   },
   accountant: {
     dashboard: "view", users: "none", "student-management": "process", students: "view", attendance: "none",
     timetable: "none", assignments: "none", exams: "none", fees: "crud",
     salary: "process", library: "none", chat: "view", announcements: "none",
-    reports: "view", datasheets: "crud", settings: "none", permissions: "none", "permission-catalog": "none",
+    reports: "view", datasheets: "crud", "system-config": "none", settings: "none", permissions: "none", "permission-catalog": "none",
   },
   teacher: {
     dashboard: "view", users: "none", "student-management": "view", students: "grade", attendance: "mark",
     timetable: "view", assignments: "grade", exams: "grade", fees: "none",
     salary: "view", library: "view", chat: "view", announcements: "view",
-    reports: "view", datasheets: "crud", settings: "none", permissions: "none", "permission-catalog": "none",
+    reports: "view", datasheets: "crud", "system-config": "none", settings: "none", permissions: "none", "permission-catalog": "none",
   },
   parent: {
     dashboard: "view", users: "none", "student-management": "none", students: "view", attendance: "view",
     timetable: "view", assignments: "view", exams: "view", fees: "view",
     salary: "none", library: "view", chat: "view", announcements: "view",
-    reports: "none", datasheets: "view", settings: "none", permissions: "none", "permission-catalog": "none",
+    reports: "none", datasheets: "view", "system-config": "none", settings: "none", permissions: "none", "permission-catalog": "none",
   },
   student: {
     dashboard: "view", users: "none", "student-management": "none", students: "view", attendance: "view",
     timetable: "view", assignments: "view", exams: "view", fees: "view",
     salary: "none", library: "view", chat: "view", announcements: "view",
-    reports: "none", datasheets: "view", settings: "none", permissions: "none", "permission-catalog": "none",
+    reports: "none", datasheets: "view", "system-config": "none", settings: "none", permissions: "none", "permission-catalog": "none",
   },
 };
 
@@ -121,7 +123,7 @@ export const BACKEND_MODULE_KEY_MAP: Record<string, ModuleKey> = {
   reports: "reports",
   datasheets: "datasheets",
   salary: "salary",
-  config: "settings",
+  config: "system-config",
   role: "permissions",
   user: "users",
 };

@@ -1,37 +1,91 @@
 const catchAsync = require('../utils/catchAsync');
 const ApiError = require('../utils/ApiError');
 const { getSystemModulesForApi } = require('../config/systemModules');
+const { logAudit } = require('../services/session/auditService');
+const { assertSessionWritable, syncSessionFlags, resolveSessionStatus, healSessionFlags } = require('../services/session/sessionGuard');
 const Session = require('../models/Session');
 const Class = require('../models/Class');
 const Section = require('../models/Section');
 const Subject = require('../models/Subject');
+const Student = require('../models/Student');
 const Timetable = require('../models/Timetable');
 
 const listSessions = catchAsync(async (req, res) => {
-  const sessions = await Session.find().sort({ startDate: -1 });
-  res.json({ success: true, data: sessions });
+  const { status } = req.query;
+  const q = status ? { status } : {};
+  const sessions = await Session.find(q).sort({ startDate: -1 });
+  const normalized = sessions.map((s) => {
+    const doc = s.toObject();
+    doc.status = resolveSessionStatus(s);
+    doc.writable = doc.status === 'active';
+    return doc;
+  });
+  res.json({ success: true, data: normalized });
 });
 
 const createSession = catchAsync(async (req, res) => {
-  const body = req.body;
-  if (body.isActive) {
-    await Session.updateMany({}, { $set: { isActive: false } });
+  const body = { ...req.body };
+  const existingCount = await Session.countDocuments();
+  const shouldActivate =
+    existingCount === 0 ||
+    (body.isActive !== false && body.status !== 'completed' && body.status !== 'archived');
+
+  if (shouldActivate && existingCount > 0) {
+    await Session.updateMany(
+      {},
+      { $set: { isActive: false, status: 'completed', isClosed: true } }
+    );
   }
+
   const session = await Session.create({
-    ...body,
+    name: body.name,
+    startDate: body.startDate,
+    endDate: body.endDate,
+    workingDays: body.workingDays,
+    timezone: body.timezone,
+    notes: body.notes,
     createdBy: req.user._id,
+  });
+  if (shouldActivate) {
+    syncSessionFlags(session, 'active');
+  } else {
+    syncSessionFlags(session, body.status || 'completed');
+  }
+  await session.save();
+  await logAudit({
+    sessionId: session._id,
+    action: 'SESSION_CREATED',
+    userId: req.user._id,
+    details: { name: session.name },
   });
   res.status(201).json({ success: true, data: session });
 });
 
 const patchSession = catchAsync(async (req, res) => {
-  const updates = { ...req.body };
-  if (updates.isActive) {
-    await Session.updateMany({ _id: { $ne: req.params.id } }, { $set: { isActive: false } });
-  }
-  const session = await Session.findByIdAndUpdate(req.params.id, updates, { new: true });
+  const session = await Session.findById(req.params.id);
   if (!session) throw new ApiError(404, 'Session not found');
-  res.json({ success: true, data: session });
+  if (session.status === 'archived') {
+    throw new ApiError(403, 'Archived sessions cannot be modified');
+  }
+
+  const updates = { ...req.body };
+  if (updates.status === 'archived' || updates.status === 'completed') {
+    throw new ApiError(400, 'Use session lifecycle endpoints to complete or archive a session');
+  }
+  if (updates.isActive || updates.status === 'active') {
+    await Session.updateMany(
+      { _id: { $ne: req.params.id } },
+      { $set: { isActive: false, status: 'completed', isClosed: true } }
+    );
+    updates.isActive = true;
+    updates.status = 'active';
+    updates.isClosed = false;
+  }
+
+  const updated = await Session.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true });
+  if (updated) await healSessionFlags(updated);
+  const data = await Session.findById(req.params.id);
+  res.json({ success: true, data });
 });
 
 const listClasses = catchAsync(async (req, res) => {
@@ -42,32 +96,100 @@ const listClasses = catchAsync(async (req, res) => {
 });
 
 const createClass = catchAsync(async (req, res) => {
+  await assertSessionWritable(req.body.session);
   const cls = await Class.create(req.body);
   res.status(201).json({ success: true, data: cls });
 });
 
 const patchClass = catchAsync(async (req, res) => {
+  const existing = await Class.findById(req.params.id);
+  if (!existing) throw new ApiError(404, 'Class not found');
+  await assertSessionWritable(existing.session);
   const cls = await Class.findByIdAndUpdate(req.params.id, req.body, { new: true });
-  if (!cls) throw new ApiError(404, 'Class not found');
   res.json({ success: true, data: cls });
 });
 
 const createSection = catchAsync(async (req, res) => {
-  const section = await Section.create(req.body);
-  await Class.findByIdAndUpdate(req.body.class, { $addToSet: { sections: section._id } });
-  res.status(201).json({ success: true, data: section });
+  const parentClass = await Class.findById(req.body.class);
+  if (!parentClass) throw new ApiError(404, 'Class not found');
+  await assertSessionWritable(parentClass.session);
+  const body = { ...req.body };
+  if (body.teacher === '') body.teacher = null;
+  const section = await Section.create(body);
+  await Class.findByIdAndUpdate(body.class, { $addToSet: { sections: section._id } });
+  const populated = await Section.findById(section._id)
+    .populate('class', 'name session')
+    .populate('teacher', 'name email');
+  res.status(201).json({ success: true, data: { ...populated.toObject(), studentCount: 0 } });
 });
 
 const patchSection = catchAsync(async (req, res) => {
-  const section = await Section.findByIdAndUpdate(req.params.id, req.body, { new: true });
+  const existing = await Section.findById(req.params.id).populate('class', 'session');
+  if (!existing) throw new ApiError(404, 'Section not found');
+  await assertSessionWritable(existing.class.session);
+  const updates = { ...req.body };
+  if (updates.teacher === '') updates.teacher = null;
+  const section = await Section.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true })
+    .populate('class', 'name session')
+    .populate('teacher', 'name email');
   if (!section) throw new ApiError(404, 'Section not found');
-  res.json({ success: true, data: section });
+  const studentCount = await Student.countDocuments({ section: section._id });
+  res.json({ success: true, data: { ...section.toObject(), studentCount } });
+});
+
+const deleteSection = catchAsync(async (req, res) => {
+  const section = await Section.findById(req.params.id).populate('class', 'session');
+  if (!section) throw new ApiError(404, 'Section not found');
+  await assertSessionWritable(section.class.session);
+
+  const enrolled = await Student.countDocuments({ section: section._id });
+  if (enrolled > 0) {
+    throw new ApiError(400, `Cannot delete section: ${enrolled} student(s) are enrolled. Move or remove them first.`);
+  }
+
+  await Class.findByIdAndUpdate(section.class, { $pull: { sections: section._id } });
+  await Section.findByIdAndDelete(section._id);
+  res.json({ success: true, data: { deleted: true } });
 });
 
 const createSubject = catchAsync(async (req, res) => {
+  const parentClass = await Class.findById(req.body.class);
+  if (!parentClass) throw new ApiError(404, 'Class not found');
+  await assertSessionWritable(parentClass.session);
   const subject = await Subject.create(req.body);
   await Class.findByIdAndUpdate(req.body.class, { $addToSet: { subjects: subject._id } });
   res.status(201).json({ success: true, data: subject });
+});
+
+const listSections = catchAsync(async (req, res) => {
+  const { classId, sessionId } = req.query;
+  const q = {};
+  if (classId) {
+    q.class = classId;
+  } else if (sessionId) {
+    const classes = await Class.find({ session: sessionId }).select('_id');
+    q.class = { $in: classes.map((c) => c._id) };
+  }
+  const sections = await Section.find(q)
+    .populate('class', 'name session')
+    .populate('teacher', 'name email')
+    .sort({ class: 1, name: 1 });
+
+  const sectionIds = sections.map((s) => s._id);
+  const counts = sectionIds.length
+    ? await Student.aggregate([
+        { $match: { section: { $in: sectionIds } } },
+        { $group: { _id: '$section', count: { $sum: 1 } } },
+      ])
+    : [];
+  const countMap = Object.fromEntries(counts.map((c) => [String(c._id), c.count]));
+
+  const data = sections.map((s) => ({
+    ...s.toObject(),
+    studentCount: countMap[String(s._id)] || 0,
+  }));
+
+  res.json({ success: true, data });
 });
 
 const listSubjects = catchAsync(async (req, res) => {
@@ -75,6 +197,14 @@ const listSubjects = catchAsync(async (req, res) => {
   const q = classId ? { class: classId } : {};
   const subjects = await Subject.find(q).populate('teacher').populate('class');
   res.json({ success: true, data: subjects });
+});
+
+const patchSubject = catchAsync(async (req, res) => {
+  const subject = await Subject.findByIdAndUpdate(req.params.id, req.body, { new: true })
+    .populate('teacher')
+    .populate('class');
+  if (!subject) throw new ApiError(404, 'Subject not found');
+  res.json({ success: true, data: subject });
 });
 
 const createTimetable = catchAsync(async (req, res) => {
@@ -112,8 +242,11 @@ module.exports = {
   patchClass,
   createSection,
   patchSection,
+  deleteSection,
   createSubject,
   listSubjects,
+  patchSubject,
+  listSections,
   createTimetable,
   listTimetables,
   listSystemModules,

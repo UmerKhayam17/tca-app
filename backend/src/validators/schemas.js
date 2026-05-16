@@ -48,11 +48,29 @@ const userPermissions = Joi.object({
   permissionIds: Joi.array().items(Joi.string().hex().length(24)).required(),
 });
 
+const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+const SESSION_STATUSES = ['active', 'completed', 'archived'];
+
 const sessionBody = Joi.object({
   name: Joi.string().required(),
   startDate: Joi.date().required(),
   endDate: Joi.date().required(),
   isActive: Joi.boolean(),
+  status: Joi.string().valid(...SESSION_STATUSES),
+  workingDays: Joi.array().items(Joi.string().valid(...WEEKDAYS)).min(1),
+  timezone: Joi.string().trim(),
+  notes: Joi.string().allow('').trim(),
+});
+
+const sessionCloneBody = Joi.object({
+  name: Joi.string().required().trim(),
+  startDate: Joi.date().required(),
+  endDate: Joi.date().required(),
+  activate: Joi.boolean(),
+  workingDays: Joi.array().items(Joi.string().valid(...WEEKDAYS)).min(1),
+  timezone: Joi.string().trim(),
+  notes: Joi.string().allow('').trim(),
 });
 
 const classBody = Joi.object({
@@ -65,9 +83,15 @@ const classBody = Joi.object({
 const sectionBody = Joi.object({
   name: Joi.string().required(),
   class: Joi.string().hex().length(24).required(),
-  teacher: Joi.string().hex().length(24).allow(null),
-  maxStudents: Joi.number(),
+  teacher: Joi.string().hex().length(24).allow(null, ''),
+  maxStudents: Joi.number().integer().min(1),
 });
+
+const sectionPatch = Joi.object({
+  name: Joi.string().trim(),
+  teacher: Joi.string().hex().length(24).allow(null, ''),
+  maxStudents: Joi.number().integer().min(1),
+}).min(1);
 
 const subjectBody = Joi.object({
   name: Joi.string().required(),
@@ -77,6 +101,15 @@ const subjectBody = Joi.object({
   totalMarks: Joi.number(),
   passingMarks: Joi.number(),
 });
+
+const subjectPatch = Joi.object({
+  name: Joi.string(),
+  code: Joi.string(),
+  class: Joi.string().hex().length(24),
+  teacher: Joi.string().hex().length(24).allow(null),
+  totalMarks: Joi.number(),
+  passingMarks: Joi.number(),
+}).min(1);
 
 const registerStudent = Joi.object({
   studentName: Joi.string().required(),
@@ -252,9 +285,12 @@ module.exports = {
   updateUser,
   userPermissions,
   sessionBody,
+  sessionCloneBody,
   classBody,
   sectionBody,
+  sectionPatch,
   subjectBody,
+  subjectPatch,
   registerStudent,
   activateStudent,
   studentStatus,

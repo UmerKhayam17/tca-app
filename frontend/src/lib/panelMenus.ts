@@ -2,8 +2,10 @@ import {
   ShieldCheck, Calculator, GraduationCap, Users, LayoutDashboard,
   BookOpen, DollarSign, Calendar, Bell, BarChart3, UserCog, ClipboardList,
   Wallet, MessageSquare, Award, Settings as SettingsIcon, FileText, School, KeyRound, ListTree,
+  SlidersHorizontal,
 } from "lucide-react";
 import { Role } from "./auth";
+import { systemConfigHref } from "./systemConfigMenus";
 import {
   MODULES, ModuleKey, ModuleDef, PermLevel, resolveModuleCaps,
 } from "./permissions";
@@ -11,7 +13,7 @@ import {
 export const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   LayoutDashboard, UserCog, GraduationCap, ClipboardList, Calendar,
   BookOpen, Award, Wallet, DollarSign, MessageSquare, Bell, BarChart3,
-  Settings: SettingsIcon, FileText, KeyRound, ListTree, School,
+  Settings: SettingsIcon, FileText, KeyRound, ListTree, School, SlidersHorizontal,
 };
 
 export type MenuItem = ModuleDef & {
@@ -45,4 +47,8 @@ export const findModule = (slug: string | undefined): ModuleDef | undefined =>
   MODULES.find((m) => (slug ? m.key === slug : m.key === "dashboard"));
 
 export const moduleHref = (role: Role, key: ModuleKey) =>
-  key === "dashboard" ? `/panel/${role}` : `/panel/${role}/${key}`;
+  key === "dashboard"
+    ? `/panel/${role}`
+    : key === "system-config"
+      ? systemConfigHref(role)
+      : `/panel/${role}/${key}`;

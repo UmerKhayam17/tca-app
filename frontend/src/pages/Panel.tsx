@@ -2,6 +2,7 @@ import { Navigate, useParams, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Role } from "@/lib/auth";
 import { roleMeta, findModule, buildMenu, moduleHref } from "@/lib/panelMenus";
+import { systemConfigHref } from "@/lib/systemConfigMenus";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
   applyBackendModulePermissions, ModuleKey, resolveModuleCaps,
@@ -13,6 +14,7 @@ import StudentsModule from "@/components/modules/StudentsModule";
 import UsersModule from "@/components/modules/UsersModule";
 import AttendanceModule from "@/components/modules/AttendanceModule";
 import TimetableModule from "@/components/modules/TimetableModule";
+import SystemConfigModule from "@/components/modules/SystemConfigModule";
 import AssignmentsModule from "@/components/modules/AssignmentsModule";
 import ExamsModule from "@/components/modules/ExamsModule";
 import FeesModule from "@/components/modules/FeesModule";
@@ -144,7 +146,7 @@ const Dashboard = ({
 };
 
 const Panel = () => {
-  const { role, slug } = useParams<{ role: Role; slug?: string }>();
+  const { role, slug, section } = useParams<{ role: Role; slug?: string; section?: string }>();
   const { user: session, loading } = useAuth();
   const { perms } = usePermissions();
 
@@ -175,6 +177,10 @@ const Panel = () => {
   const mod = findModule(slug);
   if (!mod) return <Navigate to={`/panel/${r}`} replace />;
 
+  if (mod.key === "system-config" && !section) {
+    return <Navigate to={systemConfigHref(r)} replace />;
+  }
+
   const rolePerms = applyBackendModulePermissions(perms[r], session.modulePermissions);
   const perm = rolePerms[mod.key as ModuleKey];
   const caps = resolveModuleCaps(mod.key as ModuleKey, perm, session.modulePermissions);
@@ -193,6 +199,7 @@ const Panel = () => {
       case "student-management": return <StudentManagementModule perm={perm} caps={caps} />;
       case "students":      return <StudentsModule perm={perm} caps={caps} />;
       case "attendance":    return <AttendanceModule perm={perm} caps={caps} />;
+      case "system-config": return <SystemConfigModule caps={caps} section={section} />;
       case "timetable":     return <TimetableModule caps={caps} />;
       case "assignments":   return <AssignmentsModule perm={perm} caps={caps} />;
       case "exams":         return <ExamsModule perm={perm} caps={caps} />;

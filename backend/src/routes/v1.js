@@ -9,6 +9,7 @@ const chatRoutes = require('./chatRoutes');
 const announcementRoutes = require('./announcementRoutes');
 const assignmentRoutes = require('./assignmentRoutes');
 const configRoutes = require('./configRoutes');
+const timetableRoutes = require('./timetableRoutes');
 const studentManagementRoutes = require('./studentManagementRoutes');
 const roleRoutes = require('./roleRoutes');
 
@@ -25,6 +26,7 @@ router.use(chatRoutes);
 router.use('/announcements', announcementRoutes);
 router.use('/assignments', assignmentRoutes);
 router.use('/config', configRoutes);
+router.use('/timetable', timetableRoutes);
 router.use('/student-management', studentManagementRoutes);
 
 module.exports = router;

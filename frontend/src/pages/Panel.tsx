@@ -24,6 +24,7 @@ import ReportsModule from "@/components/modules/ReportsModule";
 import SettingsModule from "@/components/modules/SettingsModule";
 import DatasheetsModule from "@/components/modules/DatasheetsModule";
 import PermissionsModule from "@/components/modules/PermissionsModule";
+import StudentManagementModule from "@/components/modules/StudentManagementModule";
 import PermissionCatalogModule from "@/components/modules/PermissionCatalogModule";
 import { Store, useStore } from "@/lib/store";
 
@@ -189,6 +190,7 @@ const Panel = () => {
   const renderModule = () => {
     switch (mod.key) {
       case "users":         return <UsersModule perm={perm} caps={caps} />;
+      case "student-management": return <StudentManagementModule perm={perm} caps={caps} />;
       case "students":      return <StudentsModule perm={perm} caps={caps} />;
       case "attendance":    return <AttendanceModule perm={perm} caps={caps} />;
       case "timetable":     return <TimetableModule caps={caps} />;

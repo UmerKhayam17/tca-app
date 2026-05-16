@@ -46,6 +46,15 @@ const SYSTEM_MODULES = [
     actions: ['view', 'create', 'edit', 'delete', 'activate', 'suspend'],
   },
   {
+    key: 'studentManagement',
+    panelSlug: 'student-management',
+    label: 'Student Management',
+    icon: 'School',
+    description: 'Classes, subjects, fee structure, enrollment & tuition fees',
+    order: 32,
+    actions: ['view', 'create', 'edit', 'delete', 'record', 'generate'],
+  },
+  {
     key: 'fee',
     panelSlug: 'fees',
     label: 'Fees',

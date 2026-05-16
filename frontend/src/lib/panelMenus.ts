@@ -11,7 +11,7 @@ import {
 export const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   LayoutDashboard, UserCog, GraduationCap, ClipboardList, Calendar,
   BookOpen, Award, Wallet, DollarSign, MessageSquare, Bell, BarChart3,
-  Settings: SettingsIcon, FileText, KeyRound, ListTree,
+  Settings: SettingsIcon, FileText, KeyRound, ListTree, School,
 };
 
 export type MenuItem = ModuleDef & {

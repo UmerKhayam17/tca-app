@@ -25,6 +25,7 @@ export const canCRUD  = (p: PermLevel) => PERM_RANK[p] >= PERM_RANK.crud;
 export type ModuleKey =
   | "dashboard"
   | "users"
+  | "student-management"
   | "students"
   | "attendance"
   | "timetable"
@@ -51,6 +52,7 @@ export interface ModuleDef {
 export const MODULES: ModuleDef[] = [
   { key: "dashboard",     label: "Dashboard",       icon: "LayoutDashboard", desc: "Overview & key metrics" },
   { key: "users",         label: "Staff management", icon: "UserCog",         desc: "Teachers, accountants, access & salary" },
+  { key: "student-management", label: "Student Management", icon: "School", desc: "Classes, subjects, fees & tuition enrollment" },
   { key: "students",      label: "Student Records", icon: "GraduationCap",   desc: "Profiles & academic data" },
   { key: "attendance",    label: "Attendance",      icon: "ClipboardList",   desc: "Daily attendance" },
   { key: "timetable",     label: "Timetable",       icon: "Calendar",        desc: "Class & exam schedule" },
@@ -71,31 +73,31 @@ export const MODULES: ModuleDef[] = [
 // Default matrix — mirrors the reference spec sheet
 export const DEFAULT_PERMISSIONS: Record<Role, Record<ModuleKey, PermLevel>> = {
   admin: {
-    dashboard: "full", users: "crud", students: "crud", attendance: "crud",
+    dashboard: "full", users: "crud", "student-management": "crud", students: "crud", attendance: "crud",
     timetable: "crud", assignments: "crud", exams: "crud", fees: "crud",
     salary: "crud", library: "crud", chat: "full", announcements: "crud",
     reports: "full", datasheets: "full", settings: "full", permissions: "full", "permission-catalog": "full",
   },
   accountant: {
-    dashboard: "view", users: "none", students: "view", attendance: "none",
+    dashboard: "view", users: "none", "student-management": "process", students: "view", attendance: "none",
     timetable: "none", assignments: "none", exams: "none", fees: "crud",
     salary: "process", library: "none", chat: "view", announcements: "none",
     reports: "view", datasheets: "crud", settings: "none", permissions: "none", "permission-catalog": "none",
   },
   teacher: {
-    dashboard: "view", users: "none", students: "grade", attendance: "mark",
+    dashboard: "view", users: "none", "student-management": "view", students: "grade", attendance: "mark",
     timetable: "view", assignments: "grade", exams: "grade", fees: "none",
     salary: "view", library: "view", chat: "view", announcements: "view",
     reports: "view", datasheets: "crud", settings: "none", permissions: "none", "permission-catalog": "none",
   },
   parent: {
-    dashboard: "view", users: "none", students: "view", attendance: "view",
+    dashboard: "view", users: "none", "student-management": "none", students: "view", attendance: "view",
     timetable: "view", assignments: "view", exams: "view", fees: "view",
     salary: "none", library: "view", chat: "view", announcements: "view",
     reports: "none", datasheets: "view", settings: "none", permissions: "none", "permission-catalog": "none",
   },
   student: {
-    dashboard: "view", users: "none", students: "view", attendance: "view",
+    dashboard: "view", users: "none", "student-management": "none", students: "view", attendance: "view",
     timetable: "view", assignments: "view", exams: "view", fees: "view",
     salary: "none", library: "view", chat: "view", announcements: "view",
     reports: "none", datasheets: "view", settings: "none", permissions: "none", "permission-catalog": "none",
@@ -110,6 +112,7 @@ export const BACKEND_MODULE_KEY_MAP: Record<string, ModuleKey> = {
   assignment: "assignments",
   attendance: "attendance",
   student: "students",
+  studentManagement: "student-management",
   fee: "fees",
   timetable: "timetable",
   announcement: "announcements",

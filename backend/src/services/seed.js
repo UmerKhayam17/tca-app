@@ -32,6 +32,13 @@ const PERMISSIONS = [
   { name: 'use_chat', module: 'chat', action: 'read', description: 'Participate in chat' },
   { name: 'view_timetables', module: 'config', action: 'read', description: 'View timetables' },
   { name: 'manage_timetables', module: 'config', action: 'update', description: 'Manage timetables' },
+  { name: 'manage_academy_classes', module: 'studentManagement', action: 'create', description: 'Academy classes (tuition)' },
+  { name: 'manage_academy_subjects', module: 'studentManagement', action: 'create', description: 'Academy subjects per class' },
+  { name: 'manage_academy_fee_structures', module: 'studentManagement', action: 'create', description: 'Academy fee structures' },
+  { name: 'manage_academy_students', module: 'studentManagement', action: 'create', description: 'Register academy students' },
+  { name: 'view_academy_students', module: 'studentManagement', action: 'read', description: 'View academy students' },
+  { name: 'manage_academy_fees', module: 'studentManagement', action: 'update', description: 'Record academy fee payments' },
+  { name: 'view_academy_fee_reports', module: 'studentManagement', action: 'read', description: 'Academy fee reports' },
 ];
 
 async function ensureDefaultAdmin() {
@@ -108,7 +115,57 @@ async function ensureDefaultAdmin() {
   }
 }
 
+async function ensureAcademyPermissions() {
+  const academyNames = [
+    'manage_academy_classes',
+    'manage_academy_subjects',
+    'manage_academy_fee_structures',
+    'manage_academy_students',
+    'view_academy_students',
+    'manage_academy_fees',
+    'view_academy_fee_reports',
+  ];
+  const defs = PERMISSIONS.filter((p) => academyNames.includes(p.name));
+  for (const def of defs) {
+    await Permission.findOneAndUpdate({ name: def.name }, def, { upsert: true, new: true });
+  }
+  const adminRole = await Role.findOne({ name: 'admin' });
+  if (adminRole) {
+    const all = await Permission.find();
+    adminRole.permissions = all.map((p) => p._id);
+    const mp = adminRole.modulePermissions || new Map();
+    if (!mp.has('studentManagement')) {
+      mp.set('studentManagement', MODULES.studentManagement?.actions || ['view', 'create', 'edit', 'delete', 'record', 'generate']);
+    }
+    adminRole.modulePermissions = mp;
+    await adminRole.save();
+  }
+  const accountantRole = await Role.findOne({ name: 'accountant' });
+  if (accountantRole) {
+    const byName = async (n) => {
+      const p = await Permission.findOne({ name: n });
+      return p?._id;
+    };
+    const extra = await Promise.all([
+      'view_academy_students',
+      'manage_academy_fees',
+      'view_academy_fee_reports',
+    ].map(byName));
+    const ids = extra.filter(Boolean);
+    const set = new Set((accountantRole.permissions || []).map(String));
+    ids.forEach((id) => set.add(String(id)));
+    accountantRole.permissions = [...set];
+    const mp = accountantRole.modulePermissions || new Map();
+    if (!mp.has('studentManagement')) {
+      mp.set('studentManagement', ['view', 'record', 'generate']);
+    }
+    accountantRole.modulePermissions = mp;
+    await accountantRole.save();
+  }
+}
+
 async function seedPermissionsAndRoles() {
+  await ensureAcademyPermissions();
   const existing = await Permission.countDocuments();
   if (existing === 0) {
     const createdPerms = await Permission.insertMany(PERMISSIONS);
@@ -122,6 +179,9 @@ async function seedPermissionsAndRoles() {
       'generate_vouchers',
       'record_fee_payment',
       'view_fee_reports',
+      'view_academy_students',
+      'manage_academy_fees',
+      'view_academy_fee_reports',
       'use_chat',
       'view_attendance',
       'view_results',
@@ -158,6 +218,7 @@ async function seedPermissionsAndRoles() {
       ['assignment', ['view', 'create', 'edit', 'delete', 'submit']],
       ['announcement', ['view', 'create', 'edit', 'delete']],
       ['student', ['view']],
+      ['studentManagement', ['view']],
       ['timetable', ['view']],
       ['chat', ['view', 'create', 'participate']],
     ]);
@@ -173,6 +234,7 @@ async function seedPermissionsAndRoles() {
     const accountantModulePerms = new Map([
       ['student', ['view', 'activate']],
       ['fee', ['view', 'create', 'edit', 'generate', 'record']],
+      ['studentManagement', ['view', 'record', 'generate']],
       ['attendance', ['view']],
       ['exam', ['view']],
       ['chat', ['view', 'create', 'participate']],

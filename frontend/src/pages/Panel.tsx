@@ -3,6 +3,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Role } from "@/lib/auth";
 import { roleMeta, findModule, buildMenu, moduleHref } from "@/lib/panelMenus";
 import { systemConfigHref } from "@/lib/systemConfigMenus";
+import { studentManagementHref } from "@/lib/studentManagementMenus";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
   applyBackendModulePermissions, ModuleKey, resolveModuleCaps,
@@ -196,7 +197,7 @@ const Panel = () => {
   const renderModule = () => {
     switch (mod.key) {
       case "users":         return <UsersModule perm={perm} caps={caps} />;
-      case "student-management": return <StudentManagementModule perm={perm} caps={caps} />;
+      case "student-management": return <StudentManagementModule perm={perm} caps={caps} section={section} />;
       case "students":      return <StudentsModule perm={perm} caps={caps} />;
       case "attendance":    return <AttendanceModule perm={perm} caps={caps} />;
       case "system-config": return <SystemConfigModule caps={caps} section={section} />;

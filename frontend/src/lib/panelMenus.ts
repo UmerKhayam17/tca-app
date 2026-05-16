@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { Role } from "./auth";
 import { systemConfigHref } from "./systemConfigMenus";
+import { studentManagementHref } from "./studentManagementMenus";
 import {
   MODULES, ModuleKey, ModuleDef, PermLevel, resolveModuleCaps,
 } from "./permissions";
@@ -51,4 +52,6 @@ export const moduleHref = (role: Role, key: ModuleKey) =>
     ? `/panel/${role}`
     : key === "system-config"
       ? systemConfigHref(role)
-      : `/panel/${role}/${key}`;
+      : key === "student-management"
+        ? studentManagementHref(role)
+        : `/panel/${role}/${key}`;

@@ -12,6 +12,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Role, SessionUser, logout, panelPathFor } from "@/lib/auth";
 import { buildMenu, moduleHref } from "@/lib/panelMenus";
 import { SYSTEM_CONFIG_SECTIONS, systemConfigHref } from "@/lib/systemConfigMenus";
+import { STUDENT_MANAGEMENT_SECTIONS, studentManagementHref } from "@/lib/studentManagementMenus";
 import { usePermissions } from "@/hooks/usePermissions";
 import { applyBackendModulePermissions } from "@/lib/permissions";
 import logo from "@/assets/logo.png";
@@ -36,6 +37,8 @@ const PanelSidebar = ({ user }: { user: SessionUser }) => {
   const rootPath = panelPathFor(user.role);
   const systemConfigBase = `/panel/${user.role}/system-config`;
   const systemConfigOpen = pathname.startsWith(systemConfigBase);
+  const studentMgmtBase = `/panel/${user.role}/student-management`;
+  const studentMgmtOpen = pathname.startsWith(studentMgmtBase);
 
   return (
     <Sidebar collapsible="icon">
@@ -57,14 +60,19 @@ const PanelSidebar = ({ user }: { user: SessionUser }) => {
           <SidebarGroupContent>
             <SidebarMenu>
               {items.map((m) => {
-                if (m.key === "system-config") {
+                if (m.key === "system-config" || m.key === "student-management") {
+                  const isSystemConfig = m.key === "system-config";
+                  const open = isSystemConfig ? systemConfigOpen : studentMgmtOpen;
+                  const sections = isSystemConfig ? SYSTEM_CONFIG_SECTIONS : STUDENT_MANAGEMENT_SECTIONS;
+                  const hrefFor = isSystemConfig ? systemConfigHref : studentManagementHref;
+
                   return (
-                    <Collapsible key={m.key} defaultOpen={systemConfigOpen} className="group/collapsible">
+                    <Collapsible key={m.key} defaultOpen={open} className="group/collapsible">
                       <SidebarMenuItem>
                         <CollapsibleTrigger asChild>
                           <SidebarMenuButton
                             tooltip={m.label}
-                            isActive={systemConfigOpen}
+                            isActive={open}
                             className="group-data-[state=open]/collapsible:bg-sidebar-accent/50"
                           >
                             <m.Icon className="h-4 w-4" />
@@ -74,8 +82,8 @@ const PanelSidebar = ({ user }: { user: SessionUser }) => {
                         </CollapsibleTrigger>
                         <CollapsibleContent>
                           <SidebarMenuSub>
-                            {SYSTEM_CONFIG_SECTIONS.map((sub) => {
-                              const subHref = systemConfigHref(user.role, sub.key);
+                            {sections.map((sub) => {
+                              const subHref = hrefFor(user.role, sub.key);
                               const subActive = pathname === subHref;
                               const SubIcon = sub.icon;
                               return (
@@ -97,7 +105,10 @@ const PanelSidebar = ({ user }: { user: SessionUser }) => {
                 }
 
                 const href = moduleHref(user.role, m.key);
-                const active = m.key === "dashboard" ? pathname === rootPath : pathname === href;
+                const active =
+                  m.key === "dashboard"
+                    ? pathname === rootPath
+                    : pathname === href || pathname.startsWith(`${href}/`);
                 return (
                   <SidebarMenuItem key={m.key}>
                     <SidebarMenuButton asChild isActive={active} tooltip={m.label}>

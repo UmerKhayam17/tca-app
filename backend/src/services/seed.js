@@ -115,45 +115,159 @@ async function ensureDefaultAdmin() {
   }
 }
 
-async function ensureAcademyPermissions() {
-  const academyNames = [
-    'manage_academy_classes',
-    'manage_academy_subjects',
-    'manage_academy_fee_structures',
-    'manage_academy_students',
-    'view_academy_students',
-    'manage_academy_fees',
-    'view_academy_fee_reports',
-  ];
-  const defs = PERMISSIONS.filter((p) => academyNames.includes(p.name));
-  for (const def of defs) {
+async function upsertAllPermissions() {
+  for (const def of PERMISSIONS) {
     await Permission.findOneAndUpdate({ name: def.name }, def, { upsert: true, new: true });
   }
+}
+
+async function permissionIdsByNames(names) {
+  const ids = await Promise.all(
+    names.map(async (name) => {
+      const p = await Permission.findOne({ name });
+      return p?._id;
+    })
+  );
+  return ids.filter(Boolean);
+}
+
+function buildDefaultRoleDefs(allPermissionIds) {
+  const adminModulePerms = new Map();
+  Object.keys(MODULES).forEach((moduleName) => {
+    adminModulePerms.set(moduleName, MODULES[moduleName].actions);
+  });
+
+  return {
+    admin: {
+      name: 'admin',
+      permissions: allPermissionIds,
+      description: 'Full control',
+      modulePermissions: adminModulePerms,
+    },
+    teacher: {
+      name: 'teacher',
+      permissionNames: [
+        'mark_attendance',
+        'correct_attendance',
+        'view_attendance',
+        'enter_exam_marks',
+        'view_results',
+        'manage_assignments',
+        'manage_announcements',
+        'submit_assignment',
+        'use_chat',
+        'view_students',
+        'view_timetables',
+      ],
+      description: 'Academic',
+      modulePermissions: new Map([
+        ['attendance', ['view', 'create', 'edit', 'correct']],
+        ['exam', ['view', 'create', 'edit']],
+        ['assignment', ['view', 'create', 'edit', 'delete', 'submit']],
+        ['announcement', ['view', 'create', 'edit', 'delete']],
+        ['student', ['view']],
+        ['studentManagement', ['view']],
+        ['timetable', ['view']],
+        ['chat', ['view', 'create', 'participate']],
+      ]),
+    },
+    student: {
+      name: 'student',
+      permissionNames: ['view_attendance', 'view_results', 'use_chat', 'view_timetables', 'submit_assignment'],
+      description: 'Student and Parent portal',
+      modulePermissions: new Map([
+        ['attendance', ['view']],
+        ['exam', ['view']],
+        ['assignment', ['view', 'submit']],
+        ['timetable', ['view']],
+        ['chat', ['view', 'create', 'participate']],
+      ]),
+    },
+    accountant: {
+      name: 'accountant',
+      permissionNames: [
+        'activate_student',
+        'view_students',
+        'generate_vouchers',
+        'record_fee_payment',
+        'view_fee_reports',
+        'view_academy_students',
+        'manage_academy_fees',
+        'view_academy_fee_reports',
+        'use_chat',
+        'view_attendance',
+        'view_results',
+      ],
+      description: 'Finance',
+      modulePermissions: new Map([
+        ['student', ['view', 'activate']],
+        ['fee', ['view', 'create', 'edit', 'generate', 'record']],
+        ['studentManagement', ['view', 'record', 'generate']],
+        ['attendance', ['view']],
+        ['exam', ['view']],
+        ['chat', ['view', 'create', 'participate']],
+      ]),
+    },
+  };
+}
+
+async function ensureDefaultRoles() {
+  const allPermissions = await Permission.find();
+  const allIds = allPermissions.map((p) => p._id);
+  const defs = buildDefaultRoleDefs(allIds);
+  let createdAny = false;
+
+  for (const def of Object.values(defs)) {
+    const exists = await Role.findOne({ name: def.name });
+    if (exists) continue;
+
+    const permissions =
+      def.permissionNames != null ? await permissionIdsByNames(def.permissionNames) : def.permissions;
+
+    await Role.create({
+      name: def.name,
+      permissions,
+      description: def.description,
+      modulePermissions: def.modulePermissions,
+    });
+    createdAny = true;
+    if (env.nodeEnv !== 'production') {
+      // eslint-disable-next-line no-console
+      console.log(`[seed] Role created: ${def.name}`);
+    }
+  }
+
+  return createdAny;
+}
+
+async function syncBuiltInRolePermissions() {
   const adminRole = await Role.findOne({ name: 'admin' });
   if (adminRole) {
     const all = await Permission.find();
     adminRole.permissions = all.map((p) => p._id);
     const mp = adminRole.modulePermissions || new Map();
     if (!mp.has('studentManagement')) {
-      mp.set('studentManagement', MODULES.studentManagement?.actions || ['view', 'create', 'edit', 'delete', 'record', 'generate']);
+      mp.set(
+        'studentManagement',
+        MODULES.studentManagement?.actions || ['view', 'create', 'edit', 'delete', 'record', 'generate']
+      );
+    }
+    if (MODULES.config && !mp.has('config')) {
+      mp.set('config', MODULES.config.actions);
     }
     adminRole.modulePermissions = mp;
     await adminRole.save();
   }
+
   const accountantRole = await Role.findOne({ name: 'accountant' });
   if (accountantRole) {
-    const byName = async (n) => {
-      const p = await Permission.findOne({ name: n });
-      return p?._id;
-    };
-    const extra = await Promise.all([
+    const extra = await permissionIdsByNames([
       'view_academy_students',
       'manage_academy_fees',
       'view_academy_fee_reports',
-    ].map(byName));
-    const ids = extra.filter(Boolean);
+    ]);
     const set = new Set((accountantRole.permissions || []).map(String));
-    ids.forEach((id) => set.add(String(id)));
+    extra.forEach((id) => set.add(String(id)));
     accountantRole.permissions = [...set];
     const mp = accountantRole.modulePermissions || new Map();
     if (!mp.has('studentManagement')) {
@@ -165,95 +279,15 @@ async function ensureAcademyPermissions() {
 }
 
 async function seedPermissionsAndRoles() {
-  await ensureAcademyPermissions();
-  const existing = await Permission.countDocuments();
-  if (existing === 0) {
-    const createdPerms = await Permission.insertMany(PERMISSIONS);
-    const byName = (n) => createdPerms.find((p) => p.name === n)._id;
-
-    const allIds = createdPerms.map((p) => p._id);
-
-    const accountantPerms = [
-      'activate_student',
-      'view_students',
-      'generate_vouchers',
-      'record_fee_payment',
-      'view_fee_reports',
-      'view_academy_students',
-      'manage_academy_fees',
-      'view_academy_fee_reports',
-      'use_chat',
-      'view_attendance',
-      'view_results',
-    ].map(byName);
-
-    const teacherPerms = [
-      'mark_attendance',
-      'correct_attendance',
-      'view_attendance',
-      'enter_exam_marks',
-      'view_results',
-      'manage_assignments',
-      'manage_announcements',
-      'submit_assignment',
-      'use_chat',
-      'view_students',
-      'view_timetables',
-    ].map(byName);
-
-    // Combined Parent/Student permissions
-    const studentPerms = ['view_attendance', 'view_results', 'use_chat', 'view_timetables', 'submit_assignment'].map(
-      byName
-    );
-
-    // Module permissions for each role
-    const adminModulePerms = new Map();
-    Object.keys(MODULES).forEach((moduleName) => {
-      adminModulePerms.set(moduleName, MODULES[moduleName].actions);
-    });
-
-    const teacherModulePerms = new Map([
-      ['attendance', ['view', 'create', 'edit', 'correct']],
-      ['exam', ['view', 'create', 'edit']],
-      ['assignment', ['view', 'create', 'edit', 'delete', 'submit']],
-      ['announcement', ['view', 'create', 'edit', 'delete']],
-      ['student', ['view']],
-      ['studentManagement', ['view']],
-      ['timetable', ['view']],
-      ['chat', ['view', 'create', 'participate']],
-    ]);
-
-    const studentModulePerms = new Map([
-      ['attendance', ['view']],
-      ['exam', ['view']],
-      ['assignment', ['view', 'submit']],
-      ['timetable', ['view']],
-      ['chat', ['view', 'create', 'participate']],
-    ]);
-
-    const accountantModulePerms = new Map([
-      ['student', ['view', 'activate']],
-      ['fee', ['view', 'create', 'edit', 'generate', 'record']],
-      ['studentManagement', ['view', 'record', 'generate']],
-      ['attendance', ['view']],
-      ['exam', ['view']],
-      ['chat', ['view', 'create', 'participate']],
-    ]);
-
-    await Role.insertMany([
-      { name: 'admin', permissions: allIds, description: 'Full control', modulePermissions: adminModulePerms },
-      { name: 'teacher', permissions: teacherPerms, description: 'Academic', modulePermissions: teacherModulePerms },
-      { name: 'student', permissions: studentPerms, description: 'Student and Parent portal', modulePermissions: studentModulePerms },
-      { name: 'accountant', permissions: accountantPerms, description: 'Finance', modulePermissions: accountantModulePerms },
-    ]);
-
-    if (env.nodeEnv !== 'production') {
-      // eslint-disable-next-line no-console
-      console.log('[seed] Permissions and roles initialized.');
-    }
-  }
-
+  await upsertAllPermissions();
+  const rolesCreated = await ensureDefaultRoles();
+  await syncBuiltInRolePermissions();
   await ensureDefaultAdmin();
+
+  if (rolesCreated && env.nodeEnv !== 'production') {
+    // eslint-disable-next-line no-console
+    console.log('[seed] Default roles initialized.');
+  }
 }
 
 module.exports = { seedPermissionsAndRoles, ensureDefaultAdmin };

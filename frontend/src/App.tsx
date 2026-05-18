@@ -43,6 +43,7 @@ const App = () => (
           <Route path="/login" element={<Login />} />
           <Route element={<PanelLayout />}>
             <Route path="/panel/:role" element={<Panel />} />
+            <Route path="/panel/:role/:slug/:section" element={<Panel />} />
             <Route path="/panel/:role/:slug" element={<Panel />} />
           </Route>
         </Routes>

@@ -1,0 +1,53 @@
+import { useQuery } from "@tanstack/react-query";
+import { Card } from "@/components/ui/card";
+import { fetchMyTeacherSchedule } from "@/lib/timetableApi";
+import { DAY_LABELS, DAY_ORDER, subjectColor } from "./constants";
+import type { Weekday } from "@/lib/configApi";
+
+export default function MyScheduleTab({ sessionId }: { sessionId: string }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ["my-teacher-schedule", sessionId],
+    queryFn: () => fetchMyTeacherSchedule(sessionId),
+    enabled: !!sessionId,
+  });
+
+  if (!sessionId) return <p className="p-6 text-muted-foreground text-sm">Select a session above.</p>;
+  if (isLoading) return <p className="p-6 text-muted-foreground text-sm">Loading schedule…</p>;
+
+  const slots = data?.slots || [];
+  if (!slots.length) {
+    return <p className="p-6 text-muted-foreground text-sm">No classes scheduled for you in this session.</p>;
+  }
+
+  const days = [...new Set(slots.map((s) => s.day))].sort(
+    (a, b) => DAY_ORDER.indexOf(a as Weekday) - DAY_ORDER.indexOf(b as Weekday)
+  ) as Weekday[];
+
+  const byDay = (day: Weekday) =>
+    slots.filter((s) => s.day === day).sort((a, b) => a.periodId.localeCompare(b.periodId));
+
+  return (
+    <div className="px-4 sm:px-6 lg:px-8 py-6">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {days.map((day) => (
+          <Card key={day} className="p-4">
+            <h3 className="font-semibold text-primary mb-3">{DAY_LABELS[day]}</h3>
+            <ul className="space-y-2">
+              {byDay(day).map((s) => (
+                <li key={s._id} className={`rounded-md border p-2 text-sm ${subjectColor(s.subject._id)}`}>
+                  <div className="font-semibold">{s.subject.name}</div>
+                  <div className="text-xs opacity-80">
+                    {typeof s.class === "object" && s.class?.name ? `${s.class.name} ` : ""}
+                    {typeof s.section === "object" && s.section?.name ? s.section.name : ""}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+

@@ -1,0 +1,143 @@
+const { Router } = require('express');
+const { protect } = require('../middleware/auth');
+const { requirePermission, requireAnyPermission } = require('../middleware/permissions');
+const { validate } = require('../middleware/validate');
+const schemas = require('../validators/timetableSchemas');
+const setup = require('../controllers/timetable/timetableSetupController');
+const tt = require('../controllers/timetable/timetableController');
+
+const router = Router();
+router.use(protect);
+
+const canView = requireAnyPermission('view_timetables', 'manage_timetables', 'manage_classes');
+const canManage = requireAnyPermission('manage_timetables', 'manage_classes');
+const canPublish = requireAnyPermission('manage_timetables');
+
+// ─── Setup: Rooms ───────────────────────────────────────────────
+router.get('/setup/rooms', canView, setup.listRooms);
+router.get('/setup/rooms/:id', canView, setup.getRoom);
+router.post('/setup/rooms', canManage, validate(schemas.roomBody), setup.createRoom);
+router.patch('/setup/rooms/:id', canManage, validate(schemas.roomPatch), setup.updateRoom);
+router.delete('/setup/rooms/:id', canManage, setup.deleteRoom);
+
+// ─── Setup: Period templates ────────────────────────────────────
+router.get('/setup/period-templates', canView, setup.listPeriodTemplates);
+router.get('/setup/period-templates/:id', canView, setup.getPeriodTemplate);
+router.post(
+  '/setup/period-templates',
+  canManage,
+  validate(schemas.periodTemplateBody),
+  setup.createPeriodTemplate
+);
+router.patch(
+  '/setup/period-templates/:id',
+  canManage,
+  validate(schemas.periodTemplatePatch),
+  setup.updatePeriodTemplate
+);
+router.delete('/setup/period-templates/:id', canManage, setup.deletePeriodTemplate);
+
+// ─── Setup: Teacher profiles ────────────────────────────────────
+router.get('/setup/teacher-profiles', canView, setup.listTeacherProfiles);
+router.get('/setup/teacher-profiles/:id', canView, setup.getTeacherProfile);
+router.post(
+  '/setup/teacher-profiles',
+  canManage,
+  validate(schemas.teacherProfileBody),
+  setup.createTeacherProfile
+);
+router.patch(
+  '/setup/teacher-profiles/:id',
+  canManage,
+  validate(schemas.teacherProfilePatch),
+  setup.updateTeacherProfile
+);
+router.delete('/setup/teacher-profiles/:id', canManage, setup.deleteTeacherProfile);
+
+// ─── Setup: Teacher assignments ─────────────────────────────────
+router.get('/setup/teacher-assignments', canView, setup.listTeacherAssignments);
+router.post(
+  '/setup/teacher-assignments',
+  canManage,
+  validate(schemas.teacherAssignmentBody),
+  setup.createTeacherAssignment
+);
+router.patch(
+  '/setup/teacher-assignments/:id',
+  canManage,
+  validate(schemas.teacherAssignmentPatch),
+  setup.updateTeacherAssignment
+);
+router.delete('/setup/teacher-assignments/:id', canManage, setup.deleteTeacherAssignment);
+
+// ─── Setup: Subject requirements ────────────────────────────────
+router.get('/setup/subject-requirements', canView, setup.listSubjectRequirements);
+router.post(
+  '/setup/subject-requirements',
+  canManage,
+  validate(schemas.subjectRequirementBody),
+  setup.createSubjectRequirement
+);
+router.patch(
+  '/setup/subject-requirements/:id',
+  canManage,
+  validate(schemas.subjectRequirementPatch),
+  setup.updateSubjectRequirement
+);
+router.delete('/setup/subject-requirements/:id', canManage, setup.deleteSubjectRequirement);
+
+// ─── Setup: Timetable settings (per session) ──────────────────────
+router.get('/setup/settings/:sessionId', canView, setup.getSettings);
+router.put(
+  '/setup/settings/:sessionId',
+  canManage,
+  validate(schemas.timetableSettingsBody),
+  setup.upsertSettings
+);
+
+// ─── Timetable versions ─────────────────────────────────────────
+router.get('/versions', canView, tt.listVersions);
+router.get('/versions/published', canView, tt.getPublishedForSection);
+router.get('/versions/:id', canView, tt.getVersion);
+router.get('/versions/:id/grid', canView, tt.getVersionGrid);
+router.post('/versions', canManage, validate(schemas.timetableVersionBody), tt.createVersion);
+router.post('/versions/:id/duplicate', canManage, tt.duplicateVersion);
+router.post('/versions/:id/publish', canPublish, tt.publishVersion);
+router.post('/versions/:id/archive', canManage, tt.archiveVersion);
+router.post('/versions/:id/validate', canView, tt.validateVersionHandler);
+router.delete('/versions/:id', canManage, tt.deleteVersion);
+
+// ─── Schedule slots ───────────────────────────────────────────────
+router.get('/versions/:versionId/slots', canView, tt.listSlots);
+router.post(
+  '/versions/:versionId/slots',
+  canManage,
+  validate(schemas.scheduleSlotBody),
+  tt.upsertSlot
+);
+router.patch(
+  '/slots/:slotId',
+  canManage,
+  validate(schemas.scheduleSlotMove),
+  tt.moveSlot
+);
+router.delete('/slots/:slotId', canManage, tt.deleteSlot);
+
+// ─── Role-based views ───────────────────────────────────────────
+router.get(
+  '/me/teacher',
+  requireAnyPermission('view_timetables', 'manage_timetables'),
+  tt.myTeacherSchedule
+);
+router.get('/sections/schedule', requirePermission('view_timetables'), tt.sectionSchedule);
+router.get('/rooms/:roomId/schedule', canView, tt.roomSchedule);
+
+// ─── Substitutions ────────────────────────────────────────────────
+router.post(
+  '/substitutions',
+  canManage,
+  validate(schemas.substitutionBody),
+  tt.createSubstitution
+);
+
+module.exports = router;

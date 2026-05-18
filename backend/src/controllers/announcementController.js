@@ -6,7 +6,7 @@ const create = catchAsync(async (req, res) => {
   const ann = await Announcement.create({ ...req.body, createdBy: req.user._id });
   res.status(201).json({ success: true, data: ann });
 });
-
+//  latest Code
 const list = catchAsync(async (req, res) => {
   const { audience, classId, sectionId } = req.query;
   const q = {};

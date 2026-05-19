@@ -1,11 +1,46 @@
 const ScheduleSlot = require('../../models/timetable/ScheduleSlot');
 const TimetableVersion = require('../../models/timetable/TimetableVersion');
-const PeriodTemplate = require('../../models/timetable/PeriodTemplate');
 const TeacherProfile = require('../../models/timetable/TeacherProfile');
 const TeacherAssignment = require('../../models/timetable/TeacherAssignment');
 const SubjectRequirement = require('../../models/timetable/SubjectRequirement');
 const TimetableSettings = require('../../models/timetable/TimetableSettings');
 const Room = require('../../models/timetable/Room');
+const Subject = require('../../models/Subject');
+
+function findPeriodInTemplate(template, periodId) {
+  if (!template?.slots?.length || periodId == null) return null;
+  if (typeof template.slots.id === 'function') {
+    const byId = template.slots.id(periodId);
+    if (byId) return byId;
+  }
+  return template.slots.find((s) => String(s._id) === String(periodId)) || null;
+}
+
+/** Teacher may teach this subject for the section (assignment, subject default, or profile). */
+async function teacherCanTeachSubject({ sessionId, sectionId, subjectId, teacherId }) {
+  if (!teacherId || !subjectId) return false;
+
+  const assignment = await TeacherAssignment.findOne({
+    session: sessionId,
+    section: sectionId,
+    subject: subjectId,
+    teacher: teacherId,
+    isActive: true,
+  });
+  if (assignment) return true;
+
+  const subject = await Subject.findById(subjectId).select('teacher');
+  if (subject?.teacher && String(subject.teacher) === String(teacherId)) return true;
+
+  const profile = await TeacherProfile.findOne({
+    user: teacherId,
+    session: sessionId,
+    isActive: true,
+  });
+  if (profile?.subjects?.some((s) => String(s._id || s) === String(subjectId))) return true;
+
+  return false;
+}
 
 /**
  * Validate a single slot or full timetable version.
@@ -21,6 +56,7 @@ async function validateSlot({
   roomId,
   sectionId,
   excludeSlotId,
+  strict = false,
 }) {
   const errors = [];
   const warnings = [];
@@ -32,7 +68,7 @@ async function validateSlot({
   }
 
   const template = version.periodTemplate;
-  const slotDef = template?.slots?.id(periodId);
+  const slotDef = findPeriodInTemplate(template, periodId);
   if (!slotDef) {
     errors.push({ code: 'INVALID_PERIOD', message: 'Period does not exist in template' });
     return { valid: false, errors, warnings };
@@ -113,22 +149,27 @@ async function validateSlot({
   if (profile?.availability?.length) {
     const dayAvail = profile.availability.find((a) => a.day === day);
     if (dayAvail && dayAvail.periodIds?.length && !dayAvail.periodIds.some((id) => String(id) === String(periodId))) {
-      errors.push({ code: 'TEACHER_UNAVAILABLE', message: 'Teacher is not available at this period' });
+      const entry = {
+        code: 'TEACHER_UNAVAILABLE',
+        message: 'Teacher is not available at this period',
+      };
+      if (strict) errors.push(entry);
+      else warnings.push(entry);
     }
   }
 
-  // R8: Teacher assignment
-  const assignment = await TeacherAssignment.findOne({
-    session: sessionId,
-    section: sectionId,
-    subject: subjectId,
-    teacher: teacherId,
-    isActive: true,
+  // R8: Teacher must be allowed to teach this subject for this section
+  const canTeach = await teacherCanTeachSubject({
+    sessionId,
+    sectionId,
+    subjectId,
+    teacherId,
   });
-  if (!assignment) {
+  if (!canTeach) {
     errors.push({
       code: 'TEACHER_NOT_ASSIGNED',
-      message: 'Teacher is not assigned to teach this subject for this section',
+      message:
+        'Teacher is not assigned to this subject. Add an assignment under System Configuration → Assignments.',
     });
   }
 
@@ -197,6 +238,7 @@ async function validateVersion(timetableVersionId, { forPublish = false } = {}) 
       roomId: slot.room,
       sectionId: version.section,
       excludeSlotId: slot._id,
+      strict: forPublish,
     });
     result.errors.forEach((e) =>
       errors.push({ ...e, day: slot.day, periodId: slot.periodId, slotId: slot._id })

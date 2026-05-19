@@ -31,7 +31,7 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
         : typeof body.details === "object" && body.details !== null
           ? JSON.stringify(body.details)
           : "";
-    throw new Error(body.message || detailMsg || `Request failed (${res.status})`);
+    throw new Error(detailMsg || body.message || `Request failed (${res.status})`);
   }
   return body.data as T;
 }

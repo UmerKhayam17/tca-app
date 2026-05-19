@@ -40,6 +40,12 @@ async function upsertSlot(timetableVersionId, body, { excludeSlotId } = {}) {
     substituteForTeacher: body.substituteForTeacher || null,
   };
 
+  const existing = await ScheduleSlot.findOne({
+    timetableVersion: timetableVersionId,
+    day: payload.day,
+    periodId: payload.periodId,
+  });
+
   const validation = await validateSlot({
     sessionId: version.session,
     timetableVersionId,
@@ -49,11 +55,12 @@ async function upsertSlot(timetableVersionId, body, { excludeSlotId } = {}) {
     teacherId: payload.teacher,
     roomId: payload.room,
     sectionId: version.section,
-    excludeSlotId,
+    excludeSlotId: excludeSlotId || existing?._id,
   });
 
   if (!validation.valid) {
-    throw new ApiError(400, 'Slot validation failed', validation.errors);
+    const summary = validation.errors.map((e) => e.message).filter(Boolean).join('; ');
+    throw new ApiError(400, summary || 'Slot validation failed', validation.errors);
   }
 
   if (excludeSlotId) {
@@ -64,12 +71,6 @@ async function upsertSlot(timetableVersionId, body, { excludeSlotId } = {}) {
     if (!slot) throw new ApiError(404, 'Schedule slot not found');
     return slot;
   }
-
-  const existing = await ScheduleSlot.findOne({
-    timetableVersion: timetableVersionId,
-    day: payload.day,
-    periodId: payload.periodId,
-  });
 
   if (existing) {
     const slot = await ScheduleSlot.findByIdAndUpdate(existing._id, payload, {

@@ -139,7 +139,8 @@ export default function GridTab({
       setSlotDialog(null);
       toast({ title: "Slot saved" });
     },
-    onError: (e: Error) => toast({ title: "Conflict", description: e.message, variant: "destructive" }),
+    onError: (e: Error) =>
+      toast({ title: "Could not save slot", description: e.message, variant: "destructive" }),
   });
 
   const deleteSlotMut = useMutation({

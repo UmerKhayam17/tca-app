@@ -4,6 +4,7 @@ import { Role } from "@/lib/auth";
 import { roleMeta, findModule, buildMenu, moduleHref } from "@/lib/panelMenus";
 import { systemConfigHref } from "@/lib/systemConfigMenus";
 import { studentManagementHref } from "@/lib/studentManagementMenus";
+import { defaultTimetableSection, timetableHref } from "@/lib/timetableMenus";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
   applyBackendModulePermissions, ModuleKey, resolveModuleCaps,
@@ -178,13 +179,22 @@ const Panel = () => {
   const mod = findModule(slug);
   if (!mod) return <Navigate to={`/panel/${r}`} replace />;
 
+  const rolePerms = applyBackendModulePermissions(perms[r], session.modulePermissions);
+  const perm = rolePerms[mod.key as ModuleKey];
+  const caps = resolveModuleCaps(mod.key as ModuleKey, perm, session.modulePermissions);
+
   if (mod.key === "system-config" && !section) {
     return <Navigate to={systemConfigHref(r)} replace />;
   }
 
-  const rolePerms = applyBackendModulePermissions(perms[r], session.modulePermissions);
-  const perm = rolePerms[mod.key as ModuleKey];
-  const caps = resolveModuleCaps(mod.key as ModuleKey, perm, session.modulePermissions);
+  if (mod.key === "timetable" && !section) {
+    return (
+      <Navigate
+        to={timetableHref(r, defaultTimetableSection({ caps, role: r }))}
+        replace
+      />
+    );
+  }
   if (!caps.canView) {
     return (
       <div className="px-6 py-12 text-center">
@@ -201,7 +211,7 @@ const Panel = () => {
       case "students":      return <StudentsModule perm={perm} caps={caps} />;
       case "attendance":    return <AttendanceModule perm={perm} caps={caps} />;
       case "system-config": return <SystemConfigModule caps={caps} section={section} />;
-      case "timetable":     return <TimetableModule caps={caps} />;
+      case "timetable":     return <TimetableModule caps={caps} section={section} role={r} />;
       case "assignments":   return <AssignmentsModule perm={perm} caps={caps} />;
       case "exams":         return <ExamsModule perm={perm} caps={caps} />;
       case "fees":          return <FeesModule perm={perm} caps={caps} />;

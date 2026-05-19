@@ -7,8 +7,9 @@ import {
 import { Role } from "./auth";
 import { systemConfigHref } from "./systemConfigMenus";
 import { studentManagementHref } from "./studentManagementMenus";
+import { defaultTimetableSection, timetableHref } from "./timetableMenus";
 import {
-  MODULES, ModuleKey, ModuleDef, PermLevel, resolveModuleCaps,
+  MODULES, ModuleKey, ModuleDef, ModuleActionCaps, PermLevel, resolveModuleCaps,
 } from "./permissions";
 
 export const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -47,11 +48,17 @@ export const buildMenu = (
 export const findModule = (slug: string | undefined): ModuleDef | undefined =>
   MODULES.find((m) => (slug ? m.key === slug : m.key === "dashboard"));
 
-export const moduleHref = (role: Role, key: ModuleKey) =>
+export const moduleHref = (
+  role: Role,
+  key: ModuleKey,
+  opts?: { caps?: ModuleActionCaps },
+) =>
   key === "dashboard"
     ? `/panel/${role}`
     : key === "system-config"
       ? systemConfigHref(role)
       : key === "student-management"
         ? studentManagementHref(role)
-        : `/panel/${role}/${key}`;
+        : key === "timetable" && opts?.caps
+          ? timetableHref(role, defaultTimetableSection({ caps: opts.caps, role }))
+          : `/panel/${role}/${key}`;

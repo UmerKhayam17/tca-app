@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,15 +8,19 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertCircle, Copy, Plus, Send } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import type { ModuleActionCaps } from "@/lib/permissions";
 import type { Weekday } from "@/lib/configApi";
-import { fetchClasses, fetchSections } from "@/lib/configApi";
+import { fetchClasses, fetchSections, fetchSubjects } from "@/lib/configApi";
+import { systemConfigHref } from "@/lib/systemConfigMenus";
+import { fetchUsers } from "@/lib/usersApi";
 import {
   createTimetableVersion,
   deleteScheduleSlot,
   duplicateTimetableVersion,
   fetchPeriodTemplates,
   fetchTeacherAssignments,
+  fetchTeacherProfiles,
   fetchTimetableGrid,
   fetchTimetableVersions,
   publishTimetableVersion,
@@ -34,6 +39,7 @@ export default function GridTab({
   caps: ModuleActionCaps;
 }) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const qc = useQueryClient();
   const [classId, setClassId] = useState("");
   const [sectionId, setSectionId] = useState("");
@@ -78,11 +84,25 @@ export default function GridTab({
     enabled: !!activeVersionId,
   });
 
-  const { data: assignments = [] } = useQuery({
-    queryKey: ["timetable-assignments", sessionId, sectionId],
-    queryFn: () => fetchTeacherAssignments({ sessionId, sectionId }),
-    enabled: !!sessionId && !!sectionId,
+  const { data: subjects = [] } = useQuery({
+    queryKey: ["config-subjects", classId],
+    queryFn: () => fetchSubjects(classId),
+    enabled: !!classId,
   });
+
+  const { data: assignments = [] } = useQuery({
+    queryKey: ["timetable-assignments", sessionId, classId, sectionId],
+    queryFn: () => fetchTeacherAssignments({ sessionId, classId, sectionId }),
+    enabled: !!sessionId && !!classId && !!sectionId,
+  });
+
+  const { data: teacherProfiles = [] } = useQuery({
+    queryKey: ["timetable-teacher-profiles", sessionId],
+    queryFn: () => fetchTeacherProfiles(sessionId),
+    enabled: !!sessionId,
+  });
+
+  const { data: users = [] } = useQuery({ queryKey: ["users"], queryFn: fetchUsers });
 
   const createVersionMut = useMutation({
     mutationFn: () => {
@@ -159,17 +179,66 @@ export default function GridTab({
   const getSlot = (day: Weekday, periodId: string) =>
     grid?.slots.find((s) => s.day === day && s.periodId === periodId);
 
+  const subjectOptions = useMemo(() => {
+    const merged = new Map<string, { _id: string; name: string }>();
+    for (const s of subjects) merged.set(s._id, { _id: s._id, name: s.name });
+    for (const a of assignments) merged.set(a.subject._id, { _id: a.subject._id, name: a.subject.name });
+    return [...merged.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [subjects, assignments]);
+
+  const panelTeachers = useMemo(
+    () =>
+      users
+        .filter((u) => {
+          const rn = typeof u.role === "object" && u.role?.name ? u.role.name : "";
+          return rn === "teacher" || rn === "admin";
+        })
+        .map((u) => ({ _id: u._id, name: u.name })),
+    [users]
+  );
+
+  const teachersForSubject = (subjectId: string) => {
+    if (!subjectId) return [];
+    const seen = new Set<string>();
+    const list: { _id: string; name: string }[] = [];
+    const add = (t?: { _id: string; name: string } | null) => {
+      if (t?._id && !seen.has(t._id)) {
+        seen.add(t._id);
+        list.push({ _id: t._id, name: t.name });
+      }
+    };
+
+    for (const a of assignments.filter((x) => x.subject._id === subjectId)) {
+      add(a.teacher);
+    }
+    add(subjects.find((s) => s._id === subjectId)?.teacher);
+    for (const profile of teacherProfiles) {
+      if (profile.subjects?.some((s) => s._id === subjectId)) {
+        add(profile.user);
+      }
+    }
+    if (list.length === 0) return panelTeachers;
+    return list;
+  };
+
+  const defaultTeacherForSubject = (subjectId: string, existing?: ScheduleSlot) => {
+    if (existing?.teacher._id) return existing.teacher._id;
+    return teachersForSubject(subjectId)[0]?._id || "";
+  };
+
   const openCell = (day: Weekday, period: PeriodSlot) => {
     if (!caps.canEdit || grid?.version.status !== "draft") return;
     const existing = getSlot(day, period._id);
-    const assign = assignments.find((a) => a.subject._id === existing?.subject._id);
+    const subjectId = existing?.subject._id || "";
     setForm({
-      subjectId: existing?.subject._id || "",
-      teacherId: existing?.teacher._id || assign?.teacher._id || "",
+      subjectId,
+      teacherId: defaultTeacherForSubject(subjectId, existing),
       roomId: existing?.room?._id || "",
     });
     setSlotDialog({ day, period, existing });
   };
+
+  const setupHref = user ? systemConfigHref(user.role, "teacher-assignments") : "#";
 
   const sectionLabel = sections.find((s) => s._id === sectionId);
   const classLabel = classes.find((c) => c._id === classId);
@@ -292,7 +361,28 @@ export default function GridTab({
       )}
 
       {sectionId && !activeVersionId && !isLoading && (
-        <p className="text-sm text-muted-foreground">No timetable for this section. Create a draft to start.</p>
+        <p className="text-sm text-muted-foreground">No timetable for this section. Click <strong>New draft</strong> to start building the grid.</p>
+      )}
+
+      {sectionId && classId && subjectOptions.length === 0 && (
+        <Card className="p-4 text-sm text-muted-foreground space-y-2">
+          <p className="font-medium text-foreground">Set up subjects and teachers first</p>
+          <ol className="list-decimal list-inside space-y-1">
+            <li>
+              <Link to={user ? systemConfigHref(user.role, "academic") : "#"} className="text-primary underline">
+                System Configuration → Academic
+              </Link>
+              : add classes and subjects for this class.
+            </li>
+            <li>
+              <Link to={setupHref} className="text-primary underline">
+                System Configuration → Assignments
+              </Link>
+              : link each subject to a teacher for this section.
+            </li>
+            <li>Return here, create a <strong>New draft</strong>, then click a cell to assign periods.</li>
+          </ol>
+        </Card>
       )}
 
       <Dialog open={!!slotDialog} onOpenChange={(o) => !o && setSlotDialog(null)}>
@@ -310,15 +400,27 @@ export default function GridTab({
                 value={form.subjectId}
                 onChange={(e) => {
                   const sub = e.target.value;
-                  const a = assignments.find((x) => x.subject._id === sub);
-                  setForm({ subjectId: sub, teacherId: a?.teacher._id || "", roomId: "" });
+                  setForm({
+                    subjectId: sub,
+                    teacherId: defaultTeacherForSubject(sub),
+                    roomId: "",
+                  });
                 }}
               >
                 <option value="">Select subject</option>
-                {[...new Map(assignments.map((a) => [a.subject._id, a.subject])).values()].map((s) => (
+                {subjectOptions.map((s) => (
                   <option key={s._id} value={s._id}>{s.name}</option>
                 ))}
               </select>
+              {subjectOptions.length === 0 && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  No subjects yet. Add them under{" "}
+                  <Link to={user ? systemConfigHref(user.role, "academic") : "#"} className="text-primary underline">
+                    Academic setup
+                  </Link>
+                  .
+                </p>
+              )}
             </div>
             <div>
               <Label>Teacher</Label>
@@ -326,14 +428,22 @@ export default function GridTab({
                 className="w-full h-10 rounded-md border px-3 text-sm"
                 value={form.teacherId}
                 onChange={(e) => setForm((f) => ({ ...f, teacherId: e.target.value }))}
+                disabled={!form.subjectId}
               >
                 <option value="">Select teacher</option>
-                {assignments
-                  .filter((a) => a.subject._id === form.subjectId)
-                  .map((a) => (
-                    <option key={a.teacher._id} value={a.teacher._id}>{a.teacher.name}</option>
-                  ))}
+                {teachersForSubject(form.subjectId).map((t) => (
+                  <option key={t._id} value={t._id}>{t.name}</option>
+                ))}
               </select>
+              {form.subjectId && teachersForSubject(form.subjectId).length === 0 && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Assign a teacher for this subject in{" "}
+                  <Link to={setupHref} className="text-primary underline">
+                    Assignments
+                  </Link>
+                  .
+                </p>
+              )}
             </div>
           </div>
           <DialogFooter className="gap-2 sm:gap-0">

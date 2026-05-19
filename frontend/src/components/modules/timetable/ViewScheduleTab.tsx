@@ -4,7 +4,8 @@ import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { fetchClasses, fetchSections } from "@/lib/configApi";
 import { fetchSectionSchedule } from "@/lib/timetableApi";
-import { DAY_LABELS, subjectColor } from "./constants";
+import { Badge } from "@/components/ui/badge";
+import { DAY_LABELS, slotMatchesPeriod, subjectColor } from "./constants";
 import type { Weekday } from "@/lib/configApi";
 
 export default function ViewScheduleTab({ sessionId }: { sessionId: string }) {
@@ -35,7 +36,7 @@ export default function ViewScheduleTab({ sessionId }: { sessionId: string }) {
   const lecturePeriods = (grid?.periods || []).filter((p) => p.type === "lecture");
 
   const getSlot = (day: Weekday, periodId: string) =>
-    grid?.slots.find((s) => s.day === day && s.periodId === periodId);
+    grid?.slots.find((s) => s.day === day && slotMatchesPeriod(s, periodId));
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-4">
@@ -67,10 +68,20 @@ export default function ViewScheduleTab({ sessionId }: { sessionId: string }) {
 
       {isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
       {sectionId && !isLoading && !grid && (
-        <p className="text-sm text-muted-foreground">No published timetable for this section.</p>
+        <p className="text-sm text-muted-foreground">
+          No published timetable for this section. Publish a draft from{" "}
+          <strong>Timetable builder</strong> first (same session, class, and section).
+        </p>
       )}
 
       {grid && (
+        <>
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <Badge variant="default">Published · v{grid.version.version}</Badge>
+            {grid.slots.length === 0 && (
+              <span className="text-muted-foreground">Published, but no lessons in the grid yet.</span>
+            )}
+          </div>
         <Card className="overflow-x-auto">
           <table className="w-full text-sm min-w-[640px]">
             <thead className="bg-muted/50">
@@ -107,6 +118,7 @@ export default function ViewScheduleTab({ sessionId }: { sessionId: string }) {
             </tbody>
           </table>
         </Card>
+        </>
       )}
     </div>
   );

@@ -1,11 +1,28 @@
 const ScheduleSlot = require('../../models/timetable/ScheduleSlot');
 const TimetableVersion = require('../../models/timetable/TimetableVersion');
-const PeriodTemplate = require('../../models/timetable/PeriodTemplate');
 const TeacherProfile = require('../../models/timetable/TeacherProfile');
-const TeacherAssignment = require('../../models/timetable/TeacherAssignment');
 const SubjectRequirement = require('../../models/timetable/SubjectRequirement');
 const TimetableSettings = require('../../models/timetable/TimetableSettings');
 const Room = require('../../models/timetable/Room');
+const User = require('../../models/User');
+
+function findPeriodInTemplate(template, periodId) {
+  if (!template?.slots?.length || periodId == null) return null;
+  if (typeof template.slots.id === 'function') {
+    const byId = template.slots.id(periodId);
+    if (byId) return byId;
+  }
+  return template.slots.find((s) => String(s._id) === String(periodId)) || null;
+}
+
+/** Any active teacher/admin may be placed on the grid (no per-section assignment required). */
+async function isValidTimetableTeacher(teacherId) {
+  if (!teacherId) return false;
+  const user = await User.findById(teacherId).populate('role', 'name').select('isActive role');
+  if (!user?.isActive) return false;
+  const roleName = user.role?.name;
+  return roleName === 'teacher' || roleName === 'admin';
+}
 
 /**
  * Validate a single slot or full timetable version.
@@ -21,6 +38,7 @@ async function validateSlot({
   roomId,
   sectionId,
   excludeSlotId,
+  strict = false,
 }) {
   const errors = [];
   const warnings = [];
@@ -32,7 +50,7 @@ async function validateSlot({
   }
 
   const template = version.periodTemplate;
-  const slotDef = template?.slots?.id(periodId);
+  const slotDef = findPeriodInTemplate(template, periodId);
   if (!slotDef) {
     errors.push({ code: 'INVALID_PERIOD', message: 'Period does not exist in template' });
     return { valid: false, errors, warnings };
@@ -113,23 +131,30 @@ async function validateSlot({
   if (profile?.availability?.length) {
     const dayAvail = profile.availability.find((a) => a.day === day);
     if (dayAvail && dayAvail.periodIds?.length && !dayAvail.periodIds.some((id) => String(id) === String(periodId))) {
-      errors.push({ code: 'TEACHER_UNAVAILABLE', message: 'Teacher is not available at this period' });
+      const entry = {
+        code: 'TEACHER_UNAVAILABLE',
+        message: 'Teacher is not available at this period',
+      };
+      if (strict) errors.push(entry);
+      else warnings.push(entry);
     }
   }
 
-  // R8: Teacher assignment
-  const assignment = await TeacherAssignment.findOne({
-    session: sessionId,
-    section: sectionId,
-    subject: subjectId,
-    teacher: teacherId,
-    isActive: true,
-  });
-  if (!assignment) {
+  // R8: Teacher must be an active staff member (not tied to a single section/class)
+  const validTeacher = await isValidTimetableTeacher(teacherId);
+  if (!validTeacher) {
     errors.push({
-      code: 'TEACHER_NOT_ASSIGNED',
-      message: 'Teacher is not assigned to teach this subject for this section',
+      code: 'INVALID_TEACHER',
+      message: 'Selected user is not an active teacher',
     });
+  } else if (profile?.subjects?.length && subjectId) {
+    const teachesSubject = profile.subjects.some((s) => String(s._id || s) === String(subjectId));
+    if (!teachesSubject) {
+      warnings.push({
+        code: 'SUBJECT_NOT_ON_PROFILE',
+        message: 'This subject is not listed on the teacher profile (allowed for multi-section teaching)',
+      });
+    }
   }
 
   // R9: Lab room type
@@ -197,6 +222,7 @@ async function validateVersion(timetableVersionId, { forPublish = false } = {}) 
       roomId: slot.room,
       sectionId: version.section,
       excludeSlotId: slot._id,
+      strict: forPublish,
     });
     result.errors.forEach((e) =>
       errors.push({ ...e, day: slot.day, periodId: slot.periodId, slotId: slot._id })

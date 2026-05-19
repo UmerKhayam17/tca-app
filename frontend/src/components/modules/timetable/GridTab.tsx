@@ -1,30 +1,37 @@
-import { useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { AlertCircle, Copy, Plus, Send } from "lucide-react";
+import { AlertCircle, Copy, GripVertical, Plus, Send } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import type { ModuleActionCaps } from "@/lib/permissions";
 import type { Weekday } from "@/lib/configApi";
-import { fetchClasses, fetchSections } from "@/lib/configApi";
+import { fetchClasses, fetchSections, fetchSubjects } from "@/lib/configApi";
+import { systemConfigHref } from "@/lib/systemConfigMenus";
+import { fetchUsers } from "@/lib/usersApi";
 import {
   createTimetableVersion,
   deleteScheduleSlot,
   duplicateTimetableVersion,
   fetchPeriodTemplates,
-  fetchTeacherAssignments,
+  fetchTeacherProfiles,
   fetchTimetableGrid,
   fetchTimetableVersions,
+  moveScheduleSlot,
   publishTimetableVersion,
   upsertScheduleSlot,
   validateTimetableVersion,
   type PeriodSlot,
   type ScheduleSlot,
 } from "@/lib/timetableApi";
-import { DAY_LABELS, DAY_ORDER, subjectColor } from "./constants";
+import { DAY_LABELS, DAY_ORDER, slotMatchesPeriod } from "./constants";
+import TimetableSlotCard from "./TimetableSlotCard";
 
 export default function GridTab({
   sessionId,
@@ -34,6 +41,7 @@ export default function GridTab({
   caps: ModuleActionCaps;
 }) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const qc = useQueryClient();
   const [classId, setClassId] = useState("");
   const [sectionId, setSectionId] = useState("");
@@ -44,6 +52,9 @@ export default function GridTab({
     existing?: ScheduleSlot;
   } | null>(null);
   const [form, setForm] = useState({ subjectId: "", teacherId: "", roomId: "" });
+  const [draggingSlotId, setDraggingSlotId] = useState<string | null>(null);
+  const [dropOver, setDropOver] = useState<{ day: Weekday; periodId: string } | null>(null);
+  const skipClickRef = useRef(false);
 
   const { data: classes = [] } = useQuery({
     queryKey: ["config-classes", sessionId],
@@ -70,7 +81,10 @@ export default function GridTab({
   });
 
   const draftVersion = versions.find((v) => v.status === "draft");
-  const activeVersionId = versionId || draftVersion?._id || "";
+  const publishedVersion = versions.find((v) => v.status === "published");
+  const defaultVersion = draftVersion || publishedVersion;
+  const activeVersionId = versionId || defaultVersion?._id || "";
+  const activeVersion = versions.find((v) => v._id === activeVersionId);
 
   const { data: grid, isLoading } = useQuery({
     queryKey: ["timetable-grid", activeVersionId],
@@ -78,11 +92,19 @@ export default function GridTab({
     enabled: !!activeVersionId,
   });
 
-  const { data: assignments = [] } = useQuery({
-    queryKey: ["timetable-assignments", sessionId, sectionId],
-    queryFn: () => fetchTeacherAssignments({ sessionId, sectionId }),
-    enabled: !!sessionId && !!sectionId,
+  const { data: subjects = [] } = useQuery({
+    queryKey: ["config-subjects", classId],
+    queryFn: () => fetchSubjects(classId),
+    enabled: !!classId,
   });
+
+  const { data: teacherProfiles = [] } = useQuery({
+    queryKey: ["timetable-teacher-profiles", sessionId],
+    queryFn: () => fetchTeacherProfiles(sessionId),
+    enabled: !!sessionId,
+  });
+
+  const { data: users = [] } = useQuery({ queryKey: ["users"], queryFn: fetchUsers });
 
   const createVersionMut = useMutation({
     mutationFn: () => {
@@ -119,12 +141,24 @@ export default function GridTab({
       setSlotDialog(null);
       toast({ title: "Slot saved" });
     },
-    onError: (e: Error) => toast({ title: "Conflict", description: e.message, variant: "destructive" }),
+    onError: (e: Error) =>
+      toast({ title: "Could not save slot", description: e.message, variant: "destructive" }),
   });
 
   const deleteSlotMut = useMutation({
     mutationFn: (id: string) => deleteScheduleSlot(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["timetable-grid", activeVersionId] }),
+  });
+
+  const moveSlotMut = useMutation({
+    mutationFn: ({ slotId, day, periodId }: { slotId: string; day: Weekday; periodId: string }) =>
+      moveScheduleSlot(slotId, { day, periodId }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["timetable-grid", activeVersionId] });
+      toast({ title: "Lesson moved" });
+    },
+    onError: (e: Error) =>
+      toast({ title: "Could not move lesson", description: e.message, variant: "destructive" }),
   });
 
   const validateMut = useMutation({
@@ -139,7 +173,14 @@ export default function GridTab({
     mutationFn: () => publishTimetableVersion(activeVersionId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["timetable-versions", sessionId, sectionId] });
-      toast({ title: "Timetable published" });
+      qc.invalidateQueries({ queryKey: ["timetable-grid", activeVersionId] });
+      qc.invalidateQueries({ queryKey: ["section-schedule", sessionId, sectionId] });
+      qc.invalidateQueries({ queryKey: ["my-teacher-schedule", sessionId] });
+      setVersionId("");
+      toast({
+        title: "Timetable published",
+        description: "Open Class view in the sidebar to see the live schedule.",
+      });
     },
     onError: (e: Error) => toast({ title: "Cannot publish", description: e.message, variant: "destructive" }),
   });
@@ -157,19 +198,89 @@ export default function GridTab({
   const lecturePeriods = (grid?.periods || []).filter((p) => p.type === "lecture");
 
   const getSlot = (day: Weekday, periodId: string) =>
-    grid?.slots.find((s) => s.day === day && s.periodId === periodId);
+    grid?.slots.find((s) => s.day === day && slotMatchesPeriod(s, periodId));
+
+  const subjectOptions = useMemo(
+    () => [...subjects].sort((a, b) => a.name.localeCompare(b.name)),
+    [subjects]
+  );
+
+  const panelTeachers = useMemo(
+    () =>
+      users
+        .filter((u) => {
+          const rn = typeof u.role === "object" && u.role?.name ? u.role.name : "";
+          return rn === "teacher" || rn === "admin";
+        })
+        .map((u) => ({ _id: u._id, name: u.name })),
+    [users]
+  );
+
+  /** All teachers — same pool for every class/section (multi-section teaching). */
+  const teachersForSubject = (subjectId: string) => {
+    if (!subjectId) return panelTeachers;
+    const seen = new Set<string>();
+    const suggested: { _id: string; name: string }[] = [];
+    const add = (t?: { _id: string; name: string } | null, front = false) => {
+      if (!t?._id || seen.has(t._id)) return;
+      seen.add(t._id);
+      const entry = { _id: t._id, name: t.name };
+      if (front) suggested.push(entry);
+    };
+
+    add(subjects.find((s) => s._id === subjectId)?.teacher, true);
+    for (const profile of teacherProfiles) {
+      if (profile.subjects?.some((s) => s._id === subjectId)) {
+        add(profile.user, true);
+      }
+    }
+    const rest = panelTeachers.filter((t) => !seen.has(t._id));
+    return [...suggested, ...rest];
+  };
+
+  const defaultTeacherForSubject = (subjectId: string, existing?: ScheduleSlot) => {
+    if (existing?.teacher._id) return existing.teacher._id;
+    return teachersForSubject(subjectId)[0]?._id || "";
+  };
+
+  const canEditGrid = caps.canEdit && activeVersion?.status === "draft" && grid?.version.status === "draft";
+  const canPublishVersion =
+    caps.canEdit &&
+    activeVersion &&
+    (activeVersion.status === "draft" || activeVersion.status === "archived");
+
+  const handleCellClick = (day: Weekday, period: PeriodSlot) => {
+    if (skipClickRef.current) {
+      skipClickRef.current = false;
+      return;
+    }
+    openCell(day, period);
+  };
+
+  const handleDrop = (e: React.DragEvent, day: Weekday, periodId: string) => {
+    e.preventDefault();
+    setDropOver(null);
+    if (!canEditGrid) return;
+    const slotId = e.dataTransfer.getData("application/timetable-slot-id") || draggingSlotId;
+    if (!slotId) return;
+    skipClickRef.current = true;
+    setDraggingSlotId(null);
+    moveSlotMut.mutate({ slotId, day, periodId });
+  };
 
   const openCell = (day: Weekday, period: PeriodSlot) => {
-    if (!caps.canEdit || grid?.version.status !== "draft") return;
+    if (!canEditGrid) return;
     const existing = getSlot(day, period._id);
-    const assign = assignments.find((a) => a.subject._id === existing?.subject._id);
+    const subjectId = existing?.subject._id || "";
     setForm({
-      subjectId: existing?.subject._id || "",
-      teacherId: existing?.teacher._id || assign?.teacher._id || "",
+      subjectId,
+      teacherId: defaultTeacherForSubject(subjectId, existing),
       roomId: existing?.room?._id || "",
     });
     setSlotDialog({ day, period, existing });
   };
+
+  const teachersHref = user ? systemConfigHref(user.role, "teachers") : "#";
 
   const sectionLabel = sections.find((s) => s._id === sectionId);
   const classLabel = classes.find((c) => c._id === classId);
@@ -204,6 +315,22 @@ export default function GridTab({
             {sections.map((s) => <option key={s._id} value={s._id}>{s.name}</option>)}
           </select>
         </div>
+        {sectionId && versions.length > 0 && (
+          <div className="min-w-[180px]">
+            <Label className="text-xs text-muted-foreground">Version</Label>
+            <select
+              className="mt-1 w-full h-10 rounded-md border px-3 text-sm"
+              value={activeVersionId}
+              onChange={(e) => setVersionId(e.target.value)}
+            >
+              {versions.map((v) => (
+                <option key={v._id} value={v._id}>
+                  v{v.version} · {v.status}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         {sectionId && caps.canCreate && !draftVersion && (
           <Button className="gap-2" onClick={() => createVersionMut.mutate()} disabled={createVersionMut.isPending}>
             <Plus className="h-4 w-4" /> New draft
@@ -217,7 +344,7 @@ export default function GridTab({
             <Button variant="outline" className="gap-2" onClick={() => duplicateMut.mutate()}>
               <Copy className="h-4 w-4" /> Duplicate
             </Button>
-            {grid?.version.status === "draft" && (
+            {canPublishVersion && grid && (
               <Button className="gap-2" onClick={() => publishMut.mutate()} disabled={publishMut.isPending}>
                 <Send className="h-4 w-4" /> Publish
               </Button>
@@ -245,6 +372,11 @@ export default function GridTab({
               </Badge>
             ))}
           </div>
+          {canEditGrid && (
+            <p className="text-xs text-muted-foreground">
+              Drag a lesson to another cell to move it. Drop on an occupied cell to swap.
+            </p>
+          )}
 
           <Card className="overflow-x-auto">
             <table className="w-full text-sm min-w-[640px]">
@@ -266,19 +398,59 @@ export default function GridTab({
                     </td>
                     {workingDays.map((day) => {
                       const slot = getSlot(day, period._id);
+                      const isDropTarget =
+                        dropOver?.day === day && dropOver?.periodId === period._id;
                       return (
                         <td
                           key={day}
-                          className={`p-2 align-top min-w-[100px] ${caps.canEdit && grid.version.status === "draft" ? "cursor-pointer hover:bg-muted/40" : ""}`}
-                          onClick={() => openCell(day, period)}
+                          className={cn(
+                            "p-2 align-top min-w-[100px] transition-colors",
+                            canEditGrid && "hover:bg-muted/40",
+                            isDropTarget && "bg-accent/15 ring-2 ring-inset ring-accent/50",
+                            moveSlotMut.isPending && "pointer-events-none opacity-60"
+                          )}
+                          onClick={() => handleCellClick(day, period)}
+                          onDragOver={(e) => {
+                            if (!canEditGrid || !draggingSlotId) return;
+                            e.preventDefault();
+                            e.dataTransfer.dropEffect = "move";
+                            setDropOver({ day, periodId: period._id });
+                          }}
+                          onDragLeave={() => {
+                            setDropOver((prev) =>
+                              prev?.day === day && prev?.periodId === period._id ? null : prev
+                            );
+                          }}
+                          onDrop={(e) => handleDrop(e, day, period._id)}
                         >
                           {slot ? (
-                            <div className={`rounded-md border p-2 ${subjectColor(slot.subject._id)}`}>
-                              <div className="font-semibold text-sm">{slot.subject.name}</div>
-                              <div className="text-xs opacity-80">{slot.teacher.name}</div>
-                            </div>
+                            <TimetableSlotCard
+                              slot={slot}
+                              draggable={canEditGrid && !slot.locked}
+                              isDragging={draggingSlotId === slot._id}
+                              onDragStart={(e) => {
+                                if (!canEditGrid || slot.locked) {
+                                  e.preventDefault();
+                                  return;
+                                }
+                                setDraggingSlotId(slot._id);
+                                e.dataTransfer.setData("application/timetable-slot-id", slot._id);
+                                e.dataTransfer.effectAllowed = "move";
+                              }}
+                              onDragEnd={() => {
+                                setDraggingSlotId(null);
+                                setDropOver(null);
+                              }}
+                            />
                           ) : (
-                            <span className="text-muted-foreground">—</span>
+                            <span
+                              className={cn(
+                                "block min-h-[52px] text-muted-foreground",
+                                isDropTarget && "font-medium text-accent"
+                              )}
+                            >
+                              {isDropTarget ? "Drop here" : "—"}
+                            </span>
                           )}
                         </td>
                       );
@@ -292,7 +464,44 @@ export default function GridTab({
       )}
 
       {sectionId && !activeVersionId && !isLoading && (
-        <p className="text-sm text-muted-foreground">No timetable for this section. Create a draft to start.</p>
+        <p className="text-sm text-muted-foreground">
+          No timetable for this section. Click <strong>New draft</strong> to start building the grid.
+        </p>
+      )}
+
+      {sectionId && grid && activeVersion?.status === "published" && (
+        <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+          Viewing a <strong>published</strong> timetable (read-only). Use <strong>Class view</strong> for the
+          live schedule, or create a <strong>New draft</strong> to make changes.
+        </p>
+      )}
+      {sectionId && grid && activeVersion?.status === "archived" && (
+        <p className="text-sm text-muted-foreground bg-muted/40 border rounded-md px-3 py-2">
+          Viewing an <strong>archived</strong> version (read-only). Click <strong>Publish</strong> to make it
+          the live timetable again, or <strong>Duplicate</strong> to edit as a new draft.
+        </p>
+      )}
+
+      {sectionId && classId && subjectOptions.length === 0 && (
+        <Card className="p-4 text-sm text-muted-foreground space-y-2">
+          <p className="font-medium text-foreground">Set up subjects first</p>
+          <ol className="list-decimal list-inside space-y-1">
+            <li>
+              <Link to={user ? systemConfigHref(user.role, "academic") : "#"} className="text-primary underline">
+                System Configuration → Academic
+              </Link>
+              : add classes and subjects for this class.
+            </li>
+            <li>
+              Ensure teacher accounts exist under Users. Optional:{" "}
+              <Link to={teachersHref} className="text-primary underline">
+                Teacher profiles
+              </Link>{" "}
+              for subjects they usually teach.
+            </li>
+            <li>Return here, create a <strong>New draft</strong>, then pick any teacher for each slot.</li>
+          </ol>
+        </Card>
       )}
 
       <Dialog open={!!slotDialog} onOpenChange={(o) => !o && setSlotDialog(null)}>
@@ -310,15 +519,27 @@ export default function GridTab({
                 value={form.subjectId}
                 onChange={(e) => {
                   const sub = e.target.value;
-                  const a = assignments.find((x) => x.subject._id === sub);
-                  setForm({ subjectId: sub, teacherId: a?.teacher._id || "", roomId: "" });
+                  setForm({
+                    subjectId: sub,
+                    teacherId: defaultTeacherForSubject(sub),
+                    roomId: "",
+                  });
                 }}
               >
                 <option value="">Select subject</option>
-                {[...new Map(assignments.map((a) => [a.subject._id, a.subject])).values()].map((s) => (
+                {subjectOptions.map((s) => (
                   <option key={s._id} value={s._id}>{s.name}</option>
                 ))}
               </select>
+              {subjectOptions.length === 0 && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  No subjects yet. Add them under{" "}
+                  <Link to={user ? systemConfigHref(user.role, "academic") : "#"} className="text-primary underline">
+                    Academic setup
+                  </Link>
+                  .
+                </p>
+              )}
             </div>
             <div>
               <Label>Teacher</Label>
@@ -326,14 +547,18 @@ export default function GridTab({
                 className="w-full h-10 rounded-md border px-3 text-sm"
                 value={form.teacherId}
                 onChange={(e) => setForm((f) => ({ ...f, teacherId: e.target.value }))}
+                disabled={!form.subjectId}
               >
                 <option value="">Select teacher</option>
-                {assignments
-                  .filter((a) => a.subject._id === form.subjectId)
-                  .map((a) => (
-                    <option key={a.teacher._id} value={a.teacher._id}>{a.teacher.name}</option>
-                  ))}
+                {teachersForSubject(form.subjectId).map((t) => (
+                  <option key={t._id} value={t._id}>{t.name}</option>
+                ))}
               </select>
+              {form.subjectId && panelTeachers.length === 0 && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  No teacher accounts found. Add users with the Teacher role first.
+                </p>
+              )}
             </div>
           </div>
           <DialogFooter className="gap-2 sm:gap-0">

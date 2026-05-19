@@ -34,3 +34,15 @@ export function subjectColor(id: string) {
   for (let i = 0; i < id.length; i++) h = (h + id.charCodeAt(i)) % SUBJECT_COLORS.length;
   return SUBJECT_COLORS[h];
 }
+
+/** Compare schedule slot period to template period (ObjectId vs string safe). */
+export function slotMatchesPeriod(
+  slot: { periodId: string | { _id?: string } },
+  periodId: string
+) {
+  const slotPeriod =
+    typeof slot.periodId === "object" && slot.periodId?._id
+      ? slot.periodId._id
+      : String(slot.periodId);
+  return slotPeriod === String(periodId);
+}

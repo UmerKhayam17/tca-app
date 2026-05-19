@@ -31,7 +31,7 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
         : typeof body.details === "object" && body.details !== null
           ? JSON.stringify(body.details)
           : "";
-    throw new Error(body.message || detailMsg || `Request failed (${res.status})`);
+    throw new Error(detailMsg || body.message || `Request failed (${res.status})`);
   }
   return body.data as T;
 }
@@ -315,6 +315,11 @@ export const upsertScheduleSlot = (
 
 export const deleteScheduleSlot = (slotId: string) =>
   api<{ deleted: boolean }>(`/slots/${slotId}`, { method: "DELETE" });
+
+export const moveScheduleSlot = (
+  slotId: string,
+  body: { day: Weekday; periodId: string }
+) => api<ScheduleSlot>(`/slots/${slotId}`, { method: "PATCH", body: JSON.stringify(body) });
 
 export const fetchSectionSchedule = async (sessionId: string, sectionId: string) => {
   const res = await api<TimetableGrid | { version: null; grid: null }>(

@@ -13,8 +13,9 @@ import { Role, SessionUser, logout, panelPathFor } from "@/lib/auth";
 import { buildMenu, moduleHref } from "@/lib/panelMenus";
 import { SYSTEM_CONFIG_SECTIONS, systemConfigHref } from "@/lib/systemConfigMenus";
 import { STUDENT_MANAGEMENT_SECTIONS, studentManagementHref } from "@/lib/studentManagementMenus";
+import { getTimetableSections, timetableHref } from "@/lib/timetableMenus";
 import { usePermissions } from "@/hooks/usePermissions";
-import { applyBackendModulePermissions } from "@/lib/permissions";
+import { applyBackendModulePermissions, resolveModuleCaps } from "@/lib/permissions";
 import logo from "@/assets/logo.png";
 
 const roleHeader: Record<Role, { title: string; Icon: React.ComponentType<{ className?: string }> }> = {
@@ -39,6 +40,10 @@ const PanelSidebar = ({ user }: { user: SessionUser }) => {
   const systemConfigOpen = pathname.startsWith(systemConfigBase);
   const studentMgmtBase = `/panel/${user.role}/student-management`;
   const studentMgmtOpen = pathname.startsWith(studentMgmtBase);
+  const timetableBase = `/panel/${user.role}/timetable`;
+  const timetableOpen = pathname.startsWith(timetableBase);
+  const timetableCaps = resolveModuleCaps("timetable", rolePerms.timetable, user.modulePermissions);
+  const timetableSections = getTimetableSections({ caps: timetableCaps, role: user.role });
 
   return (
     <Sidebar collapsible="icon">
@@ -60,11 +65,28 @@ const PanelSidebar = ({ user }: { user: SessionUser }) => {
           <SidebarGroupContent>
             <SidebarMenu>
               {items.map((m) => {
-                if (m.key === "system-config" || m.key === "student-management") {
+                if (
+                  m.key === "system-config" ||
+                  m.key === "student-management" ||
+                  m.key === "timetable"
+                ) {
                   const isSystemConfig = m.key === "system-config";
-                  const open = isSystemConfig ? systemConfigOpen : studentMgmtOpen;
-                  const sections = isSystemConfig ? SYSTEM_CONFIG_SECTIONS : STUDENT_MANAGEMENT_SECTIONS;
-                  const hrefFor = isSystemConfig ? systemConfigHref : studentManagementHref;
+                  const isStudentMgmt = m.key === "student-management";
+                  const open = isSystemConfig
+                    ? systemConfigOpen
+                    : isStudentMgmt
+                      ? studentMgmtOpen
+                      : timetableOpen;
+                  const sections = isSystemConfig
+                    ? SYSTEM_CONFIG_SECTIONS
+                    : isStudentMgmt
+                      ? STUDENT_MANAGEMENT_SECTIONS
+                      : timetableSections;
+                  const hrefFor = isSystemConfig
+                    ? systemConfigHref
+                    : isStudentMgmt
+                      ? studentManagementHref
+                      : timetableHref;
 
                   return (
                     <Collapsible key={m.key} defaultOpen={open} className="group/collapsible">
@@ -104,7 +126,11 @@ const PanelSidebar = ({ user }: { user: SessionUser }) => {
                   );
                 }
 
-                const href = moduleHref(user.role, m.key);
+                const href = moduleHref(
+                  user.role,
+                  m.key,
+                  m.key === "timetable" ? { caps: timetableCaps } : undefined,
+                );
                 const active =
                   m.key === "dashboard"
                     ? pathname === rootPath

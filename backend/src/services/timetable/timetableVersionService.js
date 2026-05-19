@@ -142,7 +142,6 @@ async function publishVersion(id, userId) {
   if (!version) throw new ApiError(404, 'Timetable version not found');
   await assertSessionWritable(version.session);
   if (version.status === 'published') throw new ApiError(400, 'Version is already published');
-  if (version.status === 'archived') throw new ApiError(400, 'Cannot publish an archived version');
 
   const validation = await validateVersion(id, { forPublish: true });
   if (!validation.valid) {

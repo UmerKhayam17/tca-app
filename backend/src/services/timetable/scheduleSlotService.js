@@ -40,6 +40,12 @@ async function upsertSlot(timetableVersionId, body, { excludeSlotId } = {}) {
     substituteForTeacher: body.substituteForTeacher || null,
   };
 
+  const existing = await ScheduleSlot.findOne({
+    timetableVersion: timetableVersionId,
+    day: payload.day,
+    periodId: payload.periodId,
+  });
+
   const validation = await validateSlot({
     sessionId: version.session,
     timetableVersionId,
@@ -49,11 +55,12 @@ async function upsertSlot(timetableVersionId, body, { excludeSlotId } = {}) {
     teacherId: payload.teacher,
     roomId: payload.room,
     sectionId: version.section,
-    excludeSlotId,
+    excludeSlotId: excludeSlotId || existing?._id,
   });
 
   if (!validation.valid) {
-    throw new ApiError(400, 'Slot validation failed', validation.errors);
+    const summary = validation.errors.map((e) => e.message).filter(Boolean).join('; ');
+    throw new ApiError(400, summary || 'Slot validation failed', validation.errors);
   }
 
   if (excludeSlotId) {
@@ -64,12 +71,6 @@ async function upsertSlot(timetableVersionId, body, { excludeSlotId } = {}) {
     if (!slot) throw new ApiError(404, 'Schedule slot not found');
     return slot;
   }
-
-  const existing = await ScheduleSlot.findOne({
-    timetableVersion: timetableVersionId,
-    day: payload.day,
-    periodId: payload.periodId,
-  });
 
   if (existing) {
     const slot = await ScheduleSlot.findByIdAndUpdate(existing._id, payload, {
@@ -88,11 +89,63 @@ async function moveSlot(slotId, body) {
   if (!slot) throw new ApiError(404, 'Schedule slot not found');
   if (slot.locked) throw new ApiError(400, 'Slot is locked and cannot be moved');
 
+  const toDay = body.day ?? slot.day;
+  const toPeriodId = body.periodId ?? slot.periodId;
+  const fromDay = slot.day;
+  const fromPeriodId = slot.periodId;
+
+  if (toDay === fromDay && String(toPeriodId) === String(fromPeriodId)) {
+    return ScheduleSlot.findById(slotId).populate(slotPopulate);
+  }
+
+  const targetExisting = await ScheduleSlot.findOne({
+    timetableVersion: slot.timetableVersion,
+    day: toDay,
+    periodId: toPeriodId,
+    cancelled: { $ne: true },
+  });
+
+  // Swap two occupied cells (unique index on day+period prevents simple two-step update)
+  if (targetExisting && String(targetExisting._id) !== String(slotId)) {
+    if (targetExisting.locked) {
+      throw new ApiError(400, 'Target slot is locked and cannot be swapped');
+    }
+
+    const versionId = slot.timetableVersion;
+    const a = slot.toObject();
+    const b = targetExisting.toObject();
+
+    await ScheduleSlot.deleteOne({ _id: slotId });
+    await ScheduleSlot.deleteOne({ _id: targetExisting._id });
+
+    await upsertSlot(versionId, {
+      day: toDay,
+      periodId: toPeriodId,
+      subject: a.subject,
+      teacher: a.teacher,
+      room: a.room,
+      source: a.source,
+      locked: a.locked,
+    });
+
+    const swapped = await upsertSlot(versionId, {
+      day: fromDay,
+      periodId: fromPeriodId,
+      subject: b.subject,
+      teacher: b.teacher,
+      room: b.room,
+      source: b.source,
+      locked: b.locked,
+    });
+
+    return swapped;
+  }
+
   return upsertSlot(
     slot.timetableVersion,
     {
-      day: body.day ?? slot.day,
-      periodId: body.periodId ?? slot.periodId,
+      day: toDay,
+      periodId: toPeriodId,
       subject: body.subject ?? slot.subject,
       teacher: body.teacher ?? slot.teacher,
       room: body.room !== undefined ? body.room : slot.room,

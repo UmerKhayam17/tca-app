@@ -20,6 +20,11 @@ export default defineConfig(({ mode }) => ({
         target: "http://127.0.0.1:5000",
         changeOrigin: true,
       },
+      "/socket.io": {
+        target: "http://127.0.0.1:5000",
+        changeOrigin: true,
+        ws: true,
+      },
     },
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),

@@ -27,4 +27,10 @@ const userSchema = new mongoose.Schema(
 
 userSchema.index({ isActive: 1 });
 
+userSchema.virtual('profile_image').get(function profileImageAlias() {
+  return this.profileImage;
+});
+userSchema.set('toJSON', { virtuals: true });
+userSchema.set('toObject', { virtuals: true });
+
 module.exports = mongoose.model('User', userSchema);

@@ -1,11 +1,10 @@
 const ScheduleSlot = require('../../models/timetable/ScheduleSlot');
 const TimetableVersion = require('../../models/timetable/TimetableVersion');
 const TeacherProfile = require('../../models/timetable/TeacherProfile');
-const TeacherAssignment = require('../../models/timetable/TeacherAssignment');
 const SubjectRequirement = require('../../models/timetable/SubjectRequirement');
 const TimetableSettings = require('../../models/timetable/TimetableSettings');
 const Room = require('../../models/timetable/Room');
-const Subject = require('../../models/Subject');
+const User = require('../../models/User');
 
 function findPeriodInTemplate(template, periodId) {
   if (!template?.slots?.length || periodId == null) return null;
@@ -16,30 +15,13 @@ function findPeriodInTemplate(template, periodId) {
   return template.slots.find((s) => String(s._id) === String(periodId)) || null;
 }
 
-/** Teacher may teach this subject for the section (assignment, subject default, or profile). */
-async function teacherCanTeachSubject({ sessionId, sectionId, subjectId, teacherId }) {
-  if (!teacherId || !subjectId) return false;
-
-  const assignment = await TeacherAssignment.findOne({
-    session: sessionId,
-    section: sectionId,
-    subject: subjectId,
-    teacher: teacherId,
-    isActive: true,
-  });
-  if (assignment) return true;
-
-  const subject = await Subject.findById(subjectId).select('teacher');
-  if (subject?.teacher && String(subject.teacher) === String(teacherId)) return true;
-
-  const profile = await TeacherProfile.findOne({
-    user: teacherId,
-    session: sessionId,
-    isActive: true,
-  });
-  if (profile?.subjects?.some((s) => String(s._id || s) === String(subjectId))) return true;
-
-  return false;
+/** Any active teacher/admin may be placed on the grid (no per-section assignment required). */
+async function isValidTimetableTeacher(teacherId) {
+  if (!teacherId) return false;
+  const user = await User.findById(teacherId).populate('role', 'name').select('isActive role');
+  if (!user?.isActive) return false;
+  const roleName = user.role?.name;
+  return roleName === 'teacher' || roleName === 'admin';
 }
 
 /**
@@ -158,19 +140,21 @@ async function validateSlot({
     }
   }
 
-  // R8: Teacher must be allowed to teach this subject for this section
-  const canTeach = await teacherCanTeachSubject({
-    sessionId,
-    sectionId,
-    subjectId,
-    teacherId,
-  });
-  if (!canTeach) {
+  // R8: Teacher must be an active staff member (not tied to a single section/class)
+  const validTeacher = await isValidTimetableTeacher(teacherId);
+  if (!validTeacher) {
     errors.push({
-      code: 'TEACHER_NOT_ASSIGNED',
-      message:
-        'Teacher is not assigned to this subject. Add an assignment under System Configuration → Assignments.',
+      code: 'INVALID_TEACHER',
+      message: 'Selected user is not an active teacher',
     });
+  } else if (profile?.subjects?.length && subjectId) {
+    const teachesSubject = profile.subjects.some((s) => String(s._id || s) === String(subjectId));
+    if (!teachesSubject) {
+      warnings.push({
+        code: 'SUBJECT_NOT_ON_PROFILE',
+        message: 'This subject is not listed on the teacher profile (allowed for multi-section teaching)',
+      });
+    }
   }
 
   // R9: Lab room type

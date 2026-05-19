@@ -316,6 +316,11 @@ export const upsertScheduleSlot = (
 export const deleteScheduleSlot = (slotId: string) =>
   api<{ deleted: boolean }>(`/slots/${slotId}`, { method: "DELETE" });
 
+export const moveScheduleSlot = (
+  slotId: string,
+  body: { day: Weekday; periodId: string }
+) => api<ScheduleSlot>(`/slots/${slotId}`, { method: "PATCH", body: JSON.stringify(body) });
+
 export const fetchSectionSchedule = async (sessionId: string, sectionId: string) => {
   const res = await api<TimetableGrid | { version: null; grid: null }>(
     `/sections/schedule?sessionId=${sessionId}&sectionId=${sectionId}`

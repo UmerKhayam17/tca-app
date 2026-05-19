@@ -244,6 +244,10 @@ export default function GridTab({
   };
 
   const canEditGrid = caps.canEdit && activeVersion?.status === "draft" && grid?.version.status === "draft";
+  const canPublishVersion =
+    caps.canEdit &&
+    activeVersion &&
+    (activeVersion.status === "draft" || activeVersion.status === "archived");
 
   const handleCellClick = (day: Weekday, period: PeriodSlot) => {
     if (skipClickRef.current) {
@@ -340,7 +344,7 @@ export default function GridTab({
             <Button variant="outline" className="gap-2" onClick={() => duplicateMut.mutate()}>
               <Copy className="h-4 w-4" /> Duplicate
             </Button>
-            {grid?.version.status === "draft" && (
+            {canPublishVersion && grid && (
               <Button className="gap-2" onClick={() => publishMut.mutate()} disabled={publishMut.isPending}>
                 <Send className="h-4 w-4" /> Publish
               </Button>
@@ -469,6 +473,12 @@ export default function GridTab({
         <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
           Viewing a <strong>published</strong> timetable (read-only). Use <strong>Class view</strong> for the
           live schedule, or create a <strong>New draft</strong> to make changes.
+        </p>
+      )}
+      {sectionId && grid && activeVersion?.status === "archived" && (
+        <p className="text-sm text-muted-foreground bg-muted/40 border rounded-md px-3 py-2">
+          Viewing an <strong>archived</strong> version (read-only). Click <strong>Publish</strong> to make it
+          the live timetable again, or <strong>Duplicate</strong> to edit as a new draft.
         </p>
       )}
 

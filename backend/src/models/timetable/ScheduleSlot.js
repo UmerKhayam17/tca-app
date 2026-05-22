@@ -22,6 +22,7 @@ const scheduleSlotSchema = new mongoose.Schema(
     source: { type: String, enum: SLOT_SOURCES, default: 'manual' },
     locked: { type: Boolean, default: false },
     cancelled: { type: Boolean, default: false },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }
 );

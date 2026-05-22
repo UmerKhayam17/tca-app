@@ -9,6 +9,7 @@ async function listAll({ status, classId } = {}) {
   if (classId) q.classId = classId;
   return AcademyFeeStructure.find(q)
     .populate('classId', 'className status')
+    .populate('createdBy', 'name email')
     .sort({ classId: 1, effectiveDate: -1, createdAt: -1 });
 }
 
@@ -17,7 +18,8 @@ async function getByClass(classId) {
   if (!cls) throw new ApiError(404, 'Class not found');
   const row = await AcademyFeeStructure.findOne({ classId, status: 'active' })
     .sort({ effectiveDate: -1 })
-    .populate('classId', 'className');
+    .populate('classId', 'className')
+    .populate('createdBy', 'name email');
   return row;
 }
 

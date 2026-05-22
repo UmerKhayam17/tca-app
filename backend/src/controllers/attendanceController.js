@@ -17,12 +17,15 @@ const mark = catchAsync(async (req, res) => {
     const doc = await Attendance.findOneAndUpdate(
       { student: e.studentId, date: day },
       {
-        class: classId,
-        section: sectionId,
-        date: day,
-        status: e.status,
-        reason: e.reason,
-        markedBy: req.user._id,
+        $set: {
+          class: classId,
+          section: sectionId,
+          date: day,
+          status: e.status,
+          reason: e.reason,
+          markedBy: req.user._id,
+        },
+        $setOnInsert: { createdBy: req.user._id },
       },
       { new: true, upsert: true, setDefaultsOnInsert: true }
     );

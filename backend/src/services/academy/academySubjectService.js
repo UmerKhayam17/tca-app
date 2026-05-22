@@ -2,16 +2,17 @@ const ApiError = require('../../utils/ApiError');
 const AcademySubject = require('../../models/academy/AcademySubject');
 const AcademyClass = require('../../models/academy/AcademyClass');
 const { syncSubjectCount } = require('./academyClassService');
+const { populateCreatedBy } = require('../../utils/createdBy');
 
 async function listByClass(classId, { status } = {}) {
   const cls = await AcademyClass.findById(classId);
   if (!cls) throw new ApiError(404, 'Class not found');
   const q = { classId };
   if (status) q.status = status;
-  return AcademySubject.find(q).sort({ subjectName: 1 });
+  return populateCreatedBy(AcademySubject.find(q)).sort({ subjectName: 1 });
 }
 
-async function createSubject(payload) {
+async function createSubject(payload, userId) {
   const cls = await AcademyClass.findById(payload.classId);
   if (!cls) throw new ApiError(404, 'Class not found');
   const code = payload.subjectCode.trim().toUpperCase();
@@ -22,6 +23,7 @@ async function createSubject(payload) {
     classId: payload.classId,
     subjectCode: code,
     status: payload.status || 'active',
+    createdBy: userId,
   });
   await syncSubjectCount(payload.classId);
   return subject;

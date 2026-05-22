@@ -17,7 +17,7 @@ const listStructures = catchAsync(async (req, res) => {
 });
 
 const createStructure = catchAsync(async (req, res) => {
-  const row = await FeeStructure.create(req.body);
+  const row = await FeeStructure.create({ ...req.body, createdBy: req.user._id });
   res.status(201).json({ success: true, data: row });
 });
 

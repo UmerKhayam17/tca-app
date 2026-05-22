@@ -40,12 +40,16 @@ async function listExams({ classId } = {}) {
   if (classId) q.academyClass = classId;
   return Exam.find(q)
     .populate('academyClass', 'className')
+    .populate('createdBy', 'name email')
     .sort({ startDate: -1 })
     .lean();
 }
 
 async function getExamById(id) {
-  const exam = await Exam.findById(id).populate('academyClass', 'className').lean();
+  const exam = await Exam.findById(id)
+    .populate('academyClass', 'className')
+    .populate('createdBy', 'name email')
+    .lean();
   if (!exam) throw new ApiError(404, 'Exam not found');
   return exam;
 }
@@ -53,6 +57,7 @@ async function getExamById(id) {
 async function updateExam(id, patch) {
   const exam = await Exam.findByIdAndUpdate(id, patch, { new: true })
     .populate('academyClass', 'className')
+    .populate('createdBy', 'name email')
     .lean();
   if (!exam) throw new ApiError(404, 'Exam not found');
   return exam;
@@ -125,17 +130,20 @@ async function enterMarks(examId, marksRows, userId) {
     const result = await Result.findOneAndUpdate(
       { academyStudent: row.studentId, exam: exam._id },
       {
-        academyStudent: row.studentId,
-        exam: exam._id,
-        subjectMarks: totals.subjectMarks,
-        totalMarks: totals.totalMarks,
-        obtainedMarks: totals.obtainedMarks,
-        percentage: totals.percentage,
-        grade: totals.grade,
-        gpa: totals.gpa,
-        proofImages: row.proofImages || [],
-        enteredBy: userId,
-        isPublished: false,
+        $set: {
+          academyStudent: row.studentId,
+          exam: exam._id,
+          subjectMarks: totals.subjectMarks,
+          totalMarks: totals.totalMarks,
+          obtainedMarks: totals.obtainedMarks,
+          percentage: totals.percentage,
+          grade: totals.grade,
+          gpa: totals.gpa,
+          proofImages: row.proofImages || [],
+          enteredBy: userId,
+          isPublished: false,
+        },
+        $setOnInsert: { createdBy: userId },
       },
       { new: true, upsert: true, setDefaultsOnInsert: true }
     );

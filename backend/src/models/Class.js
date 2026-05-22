@@ -8,6 +8,7 @@ const classSchema = new mongoose.Schema(
     subjects: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Subject' }],
     classTeacher: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     order: { type: Number, default: 0 },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }
 );

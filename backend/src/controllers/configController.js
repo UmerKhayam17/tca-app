@@ -97,7 +97,7 @@ const listClasses = catchAsync(async (req, res) => {
 
 const createClass = catchAsync(async (req, res) => {
   await assertSessionWritable(req.body.session);
-  const cls = await Class.create(req.body);
+  const cls = await Class.create({ ...req.body, createdBy: req.user._id });
   res.status(201).json({ success: true, data: cls });
 });
 
@@ -115,7 +115,7 @@ const createSection = catchAsync(async (req, res) => {
   await assertSessionWritable(parentClass.session);
   const body = { ...req.body };
   if (body.teacher === '') body.teacher = null;
-  const section = await Section.create(body);
+  const section = await Section.create({ ...body, createdBy: req.user._id });
   await Class.findByIdAndUpdate(body.class, { $addToSet: { sections: section._id } });
   const populated = await Section.findById(section._id)
     .populate('class', 'name session')
@@ -156,7 +156,7 @@ const createSubject = catchAsync(async (req, res) => {
   const parentClass = await Class.findById(req.body.class);
   if (!parentClass) throw new ApiError(404, 'Class not found');
   await assertSessionWritable(parentClass.session);
-  const subject = await Subject.create(req.body);
+  const subject = await Subject.create({ ...req.body, createdBy: req.user._id });
   await Class.findByIdAndUpdate(req.body.class, { $addToSet: { subjects: subject._id } });
   res.status(201).json({ success: true, data: subject });
 });
@@ -214,7 +214,7 @@ const createTimetable = catchAsync(async (req, res) => {
       { $set: { isActive: false } }
     );
   }
-  const tt = await Timetable.create(req.body);
+  const tt = await Timetable.create({ ...req.body, createdBy: req.user._id });
   res.status(201).json({ success: true, data: tt });
 });
 

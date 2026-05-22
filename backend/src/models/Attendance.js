@@ -25,6 +25,7 @@ const attendanceSchema = new mongoose.Schema(
     reason: { type: String, trim: true },
     notificationSent: { type: Boolean, default: false },
     editHistory: [editHistorySchema],
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }
 );

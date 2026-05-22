@@ -17,6 +17,7 @@ const academyAttendanceSchema = new mongoose.Schema(
     subjectId: { type: mongoose.Schema.Types.ObjectId, ref: 'AcademySubject' },
     notes: { type: String, trim: true },
     markedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }
 );

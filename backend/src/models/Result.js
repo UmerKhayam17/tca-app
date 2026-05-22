@@ -31,6 +31,7 @@ const resultSchema = new mongoose.Schema(
     proofImages: [{ type: String }],
     isPublished: { type: Boolean, default: false },
     enteredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }
 );

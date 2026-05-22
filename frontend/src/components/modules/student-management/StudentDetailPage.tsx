@@ -41,6 +41,7 @@ import {
   academyStudentRoutes,
   type AcademyStudentRoutes,
 } from "@/lib/studentManagementMenus";
+import CreatedByLine from "@/components/modules/CreatedByLine";
 import {
   classLabel,
   examPercentage,
@@ -666,6 +667,7 @@ export default function StudentDetailPage({
             {student.studentName}
           </h2>
           <p className="text-sm text-muted-foreground font-mono">{student.studentId}</p>
+          <CreatedByLine createdBy={student.createdBy} />
           <div className="flex flex-wrap gap-2 items-center text-sm text-muted-foreground">
             <span>{classLabel(student.classId)}</span>
             <span>·</span>

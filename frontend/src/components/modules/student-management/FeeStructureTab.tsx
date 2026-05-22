@@ -53,6 +53,16 @@ export default function FeeStructureTab({ caps }: { caps: ModuleActionCaps }) {
   const [modalForm, setModalForm] = useState(emptyModalForm);
   const [search, setSearch] = useState("");
 
+  const { data: classes = [] } = useQuery({
+    queryKey: ["academy-classes"],
+    queryFn: () => fetchAcademyClasses({ status: "active" }),
+  });
+
+  const { data: allStructures = [], isLoading: listLoading } = useQuery({
+    queryKey: FEE_STRUCTURES_KEY,
+    queryFn: () => fetchAllFeeStructures(),
+  });
+
   const structuresFiltered = useMemo(() => {
     if (!search.trim()) return allStructures;
     return allStructures.filter((row) =>
@@ -66,16 +76,6 @@ export default function FeeStructureTab({ caps }: { caps: ModuleActionCaps }) {
       )
     );
   }, [allStructures, search]);
-
-  const { data: classes = [] } = useQuery({
-    queryKey: ["academy-classes"],
-    queryFn: () => fetchAcademyClasses({ status: "active" }),
-  });
-
-  const { data: allStructures = [], isLoading: listLoading } = useQuery({
-    queryKey: FEE_STRUCTURES_KEY,
-    queryFn: () => fetchAllFeeStructures(),
-  });
 
   const openCreate = () => {
     setEditRow(null);

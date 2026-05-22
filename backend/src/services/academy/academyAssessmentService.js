@@ -45,6 +45,7 @@ async function createAssessment(studentId, body, userId) {
     remarks: body.remarks || '',
     testPaperImage: body.testPaperImage || '',
     recordedBy: userId,
+    createdBy: userId,
   });
   return AcademyAssessment.findById(doc._id)
     .populate('subjectId', 'subjectName subjectCode')

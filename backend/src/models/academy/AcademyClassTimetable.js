@@ -17,6 +17,7 @@ const academyClassTimetableSchema = new mongoose.Schema(
     startTime: { type: String, required: true, trim: true },
     endTime: { type: String, required: true, trim: true },
     room: { type: String, trim: true },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }
 );

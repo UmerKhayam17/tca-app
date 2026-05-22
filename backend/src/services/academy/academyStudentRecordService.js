@@ -67,7 +67,8 @@ async function getStudentRecord(id) {
   const student = await AcademyStudent.findById(id)
     .populate('classId', 'className totalSubjects')
     .populate('selectedSubjects', 'subjectName subjectCode')
-    .populate('feeStructureId');
+    .populate('feeStructureId')
+    .populate('createdBy', 'name email');
   if (!student) throw new ApiError(404, 'Student not found');
 
   const classId = resolveClassId(student);

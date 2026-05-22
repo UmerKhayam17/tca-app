@@ -55,6 +55,7 @@ async function populateTestQuery(query) {
   return query
     .populate('classId', 'className')
     .populate('subjectId', 'subjectName subjectCode')
+    .populate('createdBy', 'name email')
     .lean();
 }
 

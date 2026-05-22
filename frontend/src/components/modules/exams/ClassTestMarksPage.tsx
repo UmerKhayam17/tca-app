@@ -11,6 +11,7 @@ import type { Role } from "@/lib/auth";
 import type { ModuleActionCaps } from "@/lib/permissions";
 import { classTestMarksHref, classTestSeriesHref, testExamsHref } from "@/lib/testExamsMenus";
 import PanelSearchBar from "@/components/modules/PanelSearchBar";
+import CreatedByLine from "@/components/modules/CreatedByLine";
 import { matchesPanelSearch } from "@/lib/panelSearch";
 import TestPaperCapture from "@/components/modules/exams/TestPaperCapture";
 import {
@@ -204,6 +205,7 @@ export default function ClassTestMarksPage({
             {ASSESSMENT_TYPE_LABELS[test.assessmentType as AssessmentType]} ·{" "}
             {formatClassTestSchedule(test)} · Total {test.totalMarks} marks
           </p>
+          <CreatedByLine createdBy={test.createdBy} />
           {test.occurrenceIndex && test.occurrenceCount && test.occurrenceCount > 1 && (
             <Badge variant="secondary" className="text-xs">
               {test.recurrence === "weekly"

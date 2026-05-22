@@ -27,6 +27,7 @@ const academyAssessmentSchema = new mongoose.Schema(
     /** URL path to scanned/photo of the student's test paper (e.g. /uploads/test-papers/...). */
     testPaperImage: { type: String, trim: true },
     recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }
 );

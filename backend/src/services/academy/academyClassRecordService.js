@@ -21,8 +21,14 @@ async function getClassRecord(classId) {
     timetable,
     studentIds,
   ] = await Promise.all([
-    AcademySubject.find({ classId }).sort({ subjectName: 1 }).lean(),
-    AcademyFeeStructure.find({ classId }).sort({ effectiveDate: -1, createdAt: -1 }).lean(),
+    AcademySubject.find({ classId })
+      .populate('createdBy', 'name email')
+      .sort({ subjectName: 1 })
+      .lean(),
+    AcademyFeeStructure.find({ classId })
+      .populate('createdBy', 'name email')
+      .sort({ effectiveDate: -1, createdAt: -1 })
+      .lean(),
     AcademyStudent.find({ classId })
       .select('studentId studentName fatherName status isFullPackage gender phone')
       .sort({ studentName: 1 })

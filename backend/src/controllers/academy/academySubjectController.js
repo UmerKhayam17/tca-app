@@ -7,7 +7,7 @@ const listByClass = catchAsync(async (req, res) => {
 });
 
 const create = catchAsync(async (req, res) => {
-  const data = await subjectService.createSubject(req.body);
+  const data = await subjectService.createSubject(req.body, req.user._id);
   res.status(201).json({ success: true, data });
 });
 

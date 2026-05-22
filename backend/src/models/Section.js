@@ -7,6 +7,7 @@ const sectionSchema = new mongoose.Schema(
     teacher: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     maxStudents: { type: Number, default: 40 },
     students: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Student' }],
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }
 );

@@ -1,5 +1,6 @@
 import { getApiRoot, parseJson } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
+import type { CreatedByUser } from "@/lib/createdBy";
 import type { AcademyClass, AcademySubject } from "@/lib/studentManagementApi";
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
@@ -30,6 +31,7 @@ export interface Exam {
   endDate: string;
   status: ExamStatus;
   createdAt?: string;
+  createdBy?: CreatedByUser | string;
 }
 
 export interface SubjectMark {

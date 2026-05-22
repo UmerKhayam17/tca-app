@@ -26,6 +26,7 @@ const timetableSchema = new mongoose.Schema(
     schedule: { type: [dayScheduleSchema], required: true, default: [] },
     effectiveFrom: { type: Date, required: true },
     isActive: { type: Boolean, default: true },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }
 );

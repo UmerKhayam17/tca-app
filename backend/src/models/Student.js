@@ -53,6 +53,7 @@ const studentSchema = new mongoose.Schema(
     receiptNumber: { type: String, trim: true },
     portalEmail: { type: String, trim: true },
     notificationSent: { type: Boolean, default: false },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }
 );

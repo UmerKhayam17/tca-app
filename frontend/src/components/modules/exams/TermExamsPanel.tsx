@@ -38,6 +38,7 @@ import {
 } from "@/lib/examApi";
 import { getAccessToken } from "@/lib/auth";
 import PanelSearchBar from "@/components/modules/PanelSearchBar";
+import CreatedByLine from "@/components/modules/CreatedByLine";
 import PanelToolbar from "@/components/modules/PanelToolbar";
 import { matchesPanelSearch } from "@/lib/panelSearch";
 
@@ -297,6 +298,7 @@ export default function TermExamsPanel({ caps }: { caps: ModuleActionCaps }) {
                     {classNameOf(selectedExam)} · {selectedExam.type}
                     {selectedExam.sessionLabel ? ` · ${selectedExam.sessionLabel}` : ""}
                   </p>
+                  <CreatedByLine createdBy={selectedExam.createdBy} className="mt-1" />
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {canEnter && (

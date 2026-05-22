@@ -58,6 +58,7 @@ import {
   classTestSeriesHref,
 } from "@/lib/testExamsMenus";
 import { formatDate, formatPkr, WEEKDAY_NAMES } from "./studentDisplayUtils";
+import CreatedByLine from "@/components/modules/CreatedByLine";
 
 const RECORD_KEY = (classId: string) => ["academy-class-record", classId] as const;
 
@@ -391,6 +392,7 @@ export default function ClassDetailPage({
               <p className="text-sm text-muted-foreground">
                 Class overview — subjects, fees, students, tests & timetable
               </p>
+              <CreatedByLine createdBy={cls.createdBy} />
             </div>
             <StatusBadge status={cls.status} />
           </div>

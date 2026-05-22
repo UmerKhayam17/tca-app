@@ -1,5 +1,6 @@
 import { getApiRoot, parseJson } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
+import type { CreatedByUser } from "@/lib/createdBy";
 
 async function authedFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const token = getAccessToken();
@@ -25,6 +26,7 @@ export interface AcademyClass {
   totalSubjects: number;
   status: "active" | "inactive";
   createdAt?: string;
+  createdBy?: CreatedByUser | string;
 }
 
 export interface AcademySubject {
@@ -33,6 +35,7 @@ export interface AcademySubject {
   subjectCode: string;
   classId: string;
   status: "active" | "inactive";
+  createdBy?: CreatedByUser | string;
 }
 
 export interface AcademyFeeStructure {
@@ -43,6 +46,7 @@ export interface AcademyFeeStructure {
   admissionFee: number;
   status: string;
   effectiveDate?: string;
+  createdBy?: CreatedByUser | string;
 }
 
 export interface AcademicRecord {
@@ -110,6 +114,7 @@ export interface AcademyStudent {
   discountAmount?: number;
   totalFee: number;
   status: string;
+  createdBy?: CreatedByUser | string;
 }
 
 export interface FeePreview {
@@ -548,6 +553,7 @@ export interface AcademyClassTest {
   occurrenceIndex?: number;
   occurrenceCount?: number;
   createdAt?: string;
+  createdBy?: CreatedByUser | string;
 }
 
 export interface CreateClassTestResponse {

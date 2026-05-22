@@ -10,6 +10,7 @@ const feeStructureSchema = new mongoose.Schema(
     dueDay: { type: Number, default: 10, min: 1, max: 28 },
     finePerDay: { type: Number, default: 0, min: 0 },
     isActive: { type: Boolean, default: true },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }
 );

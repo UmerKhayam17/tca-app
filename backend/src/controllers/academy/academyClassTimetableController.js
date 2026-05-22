@@ -7,7 +7,10 @@ const list = catchAsync(async (req, res) => {
 });
 
 const create = catchAsync(async (req, res) => {
-  const data = await timetableService.createSlot({ ...req.body, classId: req.params.classId });
+  const data = await timetableService.createSlot(
+    { ...req.body, classId: req.params.classId },
+    req.user._id
+  );
   res.status(201).json({ success: true, data });
 });
 

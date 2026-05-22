@@ -2,6 +2,7 @@ const ApiError = require('../../utils/ApiError');
 const AcademyClass = require('../../models/academy/AcademyClass');
 const AcademySubject = require('../../models/academy/AcademySubject');
 const AcademyClassTimetable = require('../../models/academy/AcademyClassTimetable');
+const { populateCreatedBy } = require('../../utils/createdBy');
 
 async function assertClassSubject(classId, subjectId) {
   const cls = await AcademyClass.findById(classId);
@@ -14,13 +15,14 @@ async function assertClassSubject(classId, subjectId) {
 async function listByClass(classId) {
   const cls = await AcademyClass.findById(classId);
   if (!cls) throw new ApiError(404, 'Class not found');
-  return AcademyClassTimetable.find({ classId })
-    .populate('subjectId', 'subjectName subjectCode')
-    .sort({ dayOfWeek: 1, startTime: 1 })
-    .lean();
+  return populateCreatedBy(
+    AcademyClassTimetable.find({ classId })
+      .populate('subjectId', 'subjectName subjectCode')
+      .sort({ dayOfWeek: 1, startTime: 1 })
+  ).lean();
 }
 
-async function createSlot(payload) {
+async function createSlot(payload, userId) {
   await assertClassSubject(payload.classId, payload.subjectId);
   try {
     const doc = await AcademyClassTimetable.create({
@@ -30,10 +32,11 @@ async function createSlot(payload) {
       startTime: payload.startTime,
       endTime: payload.endTime,
       room: payload.room || '',
+      createdBy: userId,
     });
-    return AcademyClassTimetable.findById(doc._id)
-      .populate('subjectId', 'subjectName subjectCode')
-      .lean();
+    return populateCreatedBy(
+      AcademyClassTimetable.findById(doc._id).populate('subjectId', 'subjectName subjectCode')
+    ).lean();
   } catch (err) {
     if (err.code === 11000) {
       throw new ApiError(409, 'A slot already exists at this day and time for this subject');
@@ -54,9 +57,9 @@ async function updateSlot(id, payload) {
   if (payload.endTime !== undefined) slot.endTime = payload.endTime;
   if (payload.room !== undefined) slot.room = payload.room;
   await slot.save();
-  return AcademyClassTimetable.findById(id)
-    .populate('subjectId', 'subjectName subjectCode')
-    .lean();
+  return populateCreatedBy(
+    AcademyClassTimetable.findById(id).populate('subjectId', 'subjectName subjectCode')
+  ).lean();
 }
 
 async function deleteSlot(id) {

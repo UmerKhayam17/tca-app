@@ -1,55 +1,59 @@
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Store, useStore } from "@/lib/store";
-import { ModuleActionCaps, PermLevel } from "@/lib/permissions";
-import { useToast } from "@/hooks/use-toast";
+import { Navigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
+import type { ModuleActionCaps, PermLevel } from "@/lib/permissions";
+import {
+  DEFAULT_TEST_EXAMS_SECTION,
+  findTestExamsSection,
+  isClassTestId,
+  isTestExamsSection,
+  testExamsHref,
+  type TestExamsSection,
+} from "@/lib/testExamsMenus";
+import ClassTestMarksPage from "./exams/ClassTestMarksPage";
+import ClassTestsPanel from "./exams/ClassTestsPanel";
+import TermExamsPanel from "./exams/TermExamsPanel";
 
-const ExamsModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActionCaps }) => {
-  const exams = useStore(() => Store.listExams());
-  const students = useStore(() => Store.listStudents());
-  const canEditMarks = caps.canEdit;
-  const { toast } = useToast();
-  const studentName = (id: string) => students.find((s) => s.id === id)?.name ?? "—";
+const ExamsModule = ({
+  perm: _perm,
+  caps,
+  section: sectionParam,
+  action,
+}: {
+  perm: PermLevel;
+  caps: ModuleActionCaps;
+  section?: string;
+  action?: string;
+}) => {
+  const { user } = useAuth();
+  const role = user?.role;
 
-  const setMarks = (id: string, marks: number) => {
-    Store.saveExams(Store.listExams().map((e) => (e.id === id ? { ...e, marks } : e)));
-  };
+  if (!sectionParam) {
+    return <Navigate to={DEFAULT_TEST_EXAMS_SECTION} replace />;
+  }
+
+  if (sectionParam === "enter-tests" && action && isClassTestId(action)) {
+    if (!role) return null;
+    return (
+      <div className="px-4 sm:px-6 lg:px-8 py-6">
+        <ClassTestMarksPage testId={action} role={role} caps={caps} />
+      </div>
+    );
+  }
+
+  if (sectionParam === "enter-tests" && action) {
+    return <Navigate to={role ? testExamsHref(role, "enter-tests") : ".."} replace />;
+  }
+
+  if (!isTestExamsSection(sectionParam)) {
+    return <Navigate to={`../${DEFAULT_TEST_EXAMS_SECTION}`} replace />;
+  }
+
+  const section: TestExamsSection = findTestExamsSection(sectionParam);
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6">
-      <Card className="overflow-hidden">
-        <div className="px-4 py-3 border-b border-border font-semibold text-primary">Mid Term Results</div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-secondary/50 text-muted-foreground">
-              <tr>
-                <th className="text-left px-4 py-3">Student</th>
-                <th className="text-left px-4 py-3">Subject</th>
-                <th className="text-left px-4 py-3">Marks</th>
-                <th className="text-left px-4 py-3 hidden sm:table-cell">%</th>
-              </tr>
-            </thead>
-            <tbody>
-              {exams.map((e) => (
-                <tr key={e.id} className="border-t border-border">
-                  <td className="px-4 py-3 font-medium text-primary">{studentName(e.studentId)}</td>
-                  <td className="px-4 py-3">{e.subject}</td>
-                  <td className="px-4 py-3">
-                    {canEditMarks ? (
-                      <Input type="number" className="h-8 w-24" value={e.marks}
-                        onChange={(ev) => setMarks(e.id, Number(ev.target.value))}
-                        onBlur={() => toast({ title: "Marks saved" })} />
-                    ) : `${e.marks} / ${e.total}`}
-                  </td>
-                  <td className="px-4 py-3 hidden sm:table-cell">
-                    <span className="text-xs font-semibold text-accent">{Math.round((e.marks / e.total) * 100)}%</span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      {section === "enter-tests" && <ClassTestsPanel caps={caps} />}
+      {section === "term-exams" && <TermExamsPanel caps={caps} />}
     </div>
   );
 };

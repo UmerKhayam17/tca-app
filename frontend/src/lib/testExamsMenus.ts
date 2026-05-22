@@ -1,0 +1,39 @@
+import type { ComponentType } from "react";
+import { ClipboardList, GraduationCap } from "lucide-react";
+import type { Role } from "./auth";
+
+export type TestExamsSection = "enter-tests" | "term-exams";
+
+export const TEST_EXAMS_SECTIONS: {
+  key: TestExamsSection;
+  label: string;
+  icon: ComponentType<{ className?: string }>;
+}[] = [
+  { key: "enter-tests", label: "Enter tests", icon: ClipboardList },
+  { key: "term-exams", label: "Term exams", icon: GraduationCap },
+];
+
+export const DEFAULT_TEST_EXAMS_SECTION: TestExamsSection = "enter-tests";
+
+export function isTestExamsSection(value: string | undefined): value is TestExamsSection {
+  return TEST_EXAMS_SECTIONS.some((s) => s.key === value);
+}
+
+const MONGO_ID = /^[a-f0-9]{24}$/i;
+
+export function isClassTestId(value: string | undefined): value is string {
+  return Boolean(value && MONGO_ID.test(value));
+}
+
+export function testExamsHref(role: Role, section: TestExamsSection = DEFAULT_TEST_EXAMS_SECTION) {
+  return `/panel/${role}/exams/${section}`;
+}
+
+/** Marks entry page for one class test — all students in the class. */
+export function classTestMarksHref(role: Role, testId: string) {
+  return `/panel/${role}/exams/enter-tests/${testId}`;
+}
+
+export function findTestExamsSection(section: string | undefined): TestExamsSection {
+  return isTestExamsSection(section) ? section : DEFAULT_TEST_EXAMS_SECTION;
+}

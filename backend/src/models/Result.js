@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const subjectMarkSchema = new mongoose.Schema(
   {
-    subject: { type: mongoose.Schema.Types.ObjectId, ref: 'Subject', required: true },
+    subject: { type: mongoose.Schema.Types.ObjectId, ref: 'AcademySubject', required: true },
     obtained: { type: Number, required: true, min: 0 },
     total: { type: Number, required: true, min: 0 },
     grade: { type: String, trim: true },
@@ -13,9 +13,13 @@ const subjectMarkSchema = new mongoose.Schema(
 
 const resultSchema = new mongoose.Schema(
   {
-    student: { type: mongoose.Schema.Types.ObjectId, ref: 'Student', required: true },
+    academyStudent: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'AcademyStudent',
+      required: true,
+      index: true,
+    },
     exam: { type: mongoose.Schema.Types.ObjectId, ref: 'Exam', required: true },
-    session: { type: mongoose.Schema.Types.ObjectId, ref: 'Session', required: true },
     subjectMarks: { type: [subjectMarkSchema], required: true, default: [] },
     totalMarks: { type: Number, default: 0 },
     obtainedMarks: { type: Number, default: 0 },
@@ -31,6 +35,6 @@ const resultSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-resultSchema.index({ student: 1, exam: 1 }, { unique: true });
+resultSchema.index({ academyStudent: 1, exam: 1 }, { unique: true });
 
 module.exports = mongoose.model('Result', resultSchema);

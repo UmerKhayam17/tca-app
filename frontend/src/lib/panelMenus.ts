@@ -8,6 +8,7 @@ import { Role } from "./auth";
 import { systemConfigHref } from "./systemConfigMenus";
 import { studentManagementHref } from "./studentManagementMenus";
 import { defaultTimetableSection, timetableHref } from "./timetableMenus";
+import { testExamsHref } from "./testExamsMenus";
 import {
   MODULES, ModuleKey, ModuleDef, ModuleActionCaps, PermLevel, resolveModuleCaps,
 } from "./permissions";
@@ -61,4 +62,6 @@ export const moduleHref = (
         ? studentManagementHref(role)
         : key === "timetable" && opts?.caps
           ? timetableHref(role, defaultTimetableSection({ caps: opts.caps, role }))
-          : `/panel/${role}/${key}`;
+          : key === "exams"
+            ? testExamsHref(role)
+            : `/panel/${role}/${key}`;

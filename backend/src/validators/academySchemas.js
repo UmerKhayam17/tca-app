@@ -127,6 +127,79 @@ const feePreview = Joi.object({
   discountAmount: Joi.number().min(0).default(0),
 });
 
+const assessmentTypes = ['quiz', 'weekly', 'monthly', 'midterm', 'final', 'assignment', 'practice', 'other'];
+
+const academyAssessmentBody = Joi.object({
+  subjectId: objectId.allow(null, ''),
+  title: Joi.string().trim().required(),
+  assessmentType: Joi.string().valid(...assessmentTypes).default('monthly'),
+  examDate: Joi.date().required(),
+  totalMarks: Joi.number().min(1).required(),
+  obtainedMarks: Joi.number().min(0).required(),
+  remarks: Joi.string().allow('').trim(),
+});
+
+const academyAssessmentPatch = Joi.object({
+  subjectId: objectId.allow(null, ''),
+  title: Joi.string().trim(),
+  assessmentType: Joi.string().valid(...assessmentTypes),
+  examDate: Joi.date(),
+  totalMarks: Joi.number().min(1),
+  obtainedMarks: Joi.number().min(0),
+  remarks: Joi.string().allow('').trim(),
+}).min(1);
+
+const academyAssessmentSessionQuery = Joi.object({
+  classId: objectId.required(),
+  subjectId: objectId.required(),
+  title: Joi.string().trim().allow(''),
+  assessmentType: Joi.string().valid(...assessmentTypes),
+  examDate: Joi.date(),
+});
+
+const academyClassTestBody = Joi.object({
+  classId: objectId.required(),
+  subjectId: objectId.required(),
+  title: Joi.string().trim().required(),
+  assessmentType: Joi.string().valid(...assessmentTypes).required(),
+  examDate: Joi.date().required(),
+  totalMarks: Joi.number().min(1).required(),
+});
+
+const academyClassTestMarksBody = Joi.object({
+  entries: Joi.array()
+    .items(
+      Joi.object({
+        studentId: objectId.required(),
+        assessmentId: objectId.optional(),
+        obtainedMarks: Joi.alternatives().try(Joi.number().min(0), Joi.string().allow('')),
+        remarks: Joi.string().allow('').trim(),
+      })
+    )
+    .min(1)
+    .required(),
+});
+
+const academyAssessmentBulkBody = Joi.object({
+  classId: objectId.required(),
+  subjectId: objectId.required(),
+  title: Joi.string().trim().required(),
+  assessmentType: Joi.string().valid(...assessmentTypes).required(),
+  examDate: Joi.date().required(),
+  totalMarks: Joi.number().min(1).required(),
+  entries: Joi.array()
+    .items(
+      Joi.object({
+        studentId: objectId.required(),
+        assessmentId: objectId.optional(),
+        obtainedMarks: Joi.alternatives().try(Joi.number().min(0), Joi.string().allow('')),
+        remarks: Joi.string().allow('').trim(),
+      })
+    )
+    .min(1)
+    .required(),
+});
+
 module.exports = {
   academyClassBody,
   academyClassPatch,
@@ -139,4 +212,10 @@ module.exports = {
   academyFeePay,
   academyFeeGenerate,
   feePreview,
+  academyAssessmentBody,
+  academyAssessmentPatch,
+  academyAssessmentSessionQuery,
+  academyAssessmentBulkBody,
+  academyClassTestBody,
+  academyClassTestMarksBody,
 };

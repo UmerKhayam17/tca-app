@@ -1,10 +1,12 @@
 import { Navigate, useParams, Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { Role } from "@/lib/auth";
 import { roleMeta, findModule, buildMenu, moduleHref } from "@/lib/panelMenus";
 import { systemConfigHref } from "@/lib/systemConfigMenus";
 import { studentManagementHref } from "@/lib/studentManagementMenus";
 import { defaultTimetableSection, timetableHref } from "@/lib/timetableMenus";
+import { testExamsHref } from "@/lib/testExamsMenus";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
   applyBackendModulePermissions, ModuleKey, resolveModuleCaps,
@@ -31,6 +33,7 @@ import PermissionsModule from "@/components/modules/PermissionsModule";
 import StudentManagementModule from "@/components/modules/StudentManagementModule";
 import PermissionCatalogModule from "@/components/modules/PermissionCatalogModule";
 import { Store, useStore } from "@/lib/store";
+import { fetchExams } from "@/lib/examApi";
 
 const Dashboard = ({
   role,
@@ -51,14 +54,18 @@ const Dashboard = ({
   const students = useStore(() => Store.listStudents());
   const fees = useStore(() => Store.listFees());
   const attendance = useStore(() => Store.listAttendance());
-  const exams = useStore(() => Store.listExams());
   const salary = useStore(() => Store.listSalary());
+  const { data: termExams = [] } = useQuery({
+    queryKey: ["dashboard-term-exams"],
+    queryFn: () => fetchExams(),
+    retry: false,
+  });
 
   const today = new Date().toISOString().slice(0, 10);
   const present = attendance.filter((a) => a.date === today && a.status === "present").length;
   const collected = fees.filter((f) => f.status === "paid").reduce((s, f) => s + f.amount, 0);
   const due = fees.filter((f) => f.status === "due").reduce((s, f) => s + f.amount, 0);
-  const avg = exams.length ? Math.round(exams.reduce((s, e) => s + (e.marks / e.total) * 100, 0) / exams.length) : 0;
+  const termExamCount = termExams.length;
   const pendingSalary = salary.filter((s) => s.status === "pending").length;
 
   const statsByRole: Record<Role, { label: string; value: string; hint: string }[]> = {
@@ -66,7 +73,7 @@ const Dashboard = ({
       { label: "Total Students", value: String(students.length), hint: "All institutions" },
       { label: "Fees Collected", value: `₨ ${collected.toLocaleString()}`, hint: "All time" },
       { label: "Outstanding",    value: `₨ ${due.toLocaleString()}`, hint: "Due fees" },
-      { label: "Avg Score",      value: `${avg}%`, hint: "Across exams" },
+      { label: "Term exams",     value: String(termExamCount), hint: "Formal result events" },
     ],
     accountant: [
       { label: "Collected",       value: `₨ ${collected.toLocaleString()}`, hint: "Fees received" },
@@ -77,18 +84,18 @@ const Dashboard = ({
     teacher: [
       { label: "My Students", value: String(students.length), hint: "Across sections" },
       { label: "Present Today", value: String(present), hint: today },
-      { label: "Avg Score",   value: `${avg}%`, hint: "Across exams" },
+      { label: "Term exams",  value: String(termExamCount), hint: "Mid / final terms" },
       { label: "Assignments", value: String(Store.listAssignments().length), hint: "Active" },
     ],
     parent: [
       { label: "Children", value: "1", hint: "Linked profile" },
       { label: "Attendance", value: present ? "Present" : "Absent", hint: today },
-      { label: "Latest Avg", value: `${avg}%`, hint: "Mid term" },
+      { label: "Term exams", value: String(termExamCount), hint: "Published results in Exams" },
       { label: "Fee Status", value: due ? "Due" : "Paid", hint: "Current month" },
     ],
     student: [
       { label: "Attendance", value: present ? "Present" : "Absent", hint: today },
-      { label: "Latest Avg", value: `${avg}%`, hint: "Across exams" },
+      { label: "Term exams", value: String(termExamCount), hint: "See student profile" },
       { label: "Assignments", value: String(Store.listAssignments().length), hint: "Active" },
       { label: "Fee Status", value: due ? "Due" : "Paid", hint: "Current month" },
     ],
@@ -197,6 +204,10 @@ const Panel = () => {
       />
     );
   }
+
+  if (mod.key === "exams" && !section) {
+    return <Navigate to={testExamsHref(r)} replace />;
+  }
   if (!caps.canView) {
     return (
       <div className="px-6 py-12 text-center">
@@ -219,7 +230,7 @@ const Panel = () => {
       case "system-config": return <SystemConfigModule caps={caps} section={section} />;
       case "timetable":     return <TimetableModule caps={caps} section={section} role={r} />;
       case "assignments":   return <AssignmentsModule perm={perm} caps={caps} />;
-      case "exams":         return <ExamsModule perm={perm} caps={caps} />;
+      case "exams":         return <ExamsModule perm={perm} caps={caps} section={section} action={action} />;
       case "fees":          return <FeesModule perm={perm} caps={caps} />;
       case "salary":        return <SalaryModule perm={perm} caps={caps} />;
       case "library":       return <LibraryModule perm={perm} caps={caps} />;

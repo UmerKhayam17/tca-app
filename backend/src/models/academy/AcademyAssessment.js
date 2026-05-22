@@ -8,11 +8,16 @@ const academyAssessmentSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    classTestId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'AcademyClassTest',
+      index: true,
+    },
     subjectId: { type: mongoose.Schema.Types.ObjectId, ref: 'AcademySubject' },
     title: { type: String, required: true, trim: true },
     assessmentType: {
       type: String,
-      enum: ['quiz', 'monthly', 'midterm', 'final', 'assignment', 'other'],
+      enum: ['quiz', 'weekly', 'monthly', 'midterm', 'final', 'assignment', 'practice', 'other'],
       default: 'monthly',
     },
     examDate: { type: Date, required: true, index: true },

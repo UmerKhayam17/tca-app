@@ -9,6 +9,8 @@ const subjectCtrl = require('../controllers/academy/academySubjectController');
 const feeStructureCtrl = require('../controllers/academy/academyFeeStructureController');
 const studentCtrl = require('../controllers/academy/academyStudentController');
 const feeCtrl = require('../controllers/academy/academyFeeController');
+const assessmentCtrl = require('../controllers/academy/academyAssessmentController');
+const classTestCtrl = require('../controllers/academy/academyClassTestController');
 
 const router = Router();
 router.use(protect);
@@ -16,7 +18,12 @@ router.use(protect);
 // Classes
 router.get(
   '/classes',
-  requireAnyPermission('view_academy_students', 'manage_academy_classes'),
+  requireAnyPermission(
+    'view_academy_students',
+    'manage_academy_classes',
+    'enter_exam_marks',
+    'view_results'
+  ),
   classCtrl.list
 );
 router.post('/classes', requirePermission('manage_academy_classes'), validate(schemas.academyClassBody), classCtrl.create);
@@ -31,7 +38,12 @@ router.delete('/classes/:id', requirePermission('manage_academy_classes'), class
 // Subjects
 router.get(
   '/classes/:classId/subjects',
-  requireAnyPermission('view_academy_students', 'manage_academy_subjects'),
+  requireAnyPermission(
+    'view_academy_students',
+    'manage_academy_subjects',
+    'enter_exam_marks',
+    'view_results'
+  ),
   subjectCtrl.listByClass
 );
 router.post(
@@ -98,6 +110,67 @@ router.get(
 );
 router.get('/students', requirePermission('view_academy_students'), studentCtrl.list);
 router.get('/students/:id/record', requirePermission('view_academy_students'), studentCtrl.getRecord);
+router.get(
+  '/class-tests',
+  requireAnyPermission('view_academy_students', 'enter_exam_marks', 'view_results'),
+  classTestCtrl.list
+);
+router.post(
+  '/class-tests',
+  requireAnyPermission('enter_exam_marks', 'manage_academy_students'),
+  validate(schemas.academyClassTestBody),
+  classTestCtrl.create
+);
+router.get(
+  '/class-tests/:id/entry',
+  requireAnyPermission('view_academy_students', 'enter_exam_marks', 'view_results'),
+  classTestCtrl.getEntry
+);
+router.post(
+  '/class-tests/:id/marks',
+  requireAnyPermission('enter_exam_marks', 'manage_academy_students'),
+  validate(schemas.academyClassTestMarksBody),
+  classTestCtrl.saveMarks
+);
+router.delete(
+  '/class-tests/:id',
+  requireAnyPermission('enter_exam_marks', 'manage_academy_students'),
+  classTestCtrl.remove
+);
+router.get(
+  '/assessments/class-entry',
+  requireAnyPermission('view_academy_students', 'enter_exam_marks', 'view_results'),
+  validate(schemas.academyAssessmentSessionQuery, 'query'),
+  assessmentCtrl.classEntry
+);
+router.post(
+  '/assessments/bulk',
+  requireAnyPermission('enter_exam_marks', 'manage_academy_students'),
+  validate(schemas.academyAssessmentBulkBody),
+  assessmentCtrl.bulkSave
+);
+router.get(
+  '/students/:studentId/assessments',
+  requirePermission('view_academy_students'),
+  assessmentCtrl.list
+);
+router.post(
+  '/students/:studentId/assessments',
+  requireAnyPermission('enter_exam_marks', 'manage_academy_students'),
+  validate(schemas.academyAssessmentBody),
+  assessmentCtrl.create
+);
+router.patch(
+  '/assessments/:id',
+  requireAnyPermission('enter_exam_marks', 'manage_academy_students'),
+  validate(schemas.academyAssessmentPatch),
+  assessmentCtrl.update
+);
+router.delete(
+  '/assessments/:id',
+  requireAnyPermission('enter_exam_marks', 'manage_academy_students'),
+  assessmentCtrl.remove
+);
 router.get('/students/:id', requirePermission('view_academy_students'), studentCtrl.getById);
 router.patch(
   '/students/:id',

@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const dateSheetEntrySchema = new mongoose.Schema(
   {
-    subject: { type: mongoose.Schema.Types.ObjectId, ref: 'Subject' },
+    subject: { type: mongoose.Schema.Types.ObjectId, ref: 'AcademySubject' },
     date: { type: Date },
     startTime: { type: String },
     endTime: { type: String },
@@ -14,8 +14,13 @@ const examSchema = new mongoose.Schema(
   {
     title: { type: String, required: true, trim: true },
     type: { type: String, required: true, trim: true },
-    class: { type: mongoose.Schema.Types.ObjectId, ref: 'Class', required: true },
-    session: { type: mongoose.Schema.Types.ObjectId, ref: 'Session', required: true },
+    academyClass: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'AcademyClass',
+      required: true,
+      index: true,
+    },
+    sessionLabel: { type: String, trim: true, default: '' },
     startDate: { type: Date, required: true },
     endDate: { type: Date, required: true },
     dateSheet: [dateSheetEntrySchema],

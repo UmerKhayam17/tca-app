@@ -371,3 +371,134 @@ export const payAcademyFee = (id: string, body?: { paymentMethod?: string; notes
 
 export const fetchStudentFeeHistory = (studentId: string) =>
   api<{ student: AcademyStudent; records: AcademyFeeRecord[] }>(`/fees/student/${studentId}`);
+
+// Assessments (ongoing tests — single subject per row)
+export type AssessmentType =
+  | "quiz"
+  | "weekly"
+  | "monthly"
+  | "midterm"
+  | "final"
+  | "assignment"
+  | "practice"
+  | "other";
+
+export const ASSESSMENT_TYPE_LABELS: Record<AssessmentType, string> = {
+  quiz: "Quiz",
+  weekly: "Weekly test",
+  monthly: "Monthly test",
+  midterm: "Midterm",
+  final: "Final",
+  assignment: "Assignment",
+  practice: "Practice test",
+  other: "Other",
+};
+
+export const fetchStudentAssessments = (studentId: string) =>
+  api<AcademyAssessmentRecord[]>(`/students/${studentId}/assessments`);
+
+export const createAssessment = (
+  studentId: string,
+  body: {
+    subjectId?: string;
+    title: string;
+    assessmentType: AssessmentType;
+    examDate: string;
+    totalMarks: number;
+    obtainedMarks: number;
+    remarks?: string;
+  }
+) =>
+  api<AcademyAssessmentRecord>(`/students/${studentId}/assessments`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+export const updateAssessment = (
+  id: string,
+  body: Partial<{
+    subjectId: string;
+    title: string;
+    assessmentType: AssessmentType;
+    examDate: string;
+    totalMarks: number;
+    obtainedMarks: number;
+    remarks: string;
+  }>
+) =>
+  api<AcademyAssessmentRecord>(`/assessments/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+
+export const deleteAssessment = (id: string) =>
+  api<{ ok: boolean }>(`/assessments/${id}`, { method: "DELETE" });
+
+export interface ClassTestEntryRow {
+  student: {
+    _id: string;
+    studentId: string;
+    studentName: string;
+    fatherName?: string;
+  };
+  assessment: AcademyAssessmentRecord | null;
+}
+
+export interface AcademyClassTest {
+  _id: string;
+  classId: string | AcademyClass;
+  subjectId: string | AcademySubject;
+  title: string;
+  assessmentType: AssessmentType;
+  examDate: string;
+  totalMarks: number;
+  status: "open" | "closed";
+  createdAt?: string;
+}
+
+export interface ClassTestMarksEntry {
+  test: AcademyClassTest;
+  students: ClassTestEntryRow[];
+}
+
+export function fetchClassTests(classId?: string) {
+  const q = classId ? `?classId=${classId}` : "";
+  return api<AcademyClassTest[]>(`/class-tests${q}`);
+}
+
+export function createClassTest(body: {
+  classId: string;
+  subjectId: string;
+  title: string;
+  assessmentType: AssessmentType;
+  examDate: string;
+  totalMarks: number;
+}) {
+  return api<AcademyClassTest>("/class-tests", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function fetchClassTestEntry(testId: string) {
+  return api<ClassTestMarksEntry>(`/class-tests/${testId}/entry`);
+}
+
+export function saveClassTestMarks(
+  testId: string,
+  entries: {
+    studentId: string;
+    assessmentId?: string;
+    obtainedMarks: number | string;
+    remarks?: string;
+  }[]
+) {
+  return api<{ savedCount: number }>(`/class-tests/${testId}/marks`, {
+    method: "POST",
+    body: JSON.stringify({ entries }),
+  });
+}
+
+export function deleteClassTest(testId: string) {
+  return api<{ ok: boolean }>(`/class-tests/${testId}`, { method: "DELETE" });
+}

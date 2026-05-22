@@ -1,6 +1,14 @@
 const catchAsync = require('../../utils/catchAsync');
 const feeStructureService = require('../../services/academy/academyFeeStructureService');
 
+const list = catchAsync(async (req, res) => {
+  const data = await feeStructureService.listAll({
+    status: req.query.status,
+    classId: req.query.classId,
+  });
+  res.json({ success: true, data });
+});
+
 const getByClass = catchAsync(async (req, res) => {
   const data = await feeStructureService.getByClass(req.params.classId);
   res.json({ success: true, data: data || null });
@@ -21,4 +29,4 @@ const preview = catchAsync(async (req, res) => {
   res.json({ success: true, data });
 });
 
-module.exports = { getByClass, create, update, preview };
+module.exports = { list, getByClass, create, update, preview };

@@ -5,7 +5,7 @@ const AcademySubject = require('../../models/academy/AcademySubject');
 const AcademyFeeRecord = require('../../models/academy/AcademyFeeRecord');
 const {
   getByClass,
-  calculateFeesFromStructure,
+  calculateFeesWithDiscount,
 } = require('./academyFeeStructureService');
 
 async function generateStudentId() {
@@ -21,6 +21,62 @@ async function generateStudentId() {
     if (!Number.isNaN(n)) seq = n + 1;
   }
   return `${prefix}${String(seq).padStart(6, '0')}`;
+}
+
+function normalizeAcademicHistory(rows) {
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .filter((r) => r && (r.institutionName || r.className || r.year))
+    .map((r) => ({
+      institutionName: (r.institutionName || '').trim(),
+      className: (r.className || '').trim(),
+      totalMarks: r.totalMarks != null && r.totalMarks !== '' ? Number(r.totalMarks) : undefined,
+      obtainedMarks: r.obtainedMarks != null && r.obtainedMarks !== '' ? Number(r.obtainedMarks) : undefined,
+      percentage: r.percentage != null && r.percentage !== '' ? Number(r.percentage) : undefined,
+      year: (r.year || '').trim(),
+    }));
+}
+
+function pickStudentProfile(payload) {
+  const postal = payload.postalAddress?.trim() || payload.address?.trim() || '';
+  return {
+    dateOfBirth: payload.dateOfBirth ? new Date(payload.dateOfBirth) : undefined,
+    nationality: (payload.nationality || 'Pakistan').trim(),
+    guardianName: payload.guardianName?.trim() || '',
+    guardianRelation: payload.guardianRelation?.trim() || '',
+    fatherGuardianCnic: payload.fatherGuardianCnic?.trim() || '',
+    guardianOccupation: payload.guardianOccupation?.trim() || '',
+    guardianWorkAddress: payload.guardianWorkAddress?.trim() || '',
+    guardianEmail: payload.guardianEmail?.trim() || '',
+    studentEmail: payload.studentEmail?.trim() || '',
+    postalAddress: postal,
+    address: postal,
+    contactPhoneRes: payload.contactPhoneRes?.trim() || '',
+    permanentAddress: payload.permanentAddress?.trim() || '',
+    currentSchoolCollege: payload.currentSchoolCollege?.trim() || '',
+    academicHistory: normalizeAcademicHistory(payload.academicHistory),
+  };
+}
+
+function applyProfileToStudent(student, payload) {
+  const profile = pickStudentProfile(payload);
+  if (payload.dateOfBirth !== undefined) student.dateOfBirth = profile.dateOfBirth;
+  if (payload.nationality !== undefined) student.nationality = profile.nationality;
+  if (payload.guardianName !== undefined) student.guardianName = profile.guardianName;
+  if (payload.guardianRelation !== undefined) student.guardianRelation = profile.guardianRelation;
+  if (payload.fatherGuardianCnic !== undefined) student.fatherGuardianCnic = profile.fatherGuardianCnic;
+  if (payload.guardianOccupation !== undefined) student.guardianOccupation = profile.guardianOccupation;
+  if (payload.guardianWorkAddress !== undefined) student.guardianWorkAddress = profile.guardianWorkAddress;
+  if (payload.guardianEmail !== undefined) student.guardianEmail = profile.guardianEmail;
+  if (payload.studentEmail !== undefined) student.studentEmail = profile.studentEmail;
+  if (payload.postalAddress !== undefined || payload.address !== undefined) {
+    student.postalAddress = profile.postalAddress;
+    student.address = profile.postalAddress;
+  }
+  if (payload.contactPhoneRes !== undefined) student.contactPhoneRes = profile.contactPhoneRes;
+  if (payload.permanentAddress !== undefined) student.permanentAddress = profile.permanentAddress;
+  if (payload.currentSchoolCollege !== undefined) student.currentSchoolCollege = profile.currentSchoolCollege;
+  if (payload.academicHistory !== undefined) student.academicHistory = profile.academicHistory;
 }
 
 async function validateSubjects(classId, subjectIds, isFullPackage) {
@@ -44,19 +100,23 @@ async function registerStudent(payload, userId) {
   const isFullPackage = Boolean(payload.isFullPackage);
   const subjectIds = await validateSubjects(payload.classId, payload.selectedSubjects, isFullPackage);
 
-  const fees = calculateFeesFromStructure(feeStructure, {
+  const fees = calculateFeesWithDiscount(feeStructure, {
     selectedSubjectIds: subjectIds,
     isFullPackage,
+    discountAmount: payload.discountAmount,
   });
 
   const studentId = await generateStudentId();
+  const phone = (payload.phone || payload.mobileNo || '').trim();
+  const profile = pickStudentProfile(payload);
+
   const student = await AcademyStudent.create({
     studentId,
     studentName: payload.studentName.trim(),
     fatherName: payload.fatherName.trim(),
-    phone: payload.phone.trim(),
+    phone,
     gender: payload.gender,
-    address: payload.address?.trim() || '',
+    ...profile,
     classId: payload.classId,
     selectedSubjects: isFullPackage ? [] : subjectIds,
     isFullPackage,
@@ -94,13 +154,15 @@ async function updateStudent(id, payload) {
   const needsFeeRecalc =
     payload.classId ||
     payload.selectedSubjects ||
-    payload.isFullPackage !== undefined;
+    payload.isFullPackage !== undefined ||
+    payload.discountAmount !== undefined;
 
   if (payload.studentName) student.studentName = payload.studentName.trim();
   if (payload.fatherName) student.fatherName = payload.fatherName.trim();
   if (payload.phone) student.phone = payload.phone.trim();
+  if (payload.mobileNo) student.phone = payload.mobileNo.trim();
   if (payload.gender) student.gender = payload.gender;
-  if (payload.address !== undefined) student.address = payload.address?.trim() || '';
+  applyProfileToStudent(student, payload);
   if (payload.status) student.status = payload.status;
   if (payload.classId) student.classId = payload.classId;
 
@@ -114,9 +176,12 @@ async function updateStudent(id, payload) {
     );
     student.isFullPackage = isFullPackage;
     student.selectedSubjects = isFullPackage ? [] : subjectIds;
-    const fees = calculateFeesFromStructure(feeStructure, {
+    const discountAmount =
+      payload.discountAmount !== undefined ? payload.discountAmount : student.discountAmount;
+    const fees = calculateFeesWithDiscount(feeStructure, {
       selectedSubjectIds: subjectIds,
       isFullPackage,
+      discountAmount,
     });
     Object.assign(student, fees);
     student.feeStructureId = feeStructure._id;
@@ -215,6 +280,23 @@ function studentsToCsv(rows) {
   return lines.join('\n');
 }
 
+async function deleteStudent(id) {
+  const student = await AcademyStudent.findById(id);
+  if (!student) throw new ApiError(404, 'Student not found');
+
+  const paidCount = await AcademyFeeRecord.countDocuments({
+    studentId: id,
+    status: 'paid',
+  });
+  if (paidCount > 0) {
+    throw new ApiError(400, 'Cannot delete student with paid fee records. Set status to inactive instead.');
+  }
+
+  await AcademyFeeRecord.deleteMany({ studentId: id });
+  await student.deleteOne();
+  return { deleted: true, studentId: student.studentId };
+}
+
 module.exports = {
   generateStudentId,
   registerStudent,
@@ -222,4 +304,5 @@ module.exports = {
   getStudent,
   listStudents,
   studentsToCsv,
+  deleteStudent,
 };

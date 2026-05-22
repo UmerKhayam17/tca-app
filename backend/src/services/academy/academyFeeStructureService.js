@@ -2,6 +2,15 @@ const ApiError = require('../../utils/ApiError');
 const AcademyFeeStructure = require('../../models/academy/AcademyFeeStructure');
 const AcademyClass = require('../../models/academy/AcademyClass');
 
+async function listAll({ status, classId } = {}) {
+  const q = {};
+  if (status) q.status = status;
+  if (classId) q.classId = classId;
+  return AcademyFeeStructure.find(q)
+    .populate('classId', 'className status')
+    .sort({ classId: 1, effectiveDate: -1, createdAt: -1 });
+}
+
 async function getByClass(classId) {
   const cls = await AcademyClass.findById(classId);
   if (!cls) throw new ApiError(404, 'Class not found');
@@ -59,18 +68,38 @@ function calculateFeesFromStructure(feeStructure, { selectedSubjectIds, isFullPa
     monthlyFee = count * feeStructure.perSubjectFee;
   }
   const admissionFee = feeStructure.admissionFee;
-  const totalFee = monthlyFee + admissionFee;
-  return { monthlyFee, admissionFee, totalFee };
+  return { monthlyFee, admissionFee, subtotal: monthlyFee + admissionFee };
 }
 
-async function previewFees({ classId, selectedSubjects, isFullPackage }) {
+/** Apply PKR discount to first payment; monthly/admission list prices stay unchanged for billing. */
+function applyDiscount(fees, discountAmount = 0) {
+  const discount = Math.max(0, Number(discountAmount) || 0);
+  const subtotal = fees.subtotal ?? fees.monthlyFee + fees.admissionFee;
+  const applied = Math.min(discount, subtotal);
+  return {
+    monthlyFee: fees.monthlyFee,
+    admissionFee: fees.admissionFee,
+    subtotal,
+    discountAmount: applied,
+    totalFee: Math.max(0, subtotal - applied),
+  };
+}
+
+function calculateFeesWithDiscount(feeStructure, options) {
+  const base = calculateFeesFromStructure(feeStructure, options);
+  return applyDiscount(base, options.discountAmount);
+}
+
+async function previewFees({ classId, selectedSubjects, isFullPackage, discountAmount }) {
   const feeStructure = await getByClass(classId);
   if (!feeStructure) throw new ApiError(400, 'No active fee structure for this class');
+  const fees = calculateFeesWithDiscount(feeStructure, {
+    selectedSubjectIds: selectedSubjects,
+    isFullPackage,
+    discountAmount,
+  });
   return {
-    ...calculateFeesFromStructure(feeStructure, {
-      selectedSubjectIds: selectedSubjects,
-      isFullPackage,
-    }),
+    ...fees,
     feeStructureId: feeStructure._id,
     perSubjectFee: feeStructure.perSubjectFee,
     fullPackageFee: feeStructure.fullPackageFee,
@@ -78,9 +107,12 @@ async function previewFees({ classId, selectedSubjects, isFullPackage }) {
 }
 
 module.exports = {
+  listAll,
   getByClass,
   createStructure,
   updateStructure,
   calculateFeesFromStructure,
+  applyDiscount,
+  calculateFeesWithDiscount,
   previewFees,
 };

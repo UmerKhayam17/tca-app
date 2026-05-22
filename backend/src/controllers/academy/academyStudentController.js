@@ -1,5 +1,6 @@
 const catchAsync = require('../../utils/catchAsync');
 const studentService = require('../../services/academy/academyStudentService');
+const recordService = require('../../services/academy/academyStudentRecordService');
 const feeStructureService = require('../../services/academy/academyFeeStructureService');
 
 const register = catchAsync(async (req, res) => {
@@ -14,6 +15,11 @@ const update = catchAsync(async (req, res) => {
 
 const getById = catchAsync(async (req, res) => {
   const data = await studentService.getStudent(req.params.id);
+  res.json({ success: true, data });
+});
+
+const getRecord = catchAsync(async (req, res) => {
+  const data = await recordService.getStudentRecord(req.params.id);
   res.json({ success: true, data });
 });
 
@@ -48,4 +54,9 @@ const previewFees = catchAsync(async (req, res) => {
   res.json({ success: true, data });
 });
 
-module.exports = { register, update, getById, list, exportCsv, previewFees };
+const remove = catchAsync(async (req, res) => {
+  const data = await studentService.deleteStudent(req.params.id);
+  res.json({ success: true, data });
+});
+
+module.exports = { register, update, getById, getRecord, list, exportCsv, previewFees, remove };

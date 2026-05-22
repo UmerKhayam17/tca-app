@@ -45,12 +45,61 @@ export interface AcademyFeeStructure {
   effectiveDate?: string;
 }
 
+export interface AcademicRecord {
+  institutionName?: string;
+  className?: string;
+  totalMarks?: number;
+  obtainedMarks?: number;
+  percentage?: number;
+  year?: string;
+}
+
+export interface AcademyStudentRegisterBody {
+  studentName: string;
+  fatherName: string;
+  dateOfBirth: string;
+  nationality?: string;
+  guardianName?: string;
+  guardianRelation?: string;
+  fatherGuardianCnic?: string;
+  guardianOccupation?: string;
+  guardianWorkAddress?: string;
+  guardianEmail?: string;
+  studentEmail?: string;
+  postalAddress?: string;
+  contactPhoneRes?: string;
+  phone?: string;
+  mobileNo?: string;
+  permanentAddress?: string;
+  currentSchoolCollege?: string;
+  academicHistory?: AcademicRecord[];
+  gender: string;
+  classId: string;
+  selectedSubjects: string[];
+  isFullPackage: boolean;
+  discountAmount?: number;
+}
+
 export interface AcademyStudent {
   _id: string;
   studentId: string;
   studentName: string;
   fatherName: string;
+  dateOfBirth?: string;
+  nationality?: string;
+  guardianName?: string;
+  guardianRelation?: string;
+  fatherGuardianCnic?: string;
+  guardianOccupation?: string;
+  guardianWorkAddress?: string;
+  guardianEmail?: string;
+  studentEmail?: string;
+  postalAddress?: string;
+  contactPhoneRes?: string;
   phone: string;
+  permanentAddress?: string;
+  currentSchoolCollege?: string;
+  academicHistory?: AcademicRecord[];
   gender: "male" | "female" | "other";
   address?: string;
   classId: string | AcademyClass;
@@ -58,6 +107,7 @@ export interface AcademyStudent {
   isFullPackage: boolean;
   monthlyFee: number;
   admissionFee: number;
+  discountAmount?: number;
   totalFee: number;
   status: string;
 }
@@ -65,6 +115,8 @@ export interface AcademyStudent {
 export interface FeePreview {
   monthlyFee: number;
   admissionFee: number;
+  subtotal?: number;
+  discountAmount?: number;
   totalFee: number;
   perSubjectFee?: number;
   fullPackageFee?: number;
@@ -78,9 +130,82 @@ export interface AcademyFeeRecord {
   amount: number;
   feeType: "admission" | "monthly";
   status: "pending" | "paid" | "overdue" | "waived";
+  dueDate?: string;
   receiptNumber?: string;
   paidAt?: string;
   paymentMethod?: string;
+  notes?: string;
+}
+
+export interface AcademyTimetableSlot {
+  _id: string;
+  classId: string;
+  subjectId: AcademySubject | string;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  room?: string;
+}
+
+export interface AcademyAttendanceRecord {
+  _id: string;
+  studentId: string;
+  date: string;
+  status: "present" | "absent" | "late" | "leave";
+  subjectId?: AcademySubject | string;
+  notes?: string;
+}
+
+export interface AcademyAssessmentRecord {
+  _id: string;
+  studentId: string;
+  subjectId?: AcademySubject | string;
+  title: string;
+  assessmentType: string;
+  examDate: string;
+  totalMarks: number;
+  obtainedMarks: number;
+  remarks?: string;
+}
+
+export interface AcademyStudentRecord {
+  student: AcademyStudent;
+  enrollment: {
+    isFullPackage: boolean;
+    subjectCount: number;
+    classSubjectsTotal: number;
+    subjects: AcademySubject[];
+  };
+  timetable: AcademyTimetableSlot[];
+  attendance: {
+    summary: {
+      present: number;
+      absent: number;
+      late: number;
+      leave: number;
+      total: number;
+      attendanceRate: number | null;
+    };
+    records: AcademyAttendanceRecord[];
+  };
+  fees: {
+    summary: {
+      recordsCount: number;
+      totalPaid: number;
+      totalPending: number;
+      byStatus: Record<string, number>;
+    };
+    records: AcademyFeeRecord[];
+  };
+  assessments: {
+    summary: {
+      count: number;
+      averagePercentage: number | null;
+      highestPercentage: number | null;
+      lowestPercentage: number | null;
+    };
+    records: AcademyAssessmentRecord[];
+  };
 }
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
@@ -109,8 +234,10 @@ export const deleteAcademyClass = (id: string) =>
   api<{ deleted: boolean }>(`/classes/${id}`, { method: "DELETE" });
 
 // Subjects
-export const fetchSubjectsByClass = (classId: string) =>
-  api<AcademySubject[]>(`/classes/${classId}/subjects`);
+export const fetchSubjectsByClass = (classId: string, params?: { status?: string }) => {
+  const q = params?.status ? `?status=${params.status}` : "";
+  return api<AcademySubject[]>(`/classes/${classId}/subjects${q}`);
+};
 
 export const createAcademySubject = (body: {
   subjectName: string;
@@ -126,6 +253,14 @@ export const deleteAcademySubject = (id: string) =>
   api<{ deleted: boolean }>(`/subjects/${id}`, { method: "DELETE" });
 
 // Fee structure
+export const fetchAllFeeStructures = (params?: { status?: string; classId?: string }) => {
+  const q = new URLSearchParams();
+  if (params?.status) q.set("status", params.status);
+  if (params?.classId) q.set("classId", params.classId);
+  const qs = q.toString();
+  return api<AcademyFeeStructure[]>(`/fee-structures${qs ? `?${qs}` : ""}`);
+};
+
 export const fetchFeeStructureByClass = (classId: string) =>
   api<AcademyFeeStructure | null>(`/fee-structures/class/${classId}`);
 
@@ -143,6 +278,7 @@ export const previewFees = (body: {
   classId: string;
   selectedSubjects: string[];
   isFullPackage: boolean;
+  discountAmount?: number;
 }) =>
   api<FeePreview>("/fee-structures/preview", { method: "POST", body: JSON.stringify(body) });
 
@@ -171,21 +307,19 @@ export const fetchAcademyStudents = async (params?: {
   return { students: body.data || [], pagination: body.pagination };
 };
 
-export const registerAcademyStudent = (body: {
-  studentName: string;
-  fatherName: string;
-  phone: string;
-  gender: string;
-  address?: string;
-  classId: string;
-  selectedSubjects: string[];
-  isFullPackage: boolean;
-}) => api<AcademyStudent>("/students", { method: "POST", body: JSON.stringify(body) });
+export const registerAcademyStudent = (body: AcademyStudentRegisterBody) =>
+  api<AcademyStudent>("/students", { method: "POST", body: JSON.stringify(body) });
 
 export const updateAcademyStudent = (id: string, body: Record<string, unknown>) =>
   api<AcademyStudent>(`/students/${id}`, { method: "PATCH", body: JSON.stringify(body) });
 
 export const getAcademyStudent = (id: string) => api<AcademyStudent>(`/students/${id}`);
+
+export const getAcademyStudentRecord = (id: string) =>
+  api<AcademyStudentRecord>(`/students/${id}/record`);
+
+export const deleteAcademyStudent = (id: string) =>
+  api<{ deleted: boolean; studentId?: string }>(`/students/${id}`, { method: "DELETE" });
 
 export const exportStudentsCsv = async (params?: { search?: string; classId?: string }) => {
   const q = new URLSearchParams();

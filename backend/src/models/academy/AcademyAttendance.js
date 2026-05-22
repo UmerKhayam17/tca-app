@@ -1,0 +1,26 @@
+const mongoose = require('mongoose');
+
+const academyAttendanceSchema = new mongoose.Schema(
+  {
+    studentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'AcademyStudent',
+      required: true,
+      index: true,
+    },
+    date: { type: Date, required: true, index: true },
+    status: {
+      type: String,
+      enum: ['present', 'absent', 'late', 'leave'],
+      default: 'present',
+    },
+    subjectId: { type: mongoose.Schema.Types.ObjectId, ref: 'AcademySubject' },
+    notes: { type: String, trim: true },
+    markedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  },
+  { timestamps: true }
+);
+
+academyAttendanceSchema.index({ studentId: 1, date: 1, subjectId: 1 }, { unique: true, sparse: true });
+
+module.exports = mongoose.model('AcademyAttendance', academyAttendanceSchema);

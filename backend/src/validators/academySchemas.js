@@ -40,28 +40,73 @@ const academyFeeStructurePatch = Joi.object({
   effectiveDate: Joi.date(),
 }).min(1);
 
+const academicRecord = Joi.object({
+  institutionName: Joi.string().allow('').trim(),
+  className: Joi.string().allow('').trim(),
+  totalMarks: Joi.number().min(0).allow(null, ''),
+  obtainedMarks: Joi.number().min(0).allow(null, ''),
+  percentage: Joi.number().min(0).max(100).allow(null, ''),
+  year: Joi.string().allow('').trim(),
+});
+
+const studentProfileFields = {
+  dateOfBirth: Joi.date().required(),
+  nationality: Joi.string().trim().default('Pakistan'),
+  guardianName: Joi.string().allow('').trim(),
+  guardianRelation: Joi.string().allow('').trim(),
+  fatherGuardianCnic: Joi.string().allow('').trim(),
+  guardianOccupation: Joi.string().allow('').trim(),
+  guardianWorkAddress: Joi.string().allow('').trim(),
+  guardianEmail: Joi.string().trim().allow('').empty('').email({ tlds: { allow: false } }),
+  studentEmail: Joi.string().trim().allow('').empty('').email({ tlds: { allow: false } }),
+  postalAddress: Joi.string().allow('').trim(),
+  contactPhoneRes: Joi.string().allow('').trim(),
+  mobileNo: Joi.string().trim(),
+  permanentAddress: Joi.string().allow('').trim(),
+  currentSchoolCollege: Joi.string().allow('').trim(),
+  academicHistory: Joi.array().items(academicRecord).default([]),
+  address: Joi.string().allow('').trim(),
+};
+
 const academyStudentRegister = Joi.object({
   studentName: Joi.string().trim().required(),
   fatherName: Joi.string().trim().required(),
-  phone: Joi.string().trim().required(),
+  phone: Joi.string().trim(),
   gender: Joi.string().valid('male', 'female', 'other').required(),
-  address: Joi.string().allow('').optional(),
   classId: objectId.required(),
   selectedSubjects: Joi.array().items(objectId).default([]),
   isFullPackage: Joi.boolean().default(false),
+  discountAmount: Joi.number().min(0).default(0),
   status: Joi.string().valid('active', 'inactive', 'suspended').optional(),
-});
+  ...studentProfileFields,
+}).or('phone', 'mobileNo');
 
 const academyStudentPatch = Joi.object({
   studentName: Joi.string().trim(),
   fatherName: Joi.string().trim(),
   phone: Joi.string().trim(),
   gender: Joi.string().valid('male', 'female', 'other'),
-  address: Joi.string().allow(''),
   classId: objectId,
   selectedSubjects: Joi.array().items(objectId),
   isFullPackage: Joi.boolean(),
+  discountAmount: Joi.number().min(0),
   status: Joi.string().valid('active', 'inactive', 'suspended'),
+  dateOfBirth: Joi.date(),
+  nationality: Joi.string().trim(),
+  guardianName: Joi.string().allow('').trim(),
+  guardianRelation: Joi.string().allow('').trim(),
+  fatherGuardianCnic: Joi.string().allow('').trim(),
+  guardianOccupation: Joi.string().allow('').trim(),
+  guardianWorkAddress: Joi.string().allow('').trim(),
+  guardianEmail: Joi.string().trim().allow('').empty('').email({ tlds: { allow: false } }),
+  studentEmail: Joi.string().trim().allow('').empty('').email({ tlds: { allow: false } }),
+  postalAddress: Joi.string().allow('').trim(),
+  contactPhoneRes: Joi.string().allow('').trim(),
+  mobileNo: Joi.string().trim(),
+  permanentAddress: Joi.string().allow('').trim(),
+  currentSchoolCollege: Joi.string().allow('').trim(),
+  academicHistory: Joi.array().items(academicRecord),
+  address: Joi.string().allow('').trim(),
 }).min(1);
 
 const academyFeePay = Joi.object({
@@ -79,6 +124,7 @@ const feePreview = Joi.object({
   classId: objectId.required(),
   selectedSubjects: Joi.array().items(objectId).default([]),
   isFullPackage: Joi.boolean().default(false),
+  discountAmount: Joi.number().min(0).default(0),
 });
 
 module.exports = {

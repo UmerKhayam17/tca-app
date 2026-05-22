@@ -12,7 +12,7 @@ import {
 import { Card } from "@/components/ui/card";
 import SEO from "@/components/SEO";
 import ModuleHeader from "@/components/modules/ModuleHeader";
-import StudentsModule from "@/components/modules/StudentsModule";
+import StudentsRecordsModule from "@/components/modules/StudentsRecordsModule";
 import UsersModule from "@/components/modules/UsersModule";
 import AttendanceModule from "@/components/modules/AttendanceModule";
 import TimetableModule from "@/components/modules/TimetableModule";
@@ -148,7 +148,9 @@ const Dashboard = ({
 };
 
 const Panel = () => {
-  const { role, slug, section } = useParams<{ role: Role; slug?: string; section?: string }>();
+  const { role, slug, section, action, subAction } = useParams<{
+    role: Role; slug?: string; section?: string; action?: string; subAction?: string;
+  }>();
   const { user: session, loading } = useAuth();
   const { perms } = usePermissions();
 
@@ -207,8 +209,12 @@ const Panel = () => {
   const renderModule = () => {
     switch (mod.key) {
       case "users":         return <UsersModule perm={perm} caps={caps} />;
-      case "student-management": return <StudentManagementModule perm={perm} caps={caps} section={section} />;
-      case "students":      return <StudentsModule perm={perm} caps={caps} />;
+      case "student-management": return (
+        <StudentManagementModule perm={perm} caps={caps} section={section} action={action} subAction={subAction} />
+      );
+      case "students":      return (
+        <StudentsRecordsModule perm={perm} caps={caps} section={section} action={action} />
+      );
       case "attendance":    return <AttendanceModule perm={perm} caps={caps} />;
       case "system-config": return <SystemConfigModule caps={caps} section={section} />;
       case "timetable":     return <TimetableModule caps={caps} section={section} role={r} />;

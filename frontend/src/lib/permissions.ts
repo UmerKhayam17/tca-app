@@ -54,7 +54,7 @@ export const MODULES: ModuleDef[] = [
   { key: "dashboard",     label: "Dashboard",       icon: "LayoutDashboard", desc: "Overview & key metrics" },
   { key: "users",         label: "Staff management", icon: "UserCog",         desc: "Teachers, accountants, access & salary" },
   { key: "student-management", label: "Student Management", icon: "School", desc: "Classes, subjects, fees & tuition enrollment" },
-  { key: "students",      label: "Student Records", icon: "GraduationCap",   desc: "Profiles & academic data" },
+  { key: "students",      label: "Student Records", icon: "GraduationCap",   desc: "Enrollment, profiles, attendance & results" },
   { key: "attendance",    label: "Attendance",      icon: "ClipboardList",   desc: "Daily attendance" },
   { key: "timetable",     label: "Timetable",       icon: "Calendar",        desc: "Build, publish & view class schedules" },
   { key: "assignments",   label: "Assignments",     icon: "BookOpen",        desc: "Homework & grading" },

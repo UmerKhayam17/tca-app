@@ -50,6 +50,11 @@ router.delete('/subjects/:id', requirePermission('manage_academy_subjects'), sub
 
 // Fee structure
 router.get(
+  '/fee-structures',
+  requireAnyPermission('view_academy_students', 'manage_academy_fee_structures'),
+  feeStructureCtrl.list
+);
+router.get(
   '/fee-structures/class/:classId',
   requireAnyPermission('view_academy_students', 'manage_academy_fee_structures'),
   feeStructureCtrl.getByClass
@@ -92,6 +97,7 @@ router.get(
   studentCtrl.exportCsv
 );
 router.get('/students', requirePermission('view_academy_students'), studentCtrl.list);
+router.get('/students/:id/record', requirePermission('view_academy_students'), studentCtrl.getRecord);
 router.get('/students/:id', requirePermission('view_academy_students'), studentCtrl.getById);
 router.patch(
   '/students/:id',
@@ -99,6 +105,7 @@ router.patch(
   validate(schemas.academyStudentPatch),
   studentCtrl.update
 );
+router.delete('/students/:id', requirePermission('manage_academy_students'), studentCtrl.remove);
 
 // Fee management
 router.get(

@@ -34,6 +34,61 @@ export function studentManagementHref(
   return `/panel/${role}/student-management/${section}`;
 }
 
+export type AcademyStudentRoutes = {
+  list: string;
+  new: string;
+  detail: (studentId: string) => string;
+  edit: (studentId: string) => string;
+};
+
+export function academyStudentRoutes(
+  role: Role,
+  base: "registration" | "records" = "registration"
+): AcademyStudentRoutes {
+  if (base === "records") {
+    const root = `/panel/${role}/students`;
+    return {
+      list: root,
+      new: `${root}/new`,
+      detail: (studentId) => `${root}/${studentId}`,
+      edit: (studentId) => `${root}/${studentId}/edit`,
+    };
+  }
+  const root = `/panel/${role}/student-management/registration`;
+  return {
+    list: root,
+    new: `${root}/new`,
+    detail: (studentId) => `${root}/${studentId}`,
+    edit: (studentId) => `${root}/${studentId}/edit`,
+  };
+}
+
+export function studentRegistrationNewHref(role: Role) {
+  return academyStudentRoutes(role, "registration").new;
+}
+
+const MONGO_ID = /^[a-f0-9]{24}$/i;
+
+export function isAcademyStudentId(value: string | undefined): value is string {
+  return Boolean(value && MONGO_ID.test(value));
+}
+
+export function studentRegistrationListHref(role: Role) {
+  return academyStudentRoutes(role, "registration").list;
+}
+
+export function studentDetailHref(role: Role, studentId: string) {
+  return academyStudentRoutes(role, "registration").detail(studentId);
+}
+
+export function studentEditHref(role: Role, studentId: string) {
+  return academyStudentRoutes(role, "registration").edit(studentId);
+}
+
+export function studentRecordsListHref(role: Role) {
+  return academyStudentRoutes(role, "records").list;
+}
+
 export function findStudentManagementSection(section: string | undefined): StudentManagementSection {
   return isStudentManagementSection(section) ? section : DEFAULT_STUDENT_MANAGEMENT_SECTION;
 }

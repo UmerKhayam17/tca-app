@@ -4,6 +4,7 @@ const classTestService = require('../../services/academy/academyClassTestService
 const list = catchAsync(async (req, res) => {
   const data = await classTestService.listClassTests({
     classId: req.query.classId,
+    seriesId: req.query.seriesId,
   });
   res.json({ success: true, data });
 });
@@ -27,9 +28,19 @@ const saveMarks = catchAsync(async (req, res) => {
   res.status(201).json({ success: true, data });
 });
 
-const remove = catchAsync(async (req, res) => {
-  await classTestService.removeClassTest(req.params.id);
-  res.json({ success: true, data: { ok: true } });
+const uploadTestPaper = catchAsync(async (req, res) => {
+  const data = await classTestService.uploadStudentTestPaper(
+    req.params.id,
+    req.params.studentId,
+    req.file
+  );
+  res.status(201).json({ success: true, data });
 });
 
-module.exports = { list, create, getEntry, saveMarks, remove };
+const remove = catchAsync(async (req, res) => {
+  const deleteSeries = req.query.series === 'true' || req.query.series === '1';
+  const data = await classTestService.removeClassTest(req.params.id, { deleteSeries });
+  res.json({ success: true, data });
+});
+
+module.exports = { list, create, getEntry, saveMarks, uploadTestPaper, remove };

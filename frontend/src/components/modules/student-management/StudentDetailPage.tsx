@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,8 @@ import {
 } from "@/lib/studentManagementApi";
 import { fetchStudentExamResults, type ExamResult } from "@/lib/examApi";
 import AssessmentFormDialog from "@/components/modules/exams/AssessmentFormDialog";
+import PanelSearchBar from "@/components/modules/PanelSearchBar";
+import { matchesPanelSearch } from "@/lib/panelSearch";
 import { getAccessToken } from "@/lib/auth";
 import { getApiRoot } from "@/lib/api";
 import {
@@ -291,6 +293,13 @@ function TimetableTab({ slots }: { slots: AcademyTimetableSlot[] }) {
 
 function AttendanceTab({ record }: { record: AcademyStudentRecord }) {
   const { summary, records } = record.attendance;
+  const [search, setSearch] = useState("");
+  const recordsFiltered = useMemo(() => {
+    if (!search.trim()) return records;
+    return records.filter((r) =>
+      matchesPanelSearch(search, r.date, r.status, r.notes, r.subjectId ? subjectName(r.subjectId as AcademySubject) : "General")
+    );
+  }, [records, search]);
 
   return (
     <div className="space-y-6">
@@ -306,12 +315,17 @@ function AttendanceTab({ record }: { record: AcademyStudentRecord }) {
         />
       </div>
 
+      {records.length > 0 && (
+        <PanelSearchBar value={search} onChange={setSearch} placeholder="Search attendance…" className="max-w-md" />
+      )}
       {records.length === 0 ? (
         <EmptyBlock message="No attendance records for this student yet." />
+      ) : recordsFiltered.length === 0 ? (
+        <EmptyBlock message="No attendance records match your search." />
       ) : (
         <DataTable
           headers={["Date", "Status", "Subject", "Notes"]}
-          rows={records.map((r: AcademyAttendanceRecord) => [
+          rows={recordsFiltered.map((r: AcademyAttendanceRecord) => [
             formatDate(r.date),
             <StatusBadge key="st" status={r.status} />,
             r.subjectId ? subjectName(r.subjectId as AcademySubject) : "General",
@@ -325,6 +339,22 @@ function AttendanceTab({ record }: { record: AcademyStudentRecord }) {
 
 function FeesTab({ record }: { record: AcademyStudentRecord }) {
   const { summary, records } = record.fees;
+  const [search, setSearch] = useState("");
+  const recordsFiltered = useMemo(() => {
+    if (!search.trim()) return records;
+    return records.filter((r) =>
+      matchesPanelSearch(
+        search,
+        r.feeType,
+        r.status,
+        r.receiptNumber,
+        r.amount,
+        r.paidAt,
+        r.month,
+        r.year
+      )
+    );
+  }, [records, search]);
 
   return (
     <div className="space-y-6">
@@ -343,12 +373,17 @@ function FeesTab({ record }: { record: AcademyStudentRecord }) {
         />
       </div>
 
+      {records.length > 0 && (
+        <PanelSearchBar value={search} onChange={setSearch} placeholder="Search fees, receipt, status…" className="max-w-md" />
+      )}
       {records.length === 0 ? (
         <EmptyBlock message="No fee invoices or payments recorded yet." />
+      ) : recordsFiltered.length === 0 ? (
+        <EmptyBlock message="No fee records match your search." />
       ) : (
         <DataTable
           headers={["Period", "Type", "Amount", "Status", "Receipt", "Paid on"]}
-          rows={records.map((r: AcademyFeeRecord) => [
+          rows={recordsFiltered.map((r: AcademyFeeRecord) => [
             r.feeType === "admission"
               ? "Admission"
               : `${MONTH_NAMES[(r.month || 1) - 1]} ${r.year}`,
@@ -381,6 +416,22 @@ function TestsTab({
   const [editing, setEditing] = useState<AcademyAssessmentRecord | null>(null);
 
   const canManageTests = caps.canEdit || caps.canCreate;
+  const [search, setSearch] = useState("");
+  const recordsFiltered = useMemo(() => {
+    if (!search.trim()) return records;
+    return records.filter((r) =>
+      matchesPanelSearch(
+        search,
+        r.title,
+        r.assessmentType,
+        r.examDate,
+        r.remarks,
+        r.subjectId ? subjectName(r.subjectId as AcademySubject) : "",
+        r.obtainedMarks,
+        r.totalMarks
+      )
+    );
+  }, [records, search]);
 
   const { data: termResults = [] } = useQuery({
     queryKey: ["student-exam-results", studentId],
@@ -439,12 +490,17 @@ function TestsTab({
           />
         </div>
 
+        {records.length > 0 && (
+          <PanelSearchBar value={search} onChange={setSearch} placeholder="Search tests…" className="max-w-md mb-4" />
+        )}
         {records.length === 0 ? (
           <EmptyBlock message="No tests recorded yet. Add quiz, weekly, or monthly tests per subject." />
+        ) : recordsFiltered.length === 0 ? (
+          <EmptyBlock message="No tests match your search." />
         ) : (
           <DataTable
             headers={["Date", "Title", "Type", "Subject", "Obtained", "Total", "%", "Remarks", ""]}
-            rows={records.map((r: AcademyAssessmentRecord) => [
+            rows={recordsFiltered.map((r: AcademyAssessmentRecord) => [
               formatDate(r.examDate),
               r.title,
               ASSESSMENT_TYPE_LABELS[r.assessmentType as keyof typeof ASSESSMENT_TYPE_LABELS] ||

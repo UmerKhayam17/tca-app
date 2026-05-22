@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,8 @@ import type { ModuleActionCaps } from "@/lib/permissions";
 import {
   fetchAcademyClasses, fetchAcademyFees, generateMonthlyFees, payAcademyFee, type AcademyFeeRecord,
 } from "@/lib/studentManagementApi";
+import PanelSearchBar from "@/components/modules/PanelSearchBar";
+import { matchesPanelSearch } from "@/lib/panelSearch";
 
 function studentName(rec: AcademyFeeRecord) {
   const s = rec.studentId;
@@ -31,6 +33,7 @@ export default function FeesTab({ caps }: { caps: ModuleActionCaps }) {
   const [statusFilter, setStatusFilter] = useState("");
   const [classFilter, setClassFilter] = useState("");
   const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
 
   const { data: classes = [] } = useQuery({
     queryKey: ["academy-classes"],
@@ -74,6 +77,21 @@ export default function FeesTab({ caps }: { caps: ModuleActionCaps }) {
 
   const records = data?.records ?? [];
   const pagination = data?.pagination;
+
+  const recordsFiltered = useMemo(() => {
+    if (!search.trim()) return records;
+    return records.filter((r) =>
+      matchesPanelSearch(
+        search,
+        studentName(r),
+        studentIdLabel(r),
+        r.receiptNumber,
+        r.feeType,
+        r.status,
+        r.amount
+      )
+    );
+  }, [records, search]);
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-4">
@@ -119,6 +137,13 @@ export default function FeesTab({ caps }: { caps: ModuleActionCaps }) {
         )}
       </Card>
 
+      <PanelSearchBar
+        value={search}
+        onChange={(v) => { setSearch(v); setPage(1); }}
+        placeholder="Search student, receipt, status…"
+        className="max-w-md"
+      />
+
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -140,7 +165,14 @@ export default function FeesTab({ caps }: { caps: ModuleActionCaps }) {
               {!isLoading && records.length === 0 && (
                 <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">No fee records</td></tr>
               )}
-              {records.map((r) => (
+              {!isLoading && records.length > 0 && recordsFiltered.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                    No fee records match your search.
+                  </td>
+                </tr>
+              )}
+              {recordsFiltered.map((r) => (
                 <tr key={r._id} className="border-b hover:bg-muted/30">
                   <td className="p-3 font-mono text-xs">{r.receiptNumber || "—"}</td>
                   <td className="p-3">

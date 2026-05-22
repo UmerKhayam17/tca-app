@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,8 @@ import { Plus } from "lucide-react";
 import { Store, useStore, newId, Book } from "@/lib/store";
 import { ModuleActionCaps, PermLevel } from "@/lib/permissions";
 import { useToast } from "@/hooks/use-toast";
+import PanelToolbar from "@/components/modules/PanelToolbar";
+import { matchesPanelSearch } from "@/lib/panelSearch";
 
 const empty: Book = { id: "", title: "", author: "", copies: 1, available: 1 };
 
@@ -15,7 +17,13 @@ const LibraryModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleAct
   const books = useStore(() => Store.listBooks());
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Book>(empty);
+  const [search, setSearch] = useState("");
   const { toast } = useToast();
+
+  const booksFiltered = useMemo(() => {
+    if (!search.trim()) return books;
+    return books.filter((b) => matchesPanelSearch(search, b.title, b.author, b.copies, b.available));
+  }, [books, search]);
 
   const save = () => {
     if (!caps.canCreate) return;
@@ -41,8 +49,8 @@ const LibraryModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleAct
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-4">
-      {caps.canCreate && (
-        <div className="flex justify-end">
+      <PanelToolbar search={search} onSearchChange={setSearch} searchPlaceholder="Search title or author…">
+        {caps.canCreate && (
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild><Button variant="hero"><Plus className="h-4 w-4" /> Add Book</Button></DialogTrigger>
             <DialogContent>
@@ -55,11 +63,14 @@ const LibraryModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleAct
               <DialogFooter><Button onClick={save} variant="hero">Save</Button></DialogFooter>
             </DialogContent>
           </Dialog>
-        </div>
-      )}
+        )}
+      </PanelToolbar>
 
+      {booksFiltered.length === 0 ? (
+        <p className="text-sm text-center text-muted-foreground py-8">No books match your search.</p>
+      ) : (
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {books.map((b) => (
+        {booksFiltered.map((b) => (
           <Card key={b.id} className="p-4 space-y-2">
             <div className="font-semibold text-primary">{b.title}</div>
             <div className="text-xs text-muted-foreground">by {b.author}</div>
@@ -73,6 +84,7 @@ const LibraryModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleAct
           </Card>
         ))}
       </div>
+      )}
     </div>
   );
 };

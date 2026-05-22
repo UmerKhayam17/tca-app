@@ -25,6 +25,15 @@ export function isClassTestId(value: string | undefined): value is string {
   return Boolean(value && MONGO_ID.test(value));
 }
 
+export function isClassTestSeriesId(value: string | undefined): value is string {
+  return isClassTestId(value);
+}
+
+/** Series schedule detail — all dates in one recurring test. */
+export function classTestSeriesHref(role: Role, seriesId: string) {
+  return `/panel/${role}/exams/enter-tests/series/${seriesId}`;
+}
+
 export function testExamsHref(role: Role, section: TestExamsSection = DEFAULT_TEST_EXAMS_SECTION) {
   return `/panel/${role}/exams/${section}`;
 }

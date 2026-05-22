@@ -166,6 +166,18 @@ export interface AcademyAssessmentRecord {
   totalMarks: number;
   obtainedMarks: number;
   remarks?: string;
+  testPaperImage?: string;
+}
+
+/** Resolve /uploads/... paths for img src (dev proxy or API host). */
+export function resolveUploadUrl(path: string): string {
+  if (!path) return "";
+  if (path.startsWith("http://") || path.startsWith("https://") || path.startsWith("blob:")) {
+    return path;
+  }
+  const api = import.meta.env.VITE_API_URL?.trim();
+  if (api) return `${api.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
+  return path;
 }
 
 export interface AcademyStudentRecord {
@@ -444,25 +456,54 @@ export interface ClassTestEntryRow {
   assessment: AcademyAssessmentRecord | null;
 }
 
+export type ClassTestRecurrence = "once" | "daily" | "weekly" | "monthly";
+
 export interface AcademyClassTest {
   _id: string;
   classId: string | AcademyClass;
   subjectId: string | AcademySubject;
   title: string;
+  seriesLabel?: string;
   assessmentType: AssessmentType;
   examDate: string;
+  testTime?: string;
   totalMarks: number;
   status: "open" | "closed";
+  recurrence?: ClassTestRecurrence;
+  seriesId?: string;
+  occurrenceIndex?: number;
+  occurrenceCount?: number;
   createdAt?: string;
+}
+
+export interface CreateClassTestResponse {
+  test: AcademyClassTest;
+  tests: AcademyClassTest[];
+  seriesId?: string;
+  createdCount: number;
+}
+
+export interface ClassTestSeriesSibling {
+  _id: string;
+  title: string;
+  examDate: string;
+  testTime?: string;
+  occurrenceIndex?: number;
+  occurrenceCount?: number;
+  status: "open" | "closed";
 }
 
 export interface ClassTestMarksEntry {
   test: AcademyClassTest;
+  series?: ClassTestSeriesSibling[];
   students: ClassTestEntryRow[];
 }
 
-export function fetchClassTests(classId?: string) {
-  const q = classId ? `?classId=${classId}` : "";
+export function fetchClassTests(classId?: string, seriesId?: string) {
+  const params = new URLSearchParams();
+  if (classId) params.set("classId", classId);
+  if (seriesId) params.set("seriesId", seriesId);
+  const q = params.toString() ? `?${params.toString()}` : "";
   return api<AcademyClassTest[]>(`/class-tests${q}`);
 }
 
@@ -472,12 +513,23 @@ export function createClassTest(body: {
   title: string;
   assessmentType: AssessmentType;
   examDate: string;
+  testTime?: string;
   totalMarks: number;
+  recurrence?: ClassTestRecurrence;
+  seriesCount?: number;
 }) {
-  return api<AcademyClassTest>("/class-tests", {
+  return api<CreateClassTestResponse>("/class-tests", {
     method: "POST",
     body: JSON.stringify(body),
   });
+}
+
+/** Format date + optional HH:mm for list/detail. */
+export function formatClassTestSchedule(test: Pick<AcademyClassTest, "examDate" | "testTime">) {
+  const d = new Date(test.examDate);
+  const date = d.toLocaleDateString();
+  const time = test.testTime?.trim();
+  return time ? `${date} at ${time}` : date;
 }
 
 export function fetchClassTestEntry(testId: string) {
@@ -491,6 +543,7 @@ export function saveClassTestMarks(
     assessmentId?: string;
     obtainedMarks: number | string;
     remarks?: string;
+    testPaperImage?: string;
   }[]
 ) {
   return api<{ savedCount: number }>(`/class-tests/${testId}/marks`, {
@@ -499,6 +552,27 @@ export function saveClassTestMarks(
   });
 }
 
-export function deleteClassTest(testId: string) {
-  return api<{ ok: boolean }>(`/class-tests/${testId}`, { method: "DELETE" });
+export async function uploadClassTestPaper(
+  testId: string,
+  studentId: string,
+  file: File
+): Promise<{ testPaperImage: string }> {
+  const fd = new FormData();
+  fd.append("testPaper", file);
+  const res = await authedFetch(
+    `/student-management/class-tests/${testId}/students/${studentId}/test-paper`,
+    {
+      method: "POST",
+      body: fd,
+    }
+  );
+  const body = await parseJson<{ success?: boolean; data?: { testPaperImage: string }; message?: string }>(res);
+  if (!res.ok) throw new Error(body.message || "Upload failed");
+  if (!body.data?.testPaperImage) throw new Error("Invalid upload response");
+  return body.data;
+}
+
+export function deleteClassTest(testId: string, options?: { deleteSeries?: boolean }) {
+  const q = options?.deleteSeries ? "?series=true" : "";
+  return api<{ ok: boolean; deletedCount?: number }>(`/class-tests/${testId}${q}`, { method: "DELETE" });
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,11 +8,19 @@ import { Plus, Trash2 } from "lucide-react";
 import { Store, useStore, newId, Announcement } from "@/lib/store";
 import { ModuleActionCaps, PermLevel } from "@/lib/permissions";
 import { useToast } from "@/hooks/use-toast";
+import PanelSearchBar from "@/components/modules/PanelSearchBar";
+import { matchesPanelSearch } from "@/lib/panelSearch";
 
 const AnnouncementsModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActionCaps }) => {
   const list = useStore(() => Store.listAnnouncements()).slice().sort((a, b) => b.ts - a.ts);
   const [draft, setDraft] = useState<Announcement>({ id: "", title: "", body: "", audience: "all", ts: 0 });
+  const [search, setSearch] = useState("");
   const { toast } = useToast();
+
+  const listFiltered = useMemo(() => {
+    if (!search.trim()) return list;
+    return list.filter((a) => matchesPanelSearch(search, a.title, a.body, a.audience));
+  }, [list, search]);
 
   const publish = () => {
     if (!draft.title.trim()) return;
@@ -44,8 +52,18 @@ const AnnouncementsModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Mod
         </Card>
       )}
 
+      <PanelSearchBar
+        value={search}
+        onChange={setSearch}
+        placeholder="Search announcements…"
+        className="max-w-lg"
+      />
+
       <div className="space-y-3">
-        {list.map((a) => (
+        {listFiltered.length === 0 && (
+          <p className="text-sm text-center text-muted-foreground py-6">No announcements match your search.</p>
+        )}
+        {listFiltered.map((a) => (
           <Card key={a.id} className="p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">

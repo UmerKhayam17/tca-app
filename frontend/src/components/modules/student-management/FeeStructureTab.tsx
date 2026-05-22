@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,8 @@ import {
   type AcademyClass,
   type AcademyFeeStructure,
 } from "@/lib/studentManagementApi";
+import PanelSearchBar from "@/components/modules/PanelSearchBar";
+import { matchesPanelSearch } from "@/lib/panelSearch";
 
 const FEE_STRUCTURES_KEY = ["academy-fee-structures"] as const;
 
@@ -49,6 +51,21 @@ export default function FeeStructureTab({ caps }: { caps: ModuleActionCaps }) {
   const [open, setOpen] = useState(false);
   const [editRow, setEditRow] = useState<AcademyFeeStructure | null>(null);
   const [modalForm, setModalForm] = useState(emptyModalForm);
+  const [search, setSearch] = useState("");
+
+  const structuresFiltered = useMemo(() => {
+    if (!search.trim()) return allStructures;
+    return allStructures.filter((row) =>
+      matchesPanelSearch(
+        search,
+        classLabel(row.classId),
+        row.perSubjectFee,
+        row.fullPackageFee,
+        row.admissionFee,
+        row.status
+      )
+    );
+  }, [allStructures, search]);
 
   const { data: classes = [] } = useQuery({
     queryKey: ["academy-classes"],
@@ -111,11 +128,14 @@ export default function FeeStructureTab({ caps }: { caps: ModuleActionCaps }) {
       <Card className="overflow-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-4 py-3 border-b bg-muted/30">
           <h3 className="font-medium text-sm">All fee structures</h3>
-          {caps.canCreate && (
-            <Button className="gap-2 shrink-0 self-start sm:self-auto" onClick={openCreate}>
-              <Plus className="h-4 w-4" /> Create fee structure
-            </Button>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <PanelSearchBar value={search} onChange={setSearch} placeholder="Search class or fees…" className="max-w-xs" />
+            {caps.canCreate && (
+              <Button className="gap-2 shrink-0" onClick={openCreate}>
+                <Plus className="h-4 w-4" /> Create fee structure
+              </Button>
+            )}
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -145,7 +165,14 @@ export default function FeeStructureTab({ caps }: { caps: ModuleActionCaps }) {
                   </td>
                 </tr>
               )}
-              {allStructures.map((row) => (
+              {!listLoading && allStructures.length > 0 && structuresFiltered.length === 0 && (
+                <tr>
+                  <td colSpan={canSave ? 6 : 5} className="p-8 text-center text-muted-foreground">
+                    No fee structures match your search.
+                  </td>
+                </tr>
+              )}
+              {structuresFiltered.map((row) => (
                 <tr key={row._id} className="border-b last:border-0 hover:bg-muted/30">
                   <td className="p-3 font-medium">{classLabel(row.classId)}</td>
                   <td className="p-3">{formatFee(row.perSubjectFee)}</td>

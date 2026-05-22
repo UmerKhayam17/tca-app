@@ -10,6 +10,8 @@ import { useToast } from "@/hooks/use-toast";
 import type { ModuleActionCaps } from "@/lib/permissions";
 import { fetchClasses, fetchSections, fetchSubjects } from "@/lib/configApi";
 import { createSubjectRequirement, deleteSubjectRequirement, fetchSubjectRequirements } from "@/lib/timetableApi";
+import PanelSearchBar from "@/components/modules/PanelSearchBar";
+import { usePanelListSearch } from "@/hooks/usePanelListSearch";
 
 export default function RequirementsTab({ sessionId, caps }: { sessionId: string; caps: ModuleActionCaps }) {
   const { toast } = useToast();
@@ -68,15 +70,25 @@ export default function RequirementsTab({ sessionId, caps }: { sessionId: string
     onSuccess: () => qc.invalidateQueries({ queryKey: ["timetable-requirements", sessionId] }),
   });
 
+  const { search, setSearch, filtered: rowsFiltered } = usePanelListSearch(rows, (r) => [
+    r.section.name,
+    r.subject.name,
+    r.weeklyPeriods,
+    r.maxConsecutive,
+  ]);
+
   if (!sessionId) return <p className="p-6 text-muted-foreground text-sm">Select a session above.</p>;
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-4">
-      {caps.canCreate && (
-        <Button className="gap-2" onClick={() => setOpen(true)}>
-          <Plus className="h-4 w-4" /> Add weekly requirement
-        </Button>
-      )}
+      <div className="flex flex-wrap items-center gap-2 justify-between">
+        <PanelSearchBar value={search} onChange={setSearch} placeholder="Search section, subject…" className="max-w-md" />
+        {caps.canCreate && (
+          <Button className="gap-2 shrink-0" onClick={() => setOpen(true)}>
+            <Plus className="h-4 w-4" /> Add weekly requirement
+          </Button>
+        )}
+      </div>
       <Card className="overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-muted/50 border-b">
@@ -90,7 +102,10 @@ export default function RequirementsTab({ sessionId, caps }: { sessionId: string
           </thead>
           <tbody>
             {isLoading && <tr><td colSpan={5} className="p-6 text-center text-muted-foreground">Loading…</td></tr>}
-            {rows.map((r) => (
+            {!isLoading && rowsFiltered.length === 0 && (
+              <tr><td colSpan={5} className="p-6 text-center text-muted-foreground">{rows.length === 0 ? "No requirements yet." : "No requirements match your search."}</td></tr>
+            )}
+            {rowsFiltered.map((r) => (
               <tr key={r._id} className="border-b">
                 <td className="p-3">{r.section.name}</td>
                 <td className="p-3">{r.subject.name}</td>

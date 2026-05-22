@@ -1,15 +1,26 @@
+import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Store, useStore } from "@/lib/store";
 import { ModuleActionCaps, PermLevel } from "@/lib/permissions";
 import { useToast } from "@/hooks/use-toast";
+import PanelToolbar from "@/components/modules/PanelToolbar";
+import { matchesPanelSearch } from "@/lib/panelSearch";
 
 const SalaryModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActionCaps }) => {
   const salary = useStore(() => Store.listSalary());
   const staff = useStore(() => Store.listStaff());
   const canProcess = caps.canEdit;
   const { toast } = useToast();
+  const [search, setSearch] = useState("");
   const staffName = (id: string) => staff.find((s) => s.id === id)?.name ?? "—";
+
+  const salaryFiltered = useMemo(() => {
+    if (!search.trim()) return salary;
+    return salary.filter((s) =>
+      matchesPanelSearch(search, staffName(s.staffId), s.month, s.status, s.amount, s.paidOn)
+    );
+  }, [salary, search, staff]);
 
   const process = (id: string) => {
     Store.saveSalary(Store.listSalary().map((s) =>
@@ -28,6 +39,8 @@ const SalaryModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActi
         <Card className="p-4"><div className="text-xs text-muted-foreground">Pending</div><div className="font-display text-2xl font-bold text-destructive">₨ {totalPending.toLocaleString()}</div></Card>
       </div>
 
+      <PanelToolbar search={search} onSearchChange={setSearch} searchPlaceholder="Search staff, month, status…" />
+
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -41,7 +54,14 @@ const SalaryModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActi
               </tr>
             </thead>
             <tbody>
-              {salary.map((s) => (
+              {salaryFiltered.length === 0 && (
+                <tr>
+                  <td colSpan={canProcess ? 5 : 4} className="px-4 py-8 text-center text-muted-foreground">
+                    No salary records match your search.
+                  </td>
+                </tr>
+              )}
+              {salaryFiltered.map((s) => (
                 <tr key={s.id} className="border-t border-border">
                   <td className="px-4 py-3 font-medium text-primary">{staffName(s.staffId)}</td>
                   <td className="px-4 py-3">{s.month}</td>

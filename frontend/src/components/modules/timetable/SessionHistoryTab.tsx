@@ -9,6 +9,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Archive, CheckCircle2, Copy, History, PlayCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { ModuleActionCaps } from "@/lib/permissions";
+import PanelSearchBar from "@/components/modules/PanelSearchBar";
+import { usePanelListSearch } from "@/hooks/usePanelListSearch";
 import {
   activateSession,
   archiveSession,
@@ -108,6 +110,13 @@ export default function SessionHistoryTab({ caps }: { caps: ModuleActionCaps }) 
   const selected = sessions.find((s) => s._id === selectedId);
   const status = selected ? sessionStatus(selected) : null;
 
+  const { search, setSearch, filtered: sessionsFiltered } = usePanelListSearch(sessions, (s) => [
+    s.name,
+    sessionStatus(s),
+    s.startDate,
+    s.endDate,
+  ]);
+
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-6">
       <div className="flex items-start gap-3">
@@ -121,9 +130,21 @@ export default function SessionHistoryTab({ caps }: { caps: ModuleActionCaps }) 
         </div>
       </div>
 
+      <PanelSearchBar
+        value={search}
+        onChange={setSearch}
+        placeholder="Search sessions by name or status…"
+        className="max-w-md"
+      />
+
       <div className="grid lg:grid-cols-3 gap-4">
         <Card className="p-3 space-y-1 max-h-[420px] overflow-y-auto">
-          {sessions.map((s) => {
+          {sessionsFiltered.length === 0 ? (
+            <p className="p-4 text-center text-sm text-muted-foreground">
+              {sessions.length === 0 ? "No sessions yet." : "No sessions match your search."}
+            </p>
+          ) : null}
+          {sessionsFiltered.map((s) => {
             const st = sessionStatus(s);
             return (
               <button

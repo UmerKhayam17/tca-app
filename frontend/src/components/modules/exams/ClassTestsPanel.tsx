@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
@@ -20,24 +20,62 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ChevronRight, ClipboardList, Plus } from "lucide-react";
+import { CalendarClock, ChevronRight, ClipboardList, Plus, Repeat } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import type { ModuleActionCaps } from "@/lib/permissions";
-import { classTestMarksHref } from "@/lib/testExamsMenus";
+import { classTestMarksHref, classTestSeriesHref } from "@/lib/testExamsMenus";
+import PanelToolbar from "@/components/modules/PanelToolbar";
+import { matchesPanelSearch } from "@/lib/panelSearch";
 import {
   ASSESSMENT_TYPE_LABELS,
   createClassTest,
   fetchAcademyClasses,
   fetchClassTests,
   fetchSubjectsByClass,
+  formatClassTestSchedule,
   type AcademyClass,
   type AcademyClassTest,
   type AcademySubject,
   type AssessmentType,
+  type ClassTestRecurrence,
 } from "@/lib/studentManagementApi";
 
 const TYPES = Object.keys(ASSESSMENT_TYPE_LABELS) as AssessmentType[];
+
+const RECURRENCE_OPTIONS: { value: ClassTestRecurrence; label: string; hint: string }[] = [
+  { value: "once", label: "One time", hint: "Single test on the chosen date" },
+  { value: "daily", label: "Daily series", hint: "Auto-schedule each day from start date" },
+  { value: "weekly", label: "Weekly series", hint: "Same test every week (e.g. weekly test)" },
+  { value: "monthly", label: "Monthly series", hint: "Same test every month" },
+];
+
+const DEFAULT_SERIES_COUNT: Record<ClassTestRecurrence, number> = {
+  once: 1,
+  daily: 7,
+  weekly: 12,
+  monthly: 6,
+};
+
+function tomorrowISO() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function emptyForm() {
+  return {
+    classId: "",
+    subjectId: "",
+    title: "",
+    assessmentType: "quiz" as AssessmentType,
+    examDate: tomorrowISO(),
+    testTime: "09:00",
+    totalMarks: "20",
+    recurrence: "once" as ClassTestRecurrence,
+    seriesCount: "12",
+  };
+}
 
 function classNameOf(test: AcademyClassTest) {
   const c = test.classId;
@@ -49,6 +87,17 @@ function subjectNameOf(test: AcademyClassTest) {
   return typeof s === "object" && s ? s.subjectName : "—";
 }
 
+function recurrenceBadge(test: AcademyClassTest) {
+  if (!test.recurrence || test.recurrence === "once") return null;
+  const labels: Record<ClassTestRecurrence, string> = {
+    once: "",
+    daily: "Daily",
+    weekly: "Weekly",
+    monthly: "Monthly",
+  };
+  return labels[test.recurrence];
+}
+
 export default function ClassTestsPanel({ caps }: { caps: ModuleActionCaps }) {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -58,15 +107,9 @@ export default function ClassTestsPanel({ caps }: { caps: ModuleActionCaps }) {
   const role = user?.role;
 
   const [classFilter, setClassFilter] = useState("");
+  const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
-  const [form, setForm] = useState({
-    classId: "",
-    subjectId: "",
-    title: "",
-    assessmentType: "quiz" as AssessmentType,
-    examDate: new Date().toISOString().slice(0, 10),
-    totalMarks: "20",
-  });
+  const [form, setForm] = useState(emptyForm);
 
   const { data: classes = [] } = useQuery({
     queryKey: ["academy-classes"],
@@ -86,42 +129,117 @@ export default function ClassTestsPanel({ caps }: { caps: ModuleActionCaps }) {
 
   const createMut = useMutation({
     mutationFn: createClassTest,
-    onSuccess: (test) => {
+    onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["class-tests"] });
       setCreateOpen(false);
-      toast({ title: "Test created", description: "Opening marks entry…" });
-      if (role) navigate(classTestMarksHref(role, test._id));
+      const count = data.createdCount;
+      toast({
+        title: count > 1 ? `${count} tests scheduled` : "Test scheduled",
+        description:
+          count > 1 && data.seriesId
+            ? "Series created. Open the schedule to enter marks per date."
+            : "Opening marks entry…",
+      });
+      if (!role) return;
+      if (count > 1 && data.seriesId) {
+        navigate(classTestSeriesHref(role, data.seriesId));
+      } else if (data.test?._id) {
+        navigate(classTestMarksHref(role, data.test._id));
+      }
     },
     onError: (e: Error) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
   });
 
+  const openCreate = () => {
+    setForm(emptyForm());
+    setCreateOpen(true);
+  };
+
   const handleCreate = () => {
     if (!form.classId || !form.subjectId || !form.title.trim()) {
-      toast({ title: "Fill class, subject, and title", variant: "destructive" });
+      toast({ title: "Enter class, subject, and test name", variant: "destructive" });
       return;
     }
-    createMut.mutate({
+    const payload: Parameters<typeof createClassTest>[0] = {
       classId: form.classId,
       subjectId: form.subjectId,
       title: form.title.trim(),
       assessmentType: form.assessmentType,
       examDate: form.examDate,
+      testTime: form.testTime,
       totalMarks: Number(form.totalMarks) || 20,
-    });
+      recurrence: form.recurrence,
+    };
+    if (form.recurrence !== "once") {
+      payload.seriesCount = Math.min(52, Math.max(2, Number(form.seriesCount) || DEFAULT_SERIES_COUNT[form.recurrence]));
+    }
+    createMut.mutate(payload);
   };
 
-  const openTest = (testId: string) => {
+  const testsFiltered = useMemo(() => {
+    if (!search.trim()) return tests;
+    return tests.filter((t) =>
+      matchesPanelSearch(
+        search,
+        t.title,
+        t.seriesLabel,
+        classNameOf(t),
+        subjectNameOf(t),
+        ASSESSMENT_TYPE_LABELS[t.assessmentType as AssessmentType],
+        t.examDate,
+        t.testTime,
+        recurrenceBadge(t)
+      )
+    );
+  }, [tests, search]);
+
+  const listGroups = useMemo(() => {
+    const map = new Map<string, AcademyClassTest[]>();
+    for (const t of testsFiltered) {
+      const key = t.seriesId && t.recurrence && t.recurrence !== "once" ? String(t.seriesId) : t._id;
+      const arr = map.get(key) ?? [];
+      arr.push(t);
+      map.set(key, arr);
+    }
+    return [...map.entries()].map(([key, items]) => {
+      const sorted = [...items].sort((a, b) => (a.occurrenceIndex ?? 1) - (b.occurrenceIndex ?? 1));
+      const first = sorted[0];
+      const isSeries = Boolean(
+        first.seriesId && first.recurrence && first.recurrence !== "once" && sorted.length > 0
+      );
+      const last = sorted[sorted.length - 1];
+      return {
+        key,
+        seriesId: first.seriesId,
+        label: first.seriesLabel || first.title,
+        recurrence: first.recurrence,
+        tests: sorted,
+        isSeries,
+        first,
+        last,
+        count: sorted.length,
+      };
+    });
+  }, [testsFiltered]);
+
+  const openGroup = (group: (typeof listGroups)[number]) => {
     if (!role) return;
-    navigate(classTestMarksHref(role, testId));
+    if (group.isSeries && group.seriesId) {
+      navigate(classTestSeriesHref(role, group.seriesId));
+    } else if (group.first) {
+      navigate(classTestMarksHref(role, group.first._id));
+    }
   };
+
+  const isSeries = form.recurrence !== "once";
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-3">
+      <PanelToolbar search={search} onSearchChange={setSearch} searchPlaceholder="Search test name, class, date…">
         <div className="space-y-1">
-          <Label className="text-xs">Filter by class</Label>
+          <Label className="text-xs sr-only">Class</Label>
           <Select value={classFilter || "_all"} onValueChange={(v) => setClassFilter(v === "_all" ? "" : v)}>
-            <SelectTrigger className="w-[200px]">
+            <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="All classes" />
             </SelectTrigger>
             <SelectContent>
@@ -135,43 +253,76 @@ export default function ClassTestsPanel({ caps }: { caps: ModuleActionCaps }) {
           </Select>
         </div>
         {canManage && (
-          <Button variant="hero" onClick={() => setCreateOpen(true)}>
+          <Button variant="hero" onClick={openCreate}>
             <Plus className="h-4 w-4 mr-1" />
-            Create test
+            Schedule test
           </Button>
         )}
-      </div>
+      </PanelToolbar>
 
       <Card className="overflow-hidden">
         <div className="px-4 py-3 border-b font-semibold text-sm text-primary bg-secondary/30 flex items-center gap-2">
           <ClipboardList className="h-4 w-4" />
-          Class tests — click a test to enter marks
+          Scheduled tests — one card per series; click to see full schedule
         </div>
         {testsLoading && <p className="p-6 text-sm text-muted-foreground">Loading…</p>}
         {!testsLoading && tests.length === 0 && (
           <p className="p-8 text-sm text-center text-muted-foreground">
-            No tests yet. Create a test, then open it to enter marks for all students in the class.
+            No tests yet. Schedule a test with name, date, and time — use a weekly or monthly series for repeating tests.
           </p>
         )}
+        {!testsLoading && tests.length > 0 && testsFiltered.length === 0 && (
+          <p className="p-8 text-sm text-center text-muted-foreground">No tests match your search.</p>
+        )}
         <ul className="divide-y">
-          {tests.map((test) => (
-            <li key={test._id}>
+          {listGroups.map((group) => (
+            <li key={group.key}>
               <button
                 type="button"
-                onClick={() => openTest(test._id)}
+                onClick={() => openGroup(group)}
                 className="w-full text-left px-4 py-4 flex items-center gap-3 hover:bg-muted/40 transition-colors"
               >
+                <div
+                  className={`h-11 w-11 rounded-lg shrink-0 flex items-center justify-center ${
+                    group.isSeries ? "bg-primary/10" : "bg-muted"
+                  }`}
+                >
+                  {group.isSeries ? (
+                    <Repeat className="h-5 w-5 text-primary" />
+                  ) : (
+                    <ClipboardList className="h-5 w-5 text-muted-foreground" />
+                  )}
+                </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-primary">{test.title}</div>
+                  <div className="font-medium text-primary">{group.label}</div>
                   <div className="text-sm text-muted-foreground mt-0.5">
-                    {classNameOf(test)} · {subjectNameOf(test)}
+                    {classNameOf(group.first)} · {subjectNameOf(group.first)}
                   </div>
                   <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-2 items-center">
-                    <span>{ASSESSMENT_TYPE_LABELS[test.assessmentType as AssessmentType]}</span>
-                    <span>·</span>
-                    <span>{new Date(test.examDate).toLocaleDateString()}</span>
+                    <span>{ASSESSMENT_TYPE_LABELS[group.first.assessmentType as AssessmentType]}</span>
+                    {group.isSeries ? (
+                      <>
+                        <span>·</span>
+                        <Badge variant="secondary" className="text-[10px] capitalize">
+                          {group.recurrence} · {group.count} dates
+                        </Badge>
+                        <span className="inline-flex items-center gap-1">
+                          <CalendarClock className="h-3 w-3" />
+                          {formatClassTestSchedule(group.first)}
+                          {group.count > 1 && group.last ? ` – ${formatClassTestSchedule(group.last)}` : ""}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span>·</span>
+                        <span className="inline-flex items-center gap-1">
+                          <CalendarClock className="h-3 w-3" />
+                          {formatClassTestSchedule(group.first)}
+                        </span>
+                      </>
+                    )}
                     <Badge variant="outline" className="text-[10px]">
-                      Out of {test.totalMarks}
+                      Out of {group.first.totalMarks}
                     </Badge>
                   </div>
                 </div>
@@ -183,14 +334,25 @@ export default function ClassTestsPanel({ caps }: { caps: ModuleActionCaps }) {
       </Card>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[92vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Create class test</DialogTitle>
+            <DialogTitle>Schedule class test</DialogTitle>
           </DialogHeader>
           <p className="text-xs text-muted-foreground">
-            After creating, you will go to a new page listing all students in the class to enter marks.
+            Set the test name, when it happens (date and time), and optionally create a repeating series (daily,
+            weekly, or monthly). The first date is usually tomorrow or the day you held the test.
           </p>
           <div className="grid gap-3 py-2">
+            <div className="space-y-1">
+              <Label>
+                Test name <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                value={form.title}
+                onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                placeholder="e.g. Chapter 5 Weekly Test"
+              />
+            </div>
             <div className="space-y-1">
               <Label>Class</Label>
               <Select
@@ -231,10 +393,22 @@ export default function ClassTestsPanel({ caps }: { caps: ModuleActionCaps }) {
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>Type</Label>
+              <Label>Category</Label>
               <Select
                 value={form.assessmentType}
-                onValueChange={(v) => setForm((f) => ({ ...f, assessmentType: v as AssessmentType }))}
+                onValueChange={(v) => {
+                  const type = v as AssessmentType;
+                  setForm((f) => ({
+                    ...f,
+                    assessmentType: type,
+                    recurrence:
+                      type === "weekly" && f.recurrence === "once"
+                        ? "weekly"
+                        : type === "monthly" && f.recurrence === "once"
+                          ? "monthly"
+                          : f.recurrence,
+                  }));
+                }}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -248,17 +422,9 @@ export default function ClassTestsPanel({ caps }: { caps: ModuleActionCaps }) {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1">
-              <Label>Title</Label>
-              <Input
-                value={form.title}
-                onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                placeholder="Week 3 Quiz"
-              />
-            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label>Date</Label>
+                <Label>Test date</Label>
                 <Input
                   type="date"
                   value={form.examDate}
@@ -266,14 +432,67 @@ export default function ClassTestsPanel({ caps }: { caps: ModuleActionCaps }) {
                 />
               </div>
               <div className="space-y-1">
-                <Label>Total marks</Label>
+                <Label>Test time</Label>
                 <Input
-                  type="number"
-                  min={1}
-                  value={form.totalMarks}
-                  onChange={(e) => setForm((f) => ({ ...f, totalMarks: e.target.value }))}
+                  type="time"
+                  value={form.testTime}
+                  onChange={(e) => setForm((f) => ({ ...f, testTime: e.target.value }))}
                 />
               </div>
+            </div>
+            <div className="space-y-1">
+              <Label>Repeat</Label>
+              <Select
+                value={form.recurrence}
+                onValueChange={(v) => {
+                  const recurrence = v as ClassTestRecurrence;
+                  setForm((f) => ({
+                    ...f,
+                    recurrence,
+                    seriesCount: String(DEFAULT_SERIES_COUNT[recurrence]),
+                  }));
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {RECURRENCE_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                {RECURRENCE_OPTIONS.find((o) => o.value === form.recurrence)?.hint}
+              </p>
+            </div>
+            {isSeries && (
+              <div className="space-y-1">
+                <Label>How many in the series</Label>
+                <Input
+                  type="number"
+                  min={2}
+                  max={52}
+                  value={form.seriesCount}
+                  onChange={(e) => setForm((f) => ({ ...f, seriesCount: e.target.value }))}
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Dates are generated automatically from the first test date (
+                  {form.recurrence === "daily" ? "each day" : form.recurrence === "weekly" ? "every 7 days" : "each month"}
+                  ).
+                </p>
+              </div>
+            )}
+            <div className="space-y-1">
+              <Label>Total marks</Label>
+              <Input
+                type="number"
+                min={1}
+                value={form.totalMarks}
+                onChange={(e) => setForm((f) => ({ ...f, totalMarks: e.target.value }))}
+              />
             </div>
           </div>
           <DialogFooter>
@@ -281,7 +500,7 @@ export default function ClassTestsPanel({ caps }: { caps: ModuleActionCaps }) {
               Cancel
             </Button>
             <Button variant="hero" onClick={handleCreate} disabled={createMut.isPending}>
-              Create & enter marks
+              {isSeries ? `Schedule ${form.seriesCount} tests` : "Schedule & enter marks"}
             </Button>
           </DialogFooter>
         </DialogContent>

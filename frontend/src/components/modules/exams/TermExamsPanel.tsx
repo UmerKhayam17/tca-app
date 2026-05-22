@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,9 @@ import {
   type ExamStudentRow,
 } from "@/lib/examApi";
 import { getAccessToken } from "@/lib/auth";
+import PanelSearchBar from "@/components/modules/PanelSearchBar";
+import PanelToolbar from "@/components/modules/PanelToolbar";
+import { matchesPanelSearch } from "@/lib/panelSearch";
 
 const EXAM_TYPES = ["Mid Term", "Final Term", "Monthly", "Board Mock", "Other"];
 
@@ -57,6 +60,8 @@ export default function TermExamsPanel({ caps }: { caps: ModuleActionCaps }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [classFilter, setClassFilter] = useState("");
+  const [examSearch, setExamSearch] = useState("");
+  const [studentSearch, setStudentSearch] = useState("");
   const [selectedExamId, setSelectedExamId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState({
@@ -132,6 +137,25 @@ export default function TermExamsPanel({ caps }: { caps: ModuleActionCaps }) {
   const subjects = examData?.subjects || [];
   const studentRows = examData?.students || [];
 
+  const examsFiltered = useMemo(() => {
+    if (!examSearch.trim()) return exams;
+    return exams.filter((e) =>
+      matchesPanelSearch(examSearch, e.title, e.type, classNameOf(e), e.sessionLabel, e.status)
+    );
+  }, [exams, examSearch]);
+
+  const studentRowsFiltered = useMemo(() => {
+    if (!studentSearch.trim()) return studentRows;
+    return studentRows.filter((row) =>
+      matchesPanelSearch(
+        studentSearch,
+        row.student.studentName,
+        row.student.studentId,
+        row.student.fatherName
+      )
+    );
+  }, [studentRows, studentSearch]);
+
   const initMarksFromRows = (rows: ExamStudentRow[]) => {
     const draft: Record<string, Record<string, { obtained: string; total: string }>> = {};
     rows.forEach((row) => {
@@ -201,11 +225,11 @@ export default function TermExamsPanel({ caps }: { caps: ModuleActionCaps }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-3">
+      <PanelToolbar search={examSearch} onSearchChange={setExamSearch} searchPlaceholder="Search term exams…">
         <div className="space-y-1">
-          <Label className="text-xs">Class</Label>
+          <Label className="text-xs sr-only">Class</Label>
           <Select value={classFilter || "_all"} onValueChange={(v) => setClassFilter(v === "_all" ? "" : v)}>
-            <SelectTrigger className="w-[200px]">
+            <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="All classes" />
             </SelectTrigger>
             <SelectContent>
@@ -224,7 +248,7 @@ export default function TermExamsPanel({ caps }: { caps: ModuleActionCaps }) {
             New term exam
           </Button>
         )}
-      </div>
+      </PanelToolbar>
 
       <div className="grid lg:grid-cols-[280px_1fr] gap-4">
         <Card className="p-0 overflow-hidden max-h-[70vh] overflow-y-auto">
@@ -235,7 +259,7 @@ export default function TermExamsPanel({ caps }: { caps: ModuleActionCaps }) {
           {!examsLoading && exams.length === 0 && (
             <p className="p-4 text-sm text-muted-foreground">No exams yet.</p>
           )}
-          {exams.map((exam) => (
+          {examsFiltered.map((exam) => (
             <button
               key={exam._id}
               type="button"
@@ -307,6 +331,15 @@ export default function TermExamsPanel({ caps }: { caps: ModuleActionCaps }) {
                   {gridLoading ? (
                     <p className="p-6 text-sm text-muted-foreground">Loading students…</p>
                   ) : (
+                    <>
+                    <div className="px-3 py-2 border-b">
+                      <PanelSearchBar
+                        value={studentSearch}
+                        onChange={setStudentSearch}
+                        placeholder="Search students in grid…"
+                        className="max-w-sm"
+                      />
+                    </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead className="bg-muted/50">
@@ -320,7 +353,17 @@ export default function TermExamsPanel({ caps }: { caps: ModuleActionCaps }) {
                           </tr>
                         </thead>
                         <tbody>
-                          {studentRows.map((row) => (
+                          {studentRowsFiltered.length === 0 && (
+                            <tr>
+                              <td
+                                colSpan={subjects.length + 1}
+                                className="p-6 text-center text-muted-foreground"
+                              >
+                                No students match your search.
+                              </td>
+                            </tr>
+                          )}
+                          {studentRowsFiltered.map((row) => (
                             <tr key={row.student._id} className="border-t">
                               <td className="p-2 sticky left-0 bg-background font-medium">
                                 {row.student.studentName}
@@ -385,6 +428,7 @@ export default function TermExamsPanel({ caps }: { caps: ModuleActionCaps }) {
                         </p>
                       )}
                     </div>
+                    </>
                   )}
                   <p className="text-xs text-muted-foreground px-4 py-2 border-t">
                     Draft marks are not visible to parents until you publish.

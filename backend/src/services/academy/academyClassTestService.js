@@ -1,3 +1,5 @@
+const fs = require('fs');
+const path = require('path');
 const ApiError = require('../../utils/ApiError');
 const AcademyClassTest = require('../../models/academy/AcademyClassTest');
 const AcademyAssessment = require('../../models/academy/AcademyAssessment');
@@ -5,37 +7,101 @@ const AcademyStudent = require('../../models/academy/AcademyStudent');
 const AcademySubject = require('../../models/academy/AcademySubject');
 const AcademyClass = require('../../models/academy/AcademyClass');
 const assessmentService = require('./academyAssessmentService');
+const { buildSeriesPlan } = require('./classTestSeries');
 
-async function createClassTest(body, userId) {
-  const cls = await AcademyClass.findById(body.classId);
+const TEST_PAPER_DIR = path.join(__dirname, '../../../uploads/test-papers');
+
+function saveTestPaperFile(testId, studentId, file) {
+  if (!file?.buffer?.length) throw new ApiError(400, 'Image file required');
+  fs.mkdirSync(TEST_PAPER_DIR, { recursive: true });
+  const ext = path.extname(file.originalname || '') || '.jpg';
+  const safeExt = ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext.toLowerCase()) ? ext : '.jpg';
+  const filename = `${testId}-${studentId}-${Date.now()}${safeExt}`;
+  const dest = path.join(TEST_PAPER_DIR, filename);
+  fs.writeFileSync(dest, file.buffer);
+  return `/uploads/test-papers/${filename}`;
+}
+
+async function uploadStudentTestPaper(testId, studentId, file) {
+  const test = await AcademyClassTest.findById(testId);
+  if (!test) throw new ApiError(404, 'Class test not found');
+  const student = await AcademyStudent.findById(studentId);
+  if (!student || String(student.classId) !== String(test.classId)) {
+    throw new ApiError(400, 'Student not in this test class');
+  }
+  const url = saveTestPaperFile(testId, studentId, file);
+  const existing = await AcademyAssessment.findOne({ classTestId: testId, studentId });
+  if (existing) {
+    existing.testPaperImage = url;
+    await existing.save();
+  }
+  return { testPaperImage: url, studentId, savedToRecord: Boolean(existing) };
+}
+
+async function assertClassAndSubject(classId, subjectId) {
+  const cls = await AcademyClass.findById(classId);
   if (!cls) throw new ApiError(404, 'Class not found');
-  const subject = await AcademySubject.findOne({ _id: body.subjectId, classId: body.classId });
+  const subject = await AcademySubject.findOne({ _id: subjectId, classId });
   if (!subject) throw new ApiError(400, 'Subject not found for this class');
+  return { cls, subject };
+}
 
-  const doc = await AcademyClassTest.create({
-    classId: body.classId,
-    subjectId: body.subjectId,
-    title: body.title.trim(),
-    assessmentType: body.assessmentType || 'quiz',
-    examDate: body.examDate,
-    totalMarks: body.totalMarks,
-    status: 'open',
-    createdBy: userId,
-  });
-
-  return AcademyClassTest.findById(doc._id)
+async function populateTestQuery(query) {
+  return query
     .populate('classId', 'className')
     .populate('subjectId', 'subjectName subjectCode')
     .lean();
 }
 
-async function listClassTests({ classId } = {}) {
+async function createClassTest(body, userId) {
+  await assertClassAndSubject(body.classId, body.subjectId);
+
+  const { seriesId, occurrences, createdCount } = buildSeriesPlan(body);
+  const docs = [];
+
+  for (const occ of occurrences) {
+    // eslint-disable-next-line no-await-in-loop
+    const doc = await AcademyClassTest.create({
+      classId: body.classId,
+      subjectId: body.subjectId,
+      title: occ.title,
+      seriesLabel: occ.seriesLabel,
+      assessmentType: body.assessmentType || 'quiz',
+      examDate: occ.examDate,
+      testTime: occ.testTime,
+      totalMarks: body.totalMarks,
+      status: 'open',
+      recurrence: occ.recurrence,
+      seriesId: occ.seriesId,
+      occurrenceIndex: occ.occurrenceIndex,
+      occurrenceCount: occ.occurrenceCount,
+      createdBy: userId,
+    });
+    docs.push(doc);
+  }
+
+  const tests = await AcademyClassTest.find({ _id: { $in: docs.map((d) => d._id) } })
+    .populate('classId', 'className')
+    .populate('subjectId', 'subjectName subjectCode')
+    .sort({ occurrenceIndex: 1 })
+    .lean();
+
+  return {
+    test: tests[0],
+    tests,
+    seriesId,
+    createdCount,
+  };
+}
+
+async function listClassTests({ classId, seriesId } = {}) {
   const q = {};
   if (classId) q.classId = classId;
+  if (seriesId) q.seriesId = seriesId;
   return AcademyClassTest.find(q)
     .populate('classId', 'className')
     .populate('subjectId', 'subjectName subjectCode')
-    .sort({ examDate: -1, createdAt: -1 })
+    .sort({ examDate: -1, seriesId: -1, occurrenceIndex: 1, createdAt: -1 })
     .lean();
 }
 
@@ -63,8 +129,17 @@ async function getClassTestMarksEntry(testId) {
     byStudent[String(a.studentId)] = a;
   });
 
+  let seriesSiblings = [];
+  if (test.seriesId) {
+    seriesSiblings = await AcademyClassTest.find({ seriesId: test.seriesId })
+      .select('title examDate testTime occurrenceIndex occurrenceCount status')
+      .sort({ occurrenceIndex: 1 })
+      .lean();
+  }
+
   return {
     test,
+    series: seriesSiblings,
     students: students.map((student) => ({
       student: {
         _id: student._id,
@@ -111,6 +186,7 @@ async function saveClassTestMarks(testId, entries, userId) {
       totalMarks: test.totalMarks,
       obtainedMarks: obtained,
       remarks: row.remarks || '',
+      testPaperImage: row.testPaperImage || '',
     };
 
     if (row.assessmentId) {
@@ -136,12 +212,21 @@ async function saveClassTestMarks(testId, entries, userId) {
   return { savedCount: saved.length, records: saved };
 }
 
-async function removeClassTest(id) {
+async function removeClassTest(id, { deleteSeries = false } = {}) {
   const test = await AcademyClassTest.findById(id);
   if (!test) throw new ApiError(404, 'Class test not found');
+
+  if (deleteSeries && test.seriesId) {
+    const siblings = await AcademyClassTest.find({ seriesId: test.seriesId }).select('_id').lean();
+    const ids = siblings.map((s) => s._id);
+    await AcademyAssessment.deleteMany({ classTestId: { $in: ids } });
+    await AcademyClassTest.deleteMany({ seriesId: test.seriesId });
+    return { ok: true, deletedCount: ids.length };
+  }
+
   await AcademyAssessment.deleteMany({ classTestId: id });
   await AcademyClassTest.findByIdAndDelete(id);
-  return { ok: true };
+  return { ok: true, deletedCount: 1 };
 }
 
 module.exports = {
@@ -150,5 +235,6 @@ module.exports = {
   getClassTestById,
   getClassTestMarksEntry,
   saveClassTestMarks,
+  uploadStudentTestPaper,
   removeClassTest,
 };

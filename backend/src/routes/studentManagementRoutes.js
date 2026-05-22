@@ -11,6 +11,7 @@ const studentCtrl = require('../controllers/academy/academyStudentController');
 const feeCtrl = require('../controllers/academy/academyFeeController');
 const assessmentCtrl = require('../controllers/academy/academyAssessmentController');
 const classTestCtrl = require('../controllers/academy/academyClassTestController');
+const { uploadImage } = require('../middleware/uploadImage');
 
 const router = Router();
 router.use(protect);
@@ -125,6 +126,12 @@ router.get(
   '/class-tests/:id/entry',
   requireAnyPermission('view_academy_students', 'enter_exam_marks', 'view_results'),
   classTestCtrl.getEntry
+);
+router.post(
+  '/class-tests/:id/students/:studentId/test-paper',
+  requireAnyPermission('enter_exam_marks', 'manage_academy_students'),
+  uploadImage.single('testPaper'),
+  classTestCtrl.uploadTestPaper
 );
 router.post(
   '/class-tests/:id/marks',

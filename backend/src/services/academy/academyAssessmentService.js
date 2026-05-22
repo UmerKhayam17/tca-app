@@ -36,6 +36,7 @@ async function createAssessment(studentId, body, userId) {
     totalMarks: body.totalMarks,
     obtainedMarks: body.obtainedMarks,
     remarks: body.remarks || '',
+    testPaperImage: body.testPaperImage || '',
     recordedBy: userId,
   });
   return AcademyAssessment.findById(doc._id)
@@ -67,6 +68,7 @@ async function updateAssessment(id, body) {
       ...(body.totalMarks !== undefined && { totalMarks: body.totalMarks }),
       ...(body.obtainedMarks !== undefined && { obtainedMarks: body.obtainedMarks }),
       ...(body.remarks !== undefined && { remarks: body.remarks }),
+      ...(body.testPaperImage !== undefined && { testPaperImage: body.testPaperImage || '' }),
     },
     { new: true }
   )

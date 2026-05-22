@@ -1,18 +1,24 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft, Save } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import type { Role } from "@/lib/auth";
 import type { ModuleActionCaps } from "@/lib/permissions";
-import { testExamsHref } from "@/lib/testExamsMenus";
+import { classTestMarksHref, classTestSeriesHref, testExamsHref } from "@/lib/testExamsMenus";
+import PanelSearchBar from "@/components/modules/PanelSearchBar";
+import { matchesPanelSearch } from "@/lib/panelSearch";
+import TestPaperCapture from "@/components/modules/exams/TestPaperCapture";
 import {
   ASSESSMENT_TYPE_LABELS,
   fetchClassTestEntry,
+  formatClassTestSchedule,
   saveClassTestMarks,
+  uploadClassTestPaper,
   type AcademyClassTest,
   type AssessmentType,
   type ClassTestEntryRow,
@@ -42,8 +48,18 @@ export default function ClassTestMarksPage({
   const canEnter = caps.canEdit || caps.canCreate;
   const listHref = testExamsHref(role, "enter-tests");
 
+  const [search, setSearch] = useState("");
   const [marks, setMarks] = useState<
-    Record<string, { obtained: string; remarks: string; assessmentId?: string }>
+    Record<
+      string,
+      {
+        obtained: string;
+        remarks: string;
+        assessmentId?: string;
+        testPaperImage?: string;
+        uploadingPaper?: boolean;
+      }
+    >
   >({});
 
   const { data: entry, isLoading, isError, error } = useQuery({
@@ -53,21 +69,69 @@ export default function ClassTestMarksPage({
 
   const rows = entry?.students ?? [];
   const test = entry?.test;
+  const series = entry?.series ?? [];
   const totalMarks = test?.totalMarks ?? 20;
+  const seriesHref =
+    test?.seriesId && test.recurrence && test.recurrence !== "once"
+      ? classTestSeriesHref(role, test.seriesId)
+      : null;
+
+  const rowsFiltered = useMemo(() => {
+    if (!search.trim()) return rows;
+    return rows.filter((row) =>
+      matchesPanelSearch(search, row.student.studentName, row.student.studentId, row.student.fatherName)
+    );
+  }, [rows, search]);
 
   useEffect(() => {
     if (!rows.length) return;
-    const draft: Record<string, { obtained: string; remarks: string; assessmentId?: string }> = {};
+    const draft: Record<
+      string,
+      { obtained: string; remarks: string; assessmentId?: string; testPaperImage?: string }
+    > = {};
     rows.forEach((row: ClassTestEntryRow) => {
       const sid = row.student._id;
       draft[sid] = {
         obtained: row.assessment != null ? String(row.assessment.obtainedMarks) : "",
         remarks: row.assessment?.remarks || "",
         assessmentId: row.assessment?._id,
+        testPaperImage: row.assessment?.testPaperImage,
       };
     });
     setMarks(draft);
   }, [entry]);
+
+  const handleTestPaperUpload = async (studentId: string, file: File) => {
+    setMarks((m) => ({
+      ...m,
+      [studentId]: { ...(m[studentId] || { obtained: "", remarks: "" }), uploadingPaper: true },
+    }));
+    try {
+      const { testPaperImage } = await uploadClassTestPaper(testId, studentId, file);
+      setMarks((m) => ({
+        ...m,
+        [studentId]: {
+          ...(m[studentId] || { obtained: "", remarks: "" }),
+          testPaperImage,
+          uploadingPaper: false,
+        },
+      }));
+      toast({
+        title: "Test paper uploaded",
+        description: "Image saved. Enter marks and click Save marks when ready.",
+      });
+    } catch (e) {
+      setMarks((m) => ({
+        ...m,
+        [studentId]: { ...(m[studentId] || { obtained: "", remarks: "" }), uploadingPaper: false },
+      }));
+      toast({
+        title: "Upload failed",
+        description: e instanceof Error ? e.message : "Could not upload image",
+        variant: "destructive",
+      });
+    }
+  };
 
   const saveMut = useMutation({
     mutationFn: (entries: Parameters<typeof saveClassTestMarks>[1]) =>
@@ -91,6 +155,7 @@ export default function ClassTestMarksPage({
           assessmentId: cell.assessmentId,
           obtainedMarks: Number(cell.obtained),
           remarks: cell.remarks,
+          testPaperImage: cell.testPaperImage,
         };
       })
       .filter(Boolean) as Parameters<typeof saveClassTestMarks>[1];
@@ -119,17 +184,43 @@ export default function ClassTestMarksPage({
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 border-b pb-4">
         <div className="space-y-2">
-          <Button variant="ghost" size="sm" className="gap-1.5 -ml-2" asChild>
-            <Link to={listHref}>
-              <ArrowLeft className="h-4 w-4" /> Back to class tests
-            </Link>
-          </Button>
-          <h2 className="font-display text-xl font-semibold text-primary">{test.title}</h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="ghost" size="sm" className="gap-1.5 -ml-2" asChild>
+              <Link to={seriesHref ?? listHref}>
+                <ArrowLeft className="h-4 w-4" /> {seriesHref ? "Back to schedule" : "Back to tests"}
+              </Link>
+            </Button>
+            {seriesHref && (
+              <Button variant="outline" size="sm" asChild>
+                <Link to={listHref}>All tests</Link>
+              </Button>
+            )}
+          </div>
+          <h2 className="font-display text-xl font-semibold text-primary">
+            {test.seriesLabel || test.title}
+          </h2>
           <p className="text-sm text-muted-foreground">
             {classNameOf(test)} · {subjectNameOf(test)} ·{" "}
             {ASSESSMENT_TYPE_LABELS[test.assessmentType as AssessmentType]} ·{" "}
-            {new Date(test.examDate).toLocaleDateString()} · Total {test.totalMarks} marks
+            {formatClassTestSchedule(test)} · Total {test.totalMarks} marks
           </p>
+          {test.occurrenceIndex && test.occurrenceCount && test.occurrenceCount > 1 && (
+            <Badge variant="secondary" className="text-xs">
+              {test.recurrence === "weekly"
+                ? "Weekly"
+                : test.recurrence === "daily"
+                  ? "Daily"
+                  : test.recurrence === "monthly"
+                    ? "Monthly"
+                    : "Series"}{" "}
+              · part {test.occurrenceIndex} of {test.occurrenceCount}
+            </Badge>
+          )}
+          {seriesHref && series.length > 1 && (
+            <Button variant="link" size="sm" className="h-auto p-0 text-xs" asChild>
+              <Link to={seriesHref}>View full schedule ({series.length} dates)</Link>
+            </Button>
+          )}
         </div>
         {canEnter && (
           <Button variant="hero" className="shrink-0" onClick={handleSave} disabled={saveMut.isPending}>
@@ -139,12 +230,21 @@ export default function ClassTestMarksPage({
         )}
       </div>
 
+      <PanelSearchBar
+        value={search}
+        onChange={setSearch}
+        placeholder="Search student name or ID…"
+        className="max-w-md"
+      />
+
       <Card className="overflow-hidden">
         <p className="px-4 py-3 text-sm text-muted-foreground border-b bg-muted/20">
-          Enter marks for each student in this class. Leave obtained blank to skip a student.
+          Enter marks and optionally upload or take a photo of each student's test paper. Leave obtained blank to skip a student.
         </p>
         {rows.length === 0 ? (
           <p className="p-8 text-sm text-center text-muted-foreground">No active students in this class.</p>
+        ) : rowsFiltered.length === 0 ? (
+          <p className="p-8 text-sm text-center text-muted-foreground">No students match your search.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -154,11 +254,12 @@ export default function ClassTestMarksPage({
                   <th className="text-left p-3 font-medium min-w-[200px]">Student</th>
                   <th className="text-left p-3 font-medium">ID</th>
                   <th className="text-center p-3 font-medium w-36">Obtained</th>
+                  <th className="text-center p-3 font-medium w-[100px]">Test paper</th>
                   <th className="text-left p-3 font-medium min-w-[160px]">Remarks</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row, idx) => {
+                {rowsFiltered.map((row, idx) => {
                   const sid = row.student._id;
                   const cell = marks[sid] || { obtained: "", remarks: "" };
                   const pct =
@@ -191,6 +292,14 @@ export default function ClassTestMarksPage({
                             <span className="text-xs font-medium text-primary w-10">{pct}%</span>
                           )}
                         </div>
+                      </td>
+                      <td className="p-3">
+                        <TestPaperCapture
+                          value={cell.testPaperImage}
+                          disabled={!canEnter}
+                          uploading={cell.uploadingPaper}
+                          onPick={(file) => handleTestPaperUpload(sid, file)}
+                        />
                       </td>
                       <td className="p-3">
                         <Input

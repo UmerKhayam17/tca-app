@@ -39,6 +39,8 @@ import {
 } from "@/lib/staffApi";
 import { useStaffRealtime } from "@/hooks/useStaffSocket";
 import ModuleAccessMatrix from "@/components/modules/ModuleAccessMatrix";
+import PanelToolbar from "@/components/modules/PanelToolbar";
+import { usePanelListSearch } from "@/hooks/usePanelListSearch";
 
 function setFormField(setter: React.Dispatch<React.SetStateAction<UserFormValues>>, key: UserFieldKey, value: string) {
   setter((prev) => ({ ...prev, [key]: value }));
@@ -176,6 +178,14 @@ const UsersModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActio
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
+  const { search, setSearch, filtered: staffFiltered } = usePanelListSearch(staff, (u) => [
+    u.name,
+    u.email,
+    u.phone,
+    typeof u.role === "object" && u.role ? (u.role as RoleOption).name : u.role,
+    u.isActive ? "active" : "inactive",
+  ]);
+
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (mode === "create" && !caps.canCreate) throw new Error("You do not have permission to create staff.");
@@ -311,13 +321,17 @@ const UsersModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActio
         </p>
       </Card>
 
-      <div className="flex justify-between items-center flex-wrap gap-2">
-        <h2 className="font-semibold text-primary">Teachers & accountants</h2>
+      <PanelToolbar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search name, email, phone, role…"
+      >
         {caps.canCreate && (
           <Button variant="hero" onClick={openCreate}>
             <Plus className="h-4 w-4" /> Add staff
           </Button>
         )}
+      </PanelToolbar>
         {(caps.canCreate || caps.canEdit) && (
             <Dialog
               open={open}
@@ -391,7 +405,6 @@ const UsersModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActio
               </DialogContent>
             </Dialog>
         )}
-      </div>
 
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
@@ -421,8 +434,14 @@ const UsersModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActio
                     No teachers or accountants yet.
                   </td>
                 </tr>
+              ) : staffFiltered.length === 0 ? (
+                <tr>
+                  <td colSpan={cols.length + 3} className="px-4 py-8 text-center text-muted-foreground">
+                    No staff match your search.
+                  </td>
+                </tr>
               ) : (
-                staff.map((u) => {
+                staffFiltered.map((u) => {
                   const modCount = u.modulePermissions ? Object.keys(u.modulePermissions).length : 0;
                   const imgSrc = u.profileImage?.startsWith("http")
                     ? u.profileImage

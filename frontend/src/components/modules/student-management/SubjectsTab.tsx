@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
@@ -17,6 +17,8 @@ import {
   createAcademySubject, deleteAcademySubject, fetchAcademyClasses,
   fetchSubjectsByClass, updateAcademySubject, type AcademySubject,
 } from "@/lib/studentManagementApi";
+import PanelSearchBar from "@/components/modules/PanelSearchBar";
+import { matchesPanelSearch } from "@/lib/panelSearch";
 
 export default function SubjectsTab({ caps }: { caps: ModuleActionCaps }) {
   const { toast } = useToast();
@@ -26,6 +28,7 @@ export default function SubjectsTab({ caps }: { caps: ModuleActionCaps }) {
   const [open, setOpen] = useState(false);
   const [edit, setEdit] = useState<AcademySubject | null>(null);
   const [form, setForm] = useState({ subjectName: "", subjectCode: "", status: "active" as "active" | "inactive" });
+  const [search, setSearch] = useState("");
 
   const { data: classes = [], isLoading: classesLoading } = useQuery({
     queryKey: ["academy-classes"],
@@ -39,6 +42,11 @@ export default function SubjectsTab({ caps }: { caps: ModuleActionCaps }) {
     queryFn: () => fetchSubjectsByClass(classId),
     enabled: Boolean(classId),
   });
+
+  const subjectsFiltered = useMemo(() => {
+    if (!search.trim()) return subjects;
+    return subjects.filter((s) => matchesPanelSearch(search, s.subjectName, s.subjectCode, s.status));
+  }, [subjects, search]);
 
   const openCreate = () => {
     if (!classId) {
@@ -118,11 +126,19 @@ export default function SubjectsTab({ caps }: { caps: ModuleActionCaps }) {
             <p className="text-sm">
               Subjects for <span className="font-semibold">{selectedClass.className}</span>
             </p>
-            {caps.canCreate && (
-              <Button className="gap-2 shrink-0 self-start sm:self-auto" onClick={openCreate}>
-                <Plus className="h-4 w-4" /> Add Subject
-              </Button>
-            )}
+            <div className="flex flex-wrap items-center gap-2">
+              <PanelSearchBar
+                value={search}
+                onChange={setSearch}
+                placeholder="Search subjects…"
+                className="max-w-xs"
+              />
+              {caps.canCreate && (
+                <Button className="gap-2 shrink-0" onClick={openCreate}>
+                  <Plus className="h-4 w-4" /> Add Subject
+                </Button>
+              )}
+            </div>
           </div>
         )}
 
@@ -152,7 +168,14 @@ export default function SubjectsTab({ caps }: { caps: ModuleActionCaps }) {
                     </td>
                   </tr>
                 )}
-                {subjects.map((s) => (
+                {subjectsFiltered.length === 0 && !subjectsLoading && (
+                  <tr>
+                    <td colSpan={canSave ? 4 : 3} className="p-8 text-center text-muted-foreground">
+                      {subjects.length === 0 ? "No subjects yet." : "No subjects match your search."}
+                    </td>
+                  </tr>
+                )}
+                {subjectsFiltered.map((s) => (
                   <tr key={s._id} className="border-b hover:bg-muted/30">
                     <td className="p-3 font-medium">{s.subjectName}</td>
                     <td className="p-3">{s.subjectCode}</td>

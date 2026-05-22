@@ -7,7 +7,8 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Pencil, Trash2, Search } from "lucide-react";
+import { Plus, Pencil, Trash2 } from "lucide-react";
+import PanelSearchBar from "@/components/modules/PanelSearchBar";
 import { useToast } from "@/hooks/use-toast";
 import type { ModuleActionCaps } from "@/lib/permissions";
 import {
@@ -67,10 +68,12 @@ export default function ClassesTab({ caps }: { caps: ModuleActionCaps }) {
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-4">
       <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input className="pl-9" placeholder="Search classes…" value={search} onChange={(e) => setSearch(e.target.value)} />
-        </div>
+        <PanelSearchBar
+          value={search}
+          onChange={setSearch}
+          placeholder="Search classes…"
+          className="max-w-md"
+        />
         {caps.canCreate && (
           <Button onClick={openCreate} className="gap-2 shrink-0">
             <Plus className="h-4 w-4" /> Add Class

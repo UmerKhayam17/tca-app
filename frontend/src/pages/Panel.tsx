@@ -230,7 +230,7 @@ const Panel = () => {
       case "system-config": return <SystemConfigModule caps={caps} section={section} />;
       case "timetable":     return <TimetableModule caps={caps} section={section} role={r} />;
       case "assignments":   return <AssignmentsModule perm={perm} caps={caps} />;
-      case "exams":         return <ExamsModule perm={perm} caps={caps} section={section} action={action} />;
+      case "exams":         return <ExamsModule perm={perm} caps={caps} section={section} action={action} subAction={subAction} />;
       case "fees":          return <FeesModule perm={perm} caps={caps} />;
       case "salary":        return <SalaryModule perm={perm} caps={caps} />;
       case "library":       return <LibraryModule perm={perm} caps={caps} />;

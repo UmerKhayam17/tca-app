@@ -10,6 +10,8 @@ import { useToast } from "@/hooks/use-toast";
 import type { ModuleActionCaps } from "@/lib/permissions";
 import { fetchUsers } from "@/lib/usersApi";
 import { createTeacherProfile, deleteTeacherProfile, fetchTeacherProfiles } from "@/lib/timetableApi";
+import PanelSearchBar from "@/components/modules/PanelSearchBar";
+import { usePanelListSearch } from "@/hooks/usePanelListSearch";
 
 const QK = (sid: string) => ["timetable-teacher-profiles", sid] as const;
 
@@ -52,15 +54,24 @@ export default function TeacherProfilesTab({ sessionId, caps }: { sessionId: str
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
+  const { search, setSearch, filtered: profilesFiltered } = usePanelListSearch(profiles, (p) => [
+    p.user.name,
+    p.user.email,
+    p.maxLecturesPerDay,
+  ]);
+
   if (!sessionId) return <p className="p-6 text-muted-foreground text-sm">Select a session above.</p>;
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-4">
-      {caps.canCreate && (
-        <Button className="gap-2" onClick={() => { setUserId(""); setMaxDay(6); setOpen(true); }}>
-          <Plus className="h-4 w-4" /> Add teacher profile
-        </Button>
-      )}
+      <div className="flex flex-wrap items-center gap-2 justify-between">
+        <PanelSearchBar value={search} onChange={setSearch} placeholder="Search teacher name or email…" className="max-w-md" />
+        {caps.canCreate && (
+          <Button className="gap-2 shrink-0" onClick={() => { setUserId(""); setMaxDay(6); setOpen(true); }}>
+            <Plus className="h-4 w-4" /> Add teacher profile
+          </Button>
+        )}
+      </div>
       <Card className="overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-muted/50 border-b">
@@ -73,7 +84,10 @@ export default function TeacherProfilesTab({ sessionId, caps }: { sessionId: str
           </thead>
           <tbody>
             {isLoading && <tr><td colSpan={4} className="p-6 text-center text-muted-foreground">Loading…</td></tr>}
-            {profiles.map((p) => (
+            {!isLoading && profilesFiltered.length === 0 && (
+              <tr><td colSpan={4} className="p-6 text-center text-muted-foreground">{profiles.length === 0 ? "No teacher profiles yet." : "No profiles match your search."}</td></tr>
+            )}
+            {profilesFiltered.map((p) => (
               <tr key={p._id} className="border-b">
                 <td className="p-3 font-medium">{p.user.name}</td>
                 <td className="p-3 text-muted-foreground">{p.user.email}</td>

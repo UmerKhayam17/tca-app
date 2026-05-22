@@ -18,6 +18,8 @@ import {
   type SchoolSection,
 } from "@/lib/configApi";
 import { fetchUsers } from "@/lib/usersApi";
+import PanelSearchBar from "@/components/modules/PanelSearchBar";
+import { usePanelListSearch } from "@/hooks/usePanelListSearch";
 
 const QUICK_SECTIONS = ["A", "B", "C", "D"];
 
@@ -72,6 +74,14 @@ export default function SectionsTab({
       viewAll ? fetchSections({ sessionId }) : fetchSections({ classId }),
     enabled: !!sessionId && (viewAll || !!classId),
   });
+
+  const { search, setSearch, filtered: sectionsFiltered } = usePanelListSearch(sections, (s) => [
+    s.name,
+    classNameOf(s),
+    s.teacher?.name,
+    s.studentCount,
+    s.maxStudents,
+  ]);
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["config-sections"] });
@@ -185,6 +195,12 @@ export default function SectionsTab({
       {(classId || viewAll) && (
         <>
           <div className="flex flex-wrap items-center gap-2">
+            <PanelSearchBar
+              value={search}
+              onChange={setSearch}
+              placeholder="Search section, class, teacher…"
+              className="max-w-xs"
+            />
             {caps.canCreate && !viewAll && classId && (
               <>
                 <Button className="gap-2" onClick={openCreate}>
@@ -239,14 +255,16 @@ export default function SectionsTab({
                       </td>
                     </tr>
                   )}
-                  {!isLoading && sections.length === 0 && (
+                  {!isLoading && sectionsFiltered.length === 0 && (
                     <tr>
                       <td colSpan={6} className="p-8 text-center text-muted-foreground">
-                        No sections yet. Add sections for this class (e.g. A, B, C).
+                        {sections.length === 0
+                          ? "No sections yet. Add sections for this class (e.g. A, B, C)."
+                          : "No sections match your search."}
                       </td>
                     </tr>
                   )}
-                  {sections.map((s) => {
+                  {sectionsFiltered.map((s) => {
                     const enrolled = s.studentCount ?? 0;
                     const cap = s.maxStudents ?? 40;
                     const full = enrolled >= cap;

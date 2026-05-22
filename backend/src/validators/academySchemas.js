@@ -157,13 +157,25 @@ const academyAssessmentSessionQuery = Joi.object({
   examDate: Joi.date(),
 });
 
+const recurrenceTypes = ['once', 'daily', 'weekly', 'monthly'];
+
 const academyClassTestBody = Joi.object({
   classId: objectId.required(),
   subjectId: objectId.required(),
-  title: Joi.string().trim().required(),
+  title: Joi.string().trim().min(1).required(),
   assessmentType: Joi.string().valid(...assessmentTypes).required(),
   examDate: Joi.date().required(),
+  testTime: Joi.string()
+    .trim()
+    .pattern(/^([01]?\d|2[0-3]):[0-5]\d$/)
+    .default('09:00'),
   totalMarks: Joi.number().min(1).required(),
+  recurrence: Joi.string().valid(...recurrenceTypes).default('once'),
+  seriesCount: Joi.when('recurrence', {
+    is: 'once',
+    then: Joi.forbidden(),
+    otherwise: Joi.number().integer().min(2).max(52),
+  }),
 });
 
 const academyClassTestMarksBody = Joi.object({
@@ -174,6 +186,7 @@ const academyClassTestMarksBody = Joi.object({
         assessmentId: objectId.optional(),
         obtainedMarks: Joi.alternatives().try(Joi.number().min(0), Joi.string().allow('')),
         remarks: Joi.string().allow('').trim(),
+        testPaperImage: Joi.string().max(2048).allow('').trim(),
       })
     )
     .min(1)

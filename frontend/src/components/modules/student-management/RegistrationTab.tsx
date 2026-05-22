@@ -4,7 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Download, Eye, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { Download, Eye, Pencil, Plus, Trash2 } from "lucide-react";
+import PanelSearchBar from "@/components/modules/PanelSearchBar";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import type { ModuleActionCaps } from "@/lib/permissions";
@@ -100,15 +101,12 @@ export default function RegistrationTab({
               </Link>
             </Button>
           )}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              className="pl-9 w-48"
-              placeholder="Search name, ID, phone…"
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            />
-          </div>
+          <PanelSearchBar
+            value={search}
+            onChange={(v) => { setSearch(v); setPage(1); }}
+            placeholder="Search name, ID, phone…"
+            className="w-48 max-w-none flex-none"
+          />
           <select
             className="h-10 rounded-md border border-input bg-background px-3 text-sm"
             value={classFilter}

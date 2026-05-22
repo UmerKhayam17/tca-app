@@ -1,8 +1,11 @@
+import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Store, useStore, newId } from "@/lib/store";
 import { ModuleActionCaps, PermLevel } from "@/lib/permissions";
 import { useToast } from "@/hooks/use-toast";
+import PanelToolbar from "@/components/modules/PanelToolbar";
+import { matchesPanelSearch } from "@/lib/panelSearch";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -11,6 +14,12 @@ const AttendanceModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Module
   const attendance = useStore(() => Store.listAttendance());
   const canMark = caps.canCreate || caps.canEdit;
   const { toast } = useToast();
+  const [search, setSearch] = useState("");
+
+  const studentsFiltered = useMemo(() => {
+    if (!search.trim()) return students;
+    return students.filter((s) => matchesPanelSearch(search, s.name, s.class, s.id));
+  }, [students, search]);
 
   const todayMap = new Map(attendance.filter((a) => a.date === today()).map((a) => [a.studentId, a]));
 
@@ -38,6 +47,12 @@ const AttendanceModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Module
         <Card className="p-4"><div className="text-xs text-muted-foreground">Leave</div><div className="font-display text-2xl font-bold text-primary">{counts.leave}</div></Card>
       </div>
 
+      <PanelToolbar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search student or class…"
+      />
+
       <Card className="overflow-hidden">
         <div className="px-4 py-3 border-b border-border font-semibold text-primary">Today — {today()}</div>
         <div className="overflow-x-auto">
@@ -51,7 +66,14 @@ const AttendanceModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Module
               </tr>
             </thead>
             <tbody>
-              {students.map((s) => {
+              {studentsFiltered.length === 0 && (
+                <tr>
+                  <td colSpan={canMark ? 4 : 3} className="px-4 py-8 text-center text-muted-foreground">
+                    No students match your search.
+                  </td>
+                </tr>
+              )}
+              {studentsFiltered.map((s) => {
                 const cur = todayMap.get(s.id)?.status;
                 return (
                   <tr key={s.id} className="border-t border-border">

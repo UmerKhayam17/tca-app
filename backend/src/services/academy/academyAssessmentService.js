@@ -2,6 +2,7 @@ const ApiError = require('../../utils/ApiError');
 const AcademyAssessment = require('../../models/academy/AcademyAssessment');
 const AcademyStudent = require('../../models/academy/AcademyStudent');
 const AcademySubject = require('../../models/academy/AcademySubject');
+const { hasAnySubjectEnrollment, isEnrolledInSubject } = require('./studentEnrollment');
 
 async function assertStudent(id) {
   const student = await AcademyStudent.findById(id);
@@ -19,9 +20,15 @@ async function listByStudent(studentId) {
 
 async function createAssessment(studentId, body, userId) {
   const student = await assertStudent(studentId);
+  if (!hasAnySubjectEnrollment(student)) {
+    throw new ApiError(400, 'Student is not enrolled in any subject');
+  }
   if (body.subjectId) {
     const sub = await AcademySubject.findOne({ _id: body.subjectId, classId: student.classId });
     if (!sub) throw new ApiError(400, 'Subject not found for this class');
+    if (!isEnrolledInSubject(student, body.subjectId)) {
+      throw new ApiError(400, 'Student is not enrolled in this subject');
+    }
   }
   if (body.obtainedMarks > body.totalMarks) {
     throw new ApiError(400, 'Obtained marks cannot exceed total marks');
@@ -92,24 +99,17 @@ function dayRange(examDate) {
   return { start, end };
 }
 
-function studentHasSubject(student, subjectId, allClassSubjects) {
-  if (student.isFullPackage) return true;
-  const ids = (student.selectedSubjects || []).map((s) => String(s._id || s));
-  return ids.includes(String(subjectId));
-}
-
 /** Class grid: students enrolled in subject + optional existing rows for same test session. */
 async function getClassTestEntry({ classId, subjectId, title, assessmentType, examDate }) {
   const subject = await AcademySubject.findOne({ _id: subjectId, classId, status: 'active' }).lean();
   if (!subject) throw new ApiError(404, 'Subject not found for this class');
 
-  const allClassSubjects = await AcademySubject.find({ classId, status: 'active' }).lean();
   const students = await AcademyStudent.find({ classId, status: 'active' })
     .select('studentId studentName fatherName isFullPackage selectedSubjects classId')
     .sort({ studentName: 1 })
     .lean();
 
-  const enrolled = students.filter((s) => studentHasSubject(s, subjectId, allClassSubjects));
+  const enrolled = students.filter((s) => isEnrolledInSubject(s, subjectId));
 
   let existingByStudent = {};
   if (title && assessmentType && examDate) {
@@ -150,7 +150,6 @@ async function bulkSaveClassTest(body, userId) {
     throw new ApiError(400, 'No marks to save');
   }
 
-  const allClassSubjects = await AcademySubject.find({ classId, status: 'active' }).lean();
   const { start, end } = dayRange(examDate);
   const saved = [];
 
@@ -166,7 +165,10 @@ async function bulkSaveClassTest(body, userId) {
     if (!student || String(student.classId) !== String(classId)) {
       throw new ApiError(400, 'Invalid student for this class');
     }
-    if (!studentHasSubject(student, subjectId, allClassSubjects)) {
+    if (!hasAnySubjectEnrollment(student)) {
+      throw new ApiError(400, `${student.studentName} is not enrolled in any subject`);
+    }
+    if (!isEnrolledInSubject(student, subjectId)) {
       throw new ApiError(400, `${student.studentName} is not enrolled in this subject`);
     }
 

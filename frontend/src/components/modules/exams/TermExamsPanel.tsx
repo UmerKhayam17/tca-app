@@ -424,7 +424,7 @@ export default function TermExamsPanel({ caps }: { caps: ModuleActionCaps }) {
                       </table>
                       {!studentRows.length && (
                         <p className="p-6 text-sm text-muted-foreground text-center">
-                          No active students in this class.
+                          No students enrolled in any subject for this class.
                         </p>
                       )}
                     </div>

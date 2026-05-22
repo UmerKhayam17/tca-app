@@ -8,6 +8,7 @@ const AcademySubject = require('../../models/academy/AcademySubject');
 const AcademyClass = require('../../models/academy/AcademyClass');
 const assessmentService = require('./academyAssessmentService');
 const { buildSeriesPlan } = require('./classTestSeries');
+const { hasAnySubjectEnrollment, isEnrolledInSubject } = require('./studentEnrollment');
 
 const TEST_PAPER_DIR = path.join(__dirname, '../../../uploads/test-papers');
 
@@ -28,6 +29,10 @@ async function uploadStudentTestPaper(testId, studentId, file) {
   const student = await AcademyStudent.findById(studentId);
   if (!student || String(student.classId) !== String(test.classId)) {
     throw new ApiError(400, 'Student not in this test class');
+  }
+  const testSubjectId = String(test.subjectId);
+  if (!hasAnySubjectEnrollment(student) || !isEnrolledInSubject(student, testSubjectId)) {
+    throw new ApiError(400, 'Student is not enrolled in this test subject');
   }
   const url = saveTestPaperFile(testId, studentId, file);
   const existing = await AcademyAssessment.findOne({ classTestId: testId, studentId });
@@ -118,10 +123,16 @@ async function getClassTestMarksEntry(testId) {
   const test = await getClassTestById(testId);
   const classId = test.classId?._id || test.classId;
 
+  const subjectId = String(test.subjectId?._id || test.subjectId);
+
   const students = await AcademyStudent.find({ classId, status: 'active' })
     .select('studentId studentName fatherName isFullPackage selectedSubjects')
     .sort({ studentName: 1 })
     .lean();
+
+  const enrolledStudents = students.filter(
+    (s) => hasAnySubjectEnrollment(s) && isEnrolledInSubject(s, subjectId)
+  );
 
   const assessments = await AcademyAssessment.find({ classTestId: testId }).lean();
   const byStudent = {};
@@ -140,7 +151,7 @@ async function getClassTestMarksEntry(testId) {
   return {
     test,
     series: seriesSiblings,
-    students: students.map((student) => ({
+    students: enrolledStudents.map((student) => ({
       student: {
         _id: student._id,
         studentId: student.studentId,
@@ -175,6 +186,10 @@ async function saveClassTestMarks(testId, entries, userId) {
     const student = await AcademyStudent.findById(row.studentId);
     if (!student || String(student.classId) !== classId) {
       throw new ApiError(400, 'Invalid student for this class');
+    }
+    const testSubjectId = String(test.subjectId);
+    if (!hasAnySubjectEnrollment(student) || !isEnrolledInSubject(student, testSubjectId)) {
+      throw new ApiError(400, `${student.studentName} is not enrolled in this test subject`);
     }
 
     const payload = {

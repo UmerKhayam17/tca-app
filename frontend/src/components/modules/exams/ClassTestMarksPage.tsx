@@ -242,7 +242,9 @@ export default function ClassTestMarksPage({
           Enter marks and optionally upload or take a photo of each student's test paper. Leave obtained blank to skip a student.
         </p>
         {rows.length === 0 ? (
-          <p className="p-8 text-sm text-center text-muted-foreground">No active students in this class.</p>
+          <p className="p-8 text-sm text-center text-muted-foreground">
+            No students enrolled in this test&apos;s subject.
+          </p>
         ) : rowsFiltered.length === 0 ? (
           <p className="p-8 text-sm text-center text-muted-foreground">No students match your search.</p>
         ) : (

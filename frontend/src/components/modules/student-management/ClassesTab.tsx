@@ -1,5 +1,8 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/useAuth";
+import { classDetailHref } from "@/lib/studentManagementMenus";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +22,8 @@ const QK = ["academy-classes"] as const;
 
 export default function ClassesTab({ caps }: { caps: ModuleActionCaps }) {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const role = user?.role ?? "admin";
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
@@ -101,7 +106,14 @@ export default function ClassesTab({ caps }: { caps: ModuleActionCaps }) {
               )}
               {classes.map((c) => (
                 <tr key={c._id} className="border-b last:border-0 hover:bg-muted/30">
-                  <td className="p-3 font-medium">{c.className}</td>
+                  <td className="p-3 font-medium">
+                    <Link
+                      to={classDetailHref(role, c._id)}
+                      className="text-primary hover:underline"
+                    >
+                      {c.className}
+                    </Link>
+                  </td>
                   <td className="p-3">{c.totalSubjects}</td>
                   <td className="p-3">
                     <span className={`text-xs font-semibold rounded-full px-2 py-0.5 ${

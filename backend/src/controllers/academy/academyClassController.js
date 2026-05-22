@@ -1,11 +1,22 @@
 const catchAsync = require('../../utils/catchAsync');
 const classService = require('../../services/academy/academyClassService');
+const classRecordService = require('../../services/academy/academyClassRecordService');
 
 const list = catchAsync(async (req, res) => {
   const data = await classService.listClasses({
     status: req.query.status,
     search: req.query.search,
   });
+  res.json({ success: true, data });
+});
+
+const getOne = catchAsync(async (req, res) => {
+  const data = await classService.getClassById(req.params.id);
+  res.json({ success: true, data });
+});
+
+const getRecord = catchAsync(async (req, res) => {
+  const data = await classRecordService.getClassRecord(req.params.id);
   res.json({ success: true, data });
 });
 
@@ -24,4 +35,4 @@ const remove = catchAsync(async (req, res) => {
   res.json({ success: true, data: { deleted: true } });
 });
 
-module.exports = { list, create, update, remove };
+module.exports = { list, getOne, getRecord, create, update, remove };

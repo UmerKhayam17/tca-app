@@ -11,6 +11,7 @@ const studentCtrl = require('../controllers/academy/academyStudentController');
 const feeCtrl = require('../controllers/academy/academyFeeController');
 const assessmentCtrl = require('../controllers/academy/academyAssessmentController');
 const classTestCtrl = require('../controllers/academy/academyClassTestController');
+const timetableSlotCtrl = require('../controllers/academy/academyClassTimetableController');
 const { uploadImage } = require('../middleware/uploadImage');
 
 const router = Router();
@@ -35,6 +36,16 @@ router.patch(
   classCtrl.update
 );
 router.delete('/classes/:id', requirePermission('manage_academy_classes'), classCtrl.remove);
+router.get(
+  '/classes/:id',
+  requireAnyPermission('view_academy_students', 'manage_academy_classes'),
+  classCtrl.getOne
+);
+router.get(
+  '/classes/:id/record',
+  requireAnyPermission('view_academy_students', 'manage_academy_classes'),
+  classCtrl.getRecord
+);
 
 // Subjects
 router.get(
@@ -61,6 +72,30 @@ router.patch(
 );
 router.delete('/subjects/:id', requirePermission('manage_academy_subjects'), subjectCtrl.remove);
 
+// Class timetable (academy weekly slots)
+router.get(
+  '/classes/:classId/timetable',
+  requireAnyPermission('view_academy_students', 'manage_academy_classes'),
+  timetableSlotCtrl.list
+);
+router.post(
+  '/classes/:classId/timetable',
+  requirePermission('manage_academy_classes'),
+  validate(schemas.academyTimetableSlotBody),
+  timetableSlotCtrl.create
+);
+router.patch(
+  '/classes/:classId/timetable/:slotId',
+  requirePermission('manage_academy_classes'),
+  validate(schemas.academyTimetableSlotPatch),
+  timetableSlotCtrl.update
+);
+router.delete(
+  '/classes/:classId/timetable/:slotId',
+  requirePermission('manage_academy_classes'),
+  timetableSlotCtrl.remove
+);
+
 // Fee structure
 router.get(
   '/fee-structures',
@@ -83,6 +118,11 @@ router.patch(
   requirePermission('manage_academy_fee_structures'),
   validate(schemas.academyFeeStructurePatch),
   feeStructureCtrl.update
+);
+router.delete(
+  '/fee-structures/:id',
+  requirePermission('manage_academy_fee_structures'),
+  feeStructureCtrl.remove
 );
 router.post(
   '/fee-structures/preview',

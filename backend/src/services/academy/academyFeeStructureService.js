@@ -1,6 +1,7 @@
 const ApiError = require('../../utils/ApiError');
 const AcademyFeeStructure = require('../../models/academy/AcademyFeeStructure');
 const AcademyClass = require('../../models/academy/AcademyClass');
+const AcademyStudent = require('../../models/academy/AcademyStudent');
 
 async function listAll({ status, classId } = {}) {
   const q = {};
@@ -106,11 +107,27 @@ async function previewFees({ classId, selectedSubjects, isFullPackage, discountA
   };
 }
 
+async function deleteStructure(id) {
+  const doc = await AcademyFeeStructure.findById(id);
+  if (!doc) throw new ApiError(404, 'Fee structure not found');
+  const activeStudents = await AcademyStudent.countDocuments({
+    classId: doc.classId,
+    feeStructureId: id,
+    status: 'active',
+  });
+  if (activeStudents > 0) {
+    throw new ApiError(400, 'Cannot delete fee structure linked to active students');
+  }
+  await doc.deleteOne();
+  return { deleted: true };
+}
+
 module.exports = {
   listAll,
   getByClass,
   createStructure,
   updateStructure,
+  deleteStructure,
   calculateFeesFromStructure,
   applyDiscount,
   calculateFeesWithDiscount,

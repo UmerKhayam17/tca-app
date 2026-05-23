@@ -4,7 +4,9 @@
  */
 
 import React, { useState } from "react";
-import { Download, FileText, Music, Film } from "lucide-react";
+import { Download, FileText, Music } from "lucide-react";
+import { chatMediaUrl } from "../chatMediaUrl";
+
 function formatBytes(bytes) {
   if (!bytes) return "0 B";
   const units = ["B", "KB", "MB", "GB"];
@@ -12,22 +14,21 @@ function formatBytes(bytes) {
   return `${(bytes / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
-const API_URL = import.meta.env.VITE_API_URL?.trim() || "";
-
 export default function FileMessageContent({ message }) {
   const { type, file, text } = message;
   const [imgError, setImgError] = useState(false);
+  const mediaSrc = chatMediaUrl(file?.url);
 
-  if (type === "image" && !imgError) {
+  if (type === "image" && !imgError && mediaSrc) {
     return (
       <div className="overflow-hidden rounded-[7px]" style={{ maxWidth: 280 }}>
         <img
-          src={`${API_URL}${file?.url}`}
+          src={mediaSrc}
           alt={file?.name || "Image"}
           onError={() => setImgError(true)}
           className="block cursor-pointer hover:opacity-95 transition-opacity"
           style={{ maxWidth: "100%", maxHeight: 300, objectFit: "cover", display: "block" }}
-          onClick={() => window.open(`${API_URL}${file?.url}`, "_blank")}
+          onClick={() => window.open(mediaSrc, "_blank")}
         />
         {text && (
           <p
@@ -41,11 +42,11 @@ export default function FileMessageContent({ message }) {
     );
   }
 
-  if (type === "video") {
+  if (type === "video" && mediaSrc) {
     return (
       <div style={{ maxWidth: 280 }}>
         <video
-          src={file?.url}
+          src={mediaSrc}
           controls
           className="rounded-[7px] block"
           style={{ maxWidth: "100%", maxHeight: 220 }}
@@ -59,7 +60,7 @@ export default function FileMessageContent({ message }) {
     );
   }
 
-  if (type === "audio") {
+  if (type === "audio" && mediaSrc) {
     return (
       <div className="flex items-center gap-2" style={{ minWidth: 220 }}>
         <div
@@ -68,7 +69,7 @@ export default function FileMessageContent({ message }) {
         >
           <Music size={18} className="text-white" />
         </div>
-        <audio src={file?.url} controls className="flex-1 h-8" style={{ minWidth: 160 }} />
+        <audio src={mediaSrc} controls className="flex-1 h-8" style={{ minWidth: 160 }} />
       </div>
     );
   }
@@ -76,7 +77,7 @@ export default function FileMessageContent({ message }) {
   // Generic file — WA style
   return (
     <a
-      href={`${API_URL}${file?.url}`}
+      href={mediaSrc || "#"}
       target="_blank"
       rel="noreferrer"
       download={file?.name}

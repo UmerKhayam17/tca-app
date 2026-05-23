@@ -40,4 +40,46 @@ const summary = catchAsync(async (req, res) => {
   res.json({ success: true, data });
 });
 
-module.exports = { list, generate, pay, studentHistory, summary };
+const defaulters = catchAsync(async (req, res) => {
+  const result = await feeService.listFeeDefaulters({
+    page: Number(req.query.page) || 1,
+    limit: Number(req.query.limit) || 20,
+    classId: req.query.classId,
+    month: req.query.month ? Number(req.query.month) : undefined,
+    year: req.query.year ? Number(req.query.year) : undefined,
+    search: req.query.search,
+  });
+  res.json({ success: true, data: result.items, pagination: result.pagination });
+});
+
+const defaultersSummary = catchAsync(async (req, res) => {
+  const data = await feeService.getDefaultersSummary({
+    classId: req.query.classId,
+    month: req.query.month ? Number(req.query.month) : undefined,
+    year: req.query.year ? Number(req.query.year) : undefined,
+  });
+  res.json({ success: true, data });
+});
+
+const exportDefaulters = catchAsync(async (req, res) => {
+  const csv = await feeService.exportFeeDefaulters({
+    classId: req.query.classId,
+    month: req.query.month ? Number(req.query.month) : undefined,
+    year: req.query.year ? Number(req.query.year) : undefined,
+    search: req.query.search,
+  });
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename="fee-defaulters.csv"');
+  res.send(csv);
+});
+
+module.exports = {
+  list,
+  generate,
+  pay,
+  studentHistory,
+  summary,
+  defaulters,
+  defaultersSummary,
+  exportDefaulters,
+};

@@ -35,7 +35,7 @@ export default function EmptyChatPlaceholder() {
           className="text-[32px] font-[300] mb-3"
           style={{ color: "#41525d", fontWeight: 300 }}
         >
-          Company Chat
+          Academy Chat
         </h3>
         {/* End-to-end encryption notice — exactly like WA */}
         <div className="flex items-center gap-1.5">

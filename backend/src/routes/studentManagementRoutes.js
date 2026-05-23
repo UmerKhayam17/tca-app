@@ -237,6 +237,21 @@ router.get(
   feeCtrl.summary
 );
 router.get(
+  '/fees/defaulters/summary',
+  requireAnyPermission('view_academy_fee_reports', 'manage_academy_fees'),
+  feeCtrl.defaultersSummary
+);
+router.get(
+  '/fees/defaulters/export',
+  requireAnyPermission('view_academy_fee_reports', 'manage_academy_fees'),
+  feeCtrl.exportDefaulters
+);
+router.get(
+  '/fees/defaulters',
+  requireAnyPermission('view_academy_fee_reports', 'manage_academy_fees'),
+  feeCtrl.defaulters
+);
+router.get(
   '/fees',
   requireAnyPermission('view_academy_fee_reports', 'manage_academy_fees'),
   feeCtrl.list

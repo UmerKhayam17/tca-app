@@ -169,9 +169,16 @@ exports.getConversationMedia = async (req, res) => {
     const { conversationId } = req.params;
     const { type = "image", page = 1, limit = 20 } = req.query;
 
+    const conv = await Conversation.findOne({
+      _id: conversationId,
+      "participants.userId": userId,
+      isDeleted: false,
+    }).lean();
+    if (!conv) return res.status(403).json({ ok: false, error: "Access denied" });
+
     const typeMap = {
       image: ["image"],
-      file:  ["file"],
+      file:  ["file", "document"],
       media: ["image", "video", "audio"],
     };
     const types = typeMap[type] || ["image"];
@@ -180,6 +187,7 @@ exports.getConversationMedia = async (req, res) => {
       conversationId,
       type: { $in: types },
       deletedForEveryone: false,
+      "file.url": { $exists: true, $ne: "" },
     })
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)

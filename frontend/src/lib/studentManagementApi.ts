@@ -493,6 +493,92 @@ export const payAcademyFee = (id: string, body?: { paymentMethod?: string; notes
 export const fetchStudentFeeHistory = (studentId: string) =>
   api<{ student: AcademyStudent; records: AcademyFeeRecord[] }>(`/fees/student/${studentId}`);
 
+export interface FeeDefaulter {
+  studentId: string;
+  totalDue: number;
+  unpaidCount: number;
+  overdueCount: number;
+  pendingCount: number;
+  oldestDueDate?: string;
+  daysOverdue: number;
+  className?: string | null;
+  student: {
+    _id: string;
+    studentId: string;
+    studentName: string;
+    fatherName: string;
+    phone: string;
+    classId?: string;
+  };
+}
+
+export interface FeeDefaultersSummary {
+  defaulterCount: number;
+  totalOutstanding: number;
+  totalUnpaidVouchers: number;
+  overdueVouchers: number;
+}
+
+export const fetchFeeDefaulters = async (params?: {
+  page?: number;
+  limit?: number;
+  classId?: string;
+  month?: number;
+  year?: number;
+  search?: string;
+}) => {
+  const q = new URLSearchParams();
+  if (params?.page) q.set("page", String(params.page));
+  if (params?.limit) q.set("limit", String(params.limit));
+  if (params?.classId) q.set("classId", params.classId);
+  if (params?.month) q.set("month", String(params.month));
+  if (params?.year) q.set("year", String(params.year));
+  if (params?.search) q.set("search", params.search);
+  const res = await authedFetch(`/student-management/fees/defaulters?${q}`);
+  const body = await parseJson<{
+    success?: boolean;
+    data?: FeeDefaulter[];
+    pagination?: Pagination;
+    message?: string;
+  }>(res);
+  if (!res.ok) throw new Error(body.message || "Failed to load fee defaulters");
+  return { defaulters: body.data || [], pagination: body.pagination };
+};
+
+export const fetchFeeDefaultersSummary = (params?: {
+  classId?: string;
+  month?: number;
+  year?: number;
+}) => {
+  const q = new URLSearchParams();
+  if (params?.classId) q.set("classId", params.classId);
+  if (params?.month) q.set("month", String(params.month));
+  if (params?.year) q.set("year", String(params.year));
+  const qs = q.toString();
+  return api<FeeDefaultersSummary>(`/fees/defaulters/summary${qs ? `?${qs}` : ""}`);
+};
+
+export const exportFeeDefaultersCsv = async (params?: {
+  classId?: string;
+  month?: number;
+  year?: number;
+  search?: string;
+}) => {
+  const q = new URLSearchParams();
+  if (params?.classId) q.set("classId", params.classId);
+  if (params?.month) q.set("month", String(params.month));
+  if (params?.year) q.set("year", String(params.year));
+  if (params?.search) q.set("search", params.search);
+  const token = getAccessToken();
+  const url = `${getApiRoot()}/student-management/fees/defaulters/export?${q}`;
+  const res = await fetch(url, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error("Export failed");
+  return res.blob();
+};
+
 // Teacher / staff salary
 export interface AcademySalaryRecord {
   _id: string;

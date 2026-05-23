@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import UserAvatar   from "../Shared/UserAvatar";
 import api          from "@/services/socket/chat.api";
+import { chatMediaUrl } from "../chatMediaUrl";
 import {
   useChatUi,
   useConversations,
@@ -448,8 +449,6 @@ export default function ConversationInfoDrawer({ conversation: convProp, onClose
   const conv =
     conversations.find((c) => String(c._id) === String(convProp._id)) || convProp;
 
-  const API_URL = import.meta.env.VITE_API_URL?.trim() || "";
-
   const [tab,        setTab]        = useState("members");
   const [media,      setMedia]      = useState(null);
   const [saving,     setSaving]     = useState(false);
@@ -875,10 +874,10 @@ export default function ConversationInfoDrawer({ conversation: convProp, onClose
                   {media.map((m) => (
                     <img
                       key={m._id}
-                      src={API_URL + m.file?.url}
+                      src={chatMediaUrl(m.file?.url)}
                       alt=""
                       className="w-full aspect-square object-cover rounded cursor-pointer hover:opacity-90 transition-opacity"
-                      onClick={() => window.open(API_URL + m.file?.url, "_blank")}
+                      onClick={() => window.open(chatMediaUrl(m.file?.url), "_blank")}
                     />
                   ))}
                 </div>
@@ -888,8 +887,10 @@ export default function ConversationInfoDrawer({ conversation: convProp, onClose
                   {media.map((m) => (
                     <a
                       key={m._id}
-                      href={m.file?.url}
+                      href={chatMediaUrl(m.file?.url)}
                       download
+                      target="_blank"
+                      rel="noreferrer"
                       className="flex items-center gap-3 p-3 rounded-lg hover:bg-[#f5f6f6] transition-colors"
                     >
                       <div

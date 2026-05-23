@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,8 @@ import { Plus } from "lucide-react";
 import { Store, useStore, newId, Assignment } from "@/lib/store";
 import { ModuleActionCaps, PermLevel } from "@/lib/permissions";
 import { useToast } from "@/hooks/use-toast";
+import PanelToolbar from "@/components/modules/PanelToolbar";
+import { matchesPanelSearch } from "@/lib/panelSearch";
 
 const empty: Assignment = { id: "", class: "10-A", subject: "Math", title: "", dueDate: "", submitted: 0, total: 24 };
 
@@ -15,7 +17,13 @@ const AssignmentsModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Modul
   const list = useStore(() => Store.listAssignments());
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Assignment>(empty);
+  const [search, setSearch] = useState("");
   const { toast } = useToast();
+
+  const listFiltered = useMemo(() => {
+    if (!search.trim()) return list;
+    return list.filter((a) => matchesPanelSearch(search, a.title, a.class, a.subject, a.dueDate));
+  }, [list, search]);
 
   const save = () => {
     if (!caps.canCreate) return;
@@ -35,8 +43,8 @@ const AssignmentsModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Modul
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-4">
-      {caps.canCreate && (
-        <div className="flex justify-end">
+      <PanelToolbar search={search} onSearchChange={setSearch} searchPlaceholder="Search title, class, subject…">
+        {caps.canCreate && (
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild><Button variant="hero"><Plus className="h-4 w-4" /> New Assignment</Button></DialogTrigger>
             <DialogContent>
@@ -51,11 +59,14 @@ const AssignmentsModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Modul
               <DialogFooter><Button onClick={save} variant="hero">Create</Button></DialogFooter>
             </DialogContent>
           </Dialog>
-        </div>
-      )}
+        )}
+      </PanelToolbar>
 
+      {listFiltered.length === 0 ? (
+        <p className="text-sm text-center text-muted-foreground py-8">No assignments match your search.</p>
+      ) : (
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {list.map((a) => (
+        {listFiltered.map((a) => (
           <Card key={a.id} className="p-4 space-y-2">
             <div className="flex items-center justify-between">
               <div className="text-xs text-muted-foreground">{a.class} • {a.subject}</div>
@@ -72,6 +83,7 @@ const AssignmentsModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Modul
           </Card>
         ))}
       </div>
+      )}
     </div>
   );
 };

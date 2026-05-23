@@ -63,7 +63,9 @@ const listSlots = catchAsync(async (req, res) => {
 });
 
 const upsertSlot = catchAsync(async (req, res) => {
-  const data = await scheduleSlotService.upsertSlot(req.params.versionId, req.body);
+  const data = await scheduleSlotService.upsertSlot(req.params.versionId, req.body, {
+    userId: req.user._id,
+  });
   res.status(201).json({ success: true, data });
 });
 
@@ -107,7 +109,7 @@ const sectionSchedule = catchAsync(async (req, res) => {
 });
 
 const createSubstitution = catchAsync(async (req, res) => {
-  const data = await scheduleSlotService.createSubstitution(req.body);
+  const data = await scheduleSlotService.createSubstitution(req.body, req.user._id);
   res.status(201).json({ success: true, data });
 });
 

@@ -21,6 +21,7 @@ const userSchema = new mongoose.Schema(
     fcmToken: { type: String },
     lastLogin: { type: Date },
     refreshToken: { type: String, select: false },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }
 );

@@ -1,5 +1,6 @@
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -9,7 +10,9 @@ import {
   ClipboardList,
   GraduationCap,
   Pencil,
+  Plus,
   Receipt,
+  Trash2,
   User,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
@@ -23,11 +26,22 @@ import {
   type AcademySubject,
   type AcademyTimetableSlot,
   getAcademyStudentRecord,
+  createAssessment,
+  updateAssessment,
+  deleteAssessment,
+  ASSESSMENT_TYPE_LABELS,
 } from "@/lib/studentManagementApi";
+import { fetchStudentExamResults, type ExamResult } from "@/lib/examApi";
+import AssessmentFormDialog from "@/components/modules/exams/AssessmentFormDialog";
+import PanelSearchBar from "@/components/modules/PanelSearchBar";
+import { matchesPanelSearch } from "@/lib/panelSearch";
+import { getAccessToken } from "@/lib/auth";
+import { getApiRoot } from "@/lib/api";
 import {
   academyStudentRoutes,
   type AcademyStudentRoutes,
 } from "@/lib/studentManagementMenus";
+import CreatedByLine from "@/components/modules/CreatedByLine";
 import {
   classLabel,
   examPercentage,
@@ -280,6 +294,13 @@ function TimetableTab({ slots }: { slots: AcademyTimetableSlot[] }) {
 
 function AttendanceTab({ record }: { record: AcademyStudentRecord }) {
   const { summary, records } = record.attendance;
+  const [search, setSearch] = useState("");
+  const recordsFiltered = useMemo(() => {
+    if (!search.trim()) return records;
+    return records.filter((r) =>
+      matchesPanelSearch(search, r.date, r.status, r.notes, r.subjectId ? subjectName(r.subjectId as AcademySubject) : "General")
+    );
+  }, [records, search]);
 
   return (
     <div className="space-y-6">
@@ -295,12 +316,17 @@ function AttendanceTab({ record }: { record: AcademyStudentRecord }) {
         />
       </div>
 
+      {records.length > 0 && (
+        <PanelSearchBar value={search} onChange={setSearch} placeholder="Search attendance…" className="max-w-md" />
+      )}
       {records.length === 0 ? (
         <EmptyBlock message="No attendance records for this student yet." />
+      ) : recordsFiltered.length === 0 ? (
+        <EmptyBlock message="No attendance records match your search." />
       ) : (
         <DataTable
           headers={["Date", "Status", "Subject", "Notes"]}
-          rows={records.map((r: AcademyAttendanceRecord) => [
+          rows={recordsFiltered.map((r: AcademyAttendanceRecord) => [
             formatDate(r.date),
             <StatusBadge key="st" status={r.status} />,
             r.subjectId ? subjectName(r.subjectId as AcademySubject) : "General",
@@ -314,6 +340,22 @@ function AttendanceTab({ record }: { record: AcademyStudentRecord }) {
 
 function FeesTab({ record }: { record: AcademyStudentRecord }) {
   const { summary, records } = record.fees;
+  const [search, setSearch] = useState("");
+  const recordsFiltered = useMemo(() => {
+    if (!search.trim()) return records;
+    return records.filter((r) =>
+      matchesPanelSearch(
+        search,
+        r.feeType,
+        r.status,
+        r.receiptNumber,
+        r.amount,
+        r.paidAt,
+        r.month,
+        r.year
+      )
+    );
+  }, [records, search]);
 
   return (
     <div className="space-y-6">
@@ -332,12 +374,17 @@ function FeesTab({ record }: { record: AcademyStudentRecord }) {
         />
       </div>
 
+      {records.length > 0 && (
+        <PanelSearchBar value={search} onChange={setSearch} placeholder="Search fees, receipt, status…" className="max-w-md" />
+      )}
       {records.length === 0 ? (
         <EmptyBlock message="No fee invoices or payments recorded yet." />
+      ) : recordsFiltered.length === 0 ? (
+        <EmptyBlock message="No fee records match your search." />
       ) : (
         <DataTable
           headers={["Period", "Type", "Amount", "Status", "Receipt", "Paid on"]}
-          rows={records.map((r: AcademyFeeRecord) => [
+          rows={recordsFiltered.map((r: AcademyFeeRecord) => [
             r.feeType === "admission"
               ? "Admission"
               : `${MONTH_NAMES[(r.month || 1) - 1]} ${r.year}`,
@@ -353,44 +400,212 @@ function FeesTab({ record }: { record: AcademyStudentRecord }) {
   );
 }
 
-function TestsTab({ record }: { record: AcademyStudentRecord }) {
+function TestsTab({
+  record,
+  studentId,
+  classId,
+  caps,
+}: {
+  record: AcademyStudentRecord;
+  studentId: string;
+  classId: string;
+  caps: ModuleActionCaps;
+}) {
+  const qc = useQueryClient();
   const { summary, records } = record.assessments;
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<AcademyAssessmentRecord | null>(null);
+
+  const canManageTests = caps.canEdit || caps.canCreate;
+  const [search, setSearch] = useState("");
+  const recordsFiltered = useMemo(() => {
+    if (!search.trim()) return records;
+    return records.filter((r) =>
+      matchesPanelSearch(
+        search,
+        r.title,
+        r.assessmentType,
+        r.examDate,
+        r.remarks,
+        r.subjectId ? subjectName(r.subjectId as AcademySubject) : "",
+        r.obtainedMarks,
+        r.totalMarks
+      )
+    );
+  }, [records, search]);
+
+  const { data: termResults = [] } = useQuery({
+    queryKey: ["student-exam-results", studentId],
+    queryFn: () => fetchStudentExamResults(studentId),
+  });
+
+  const saveMut = useMutation({
+    mutationFn: (body: Parameters<typeof createAssessment>[1]) =>
+      editing
+        ? updateAssessment(editing._id, body)
+        : createAssessment(studentId, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["academy-student-record", studentId] });
+      setDialogOpen(false);
+      setEditing(null);
+    },
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: deleteAssessment,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["academy-student-record", studentId] }),
+  });
 
   return (
-    <div className="space-y-6">
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <SummaryCard label="Tests / reports" value={summary.count} />
-        <SummaryCard
-          label="Average score"
-          value={summary.averagePercentage != null ? `${summary.averagePercentage}%` : "—"}
-        />
-        <SummaryCard
-          label="Highest"
-          value={summary.highestPercentage != null ? `${summary.highestPercentage}%` : "—"}
-        />
-        <SummaryCard
-          label="Lowest"
-          value={summary.lowestPercentage != null ? `${summary.lowestPercentage}%` : "—"}
-        />
+    <div className="space-y-8">
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <SectionTitle>Ongoing tests (this student)</SectionTitle>
+          {canManageTests && (
+            <Button
+              size="sm"
+              variant="hero"
+              className="gap-1"
+              onClick={() => {
+                setEditing(null);
+                setDialogOpen(true);
+              }}
+            >
+              <Plus className="h-4 w-4" /> Add test
+            </Button>
+          )}
+        </div>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+          <SummaryCard label="Tests / reports" value={summary.count} />
+          <SummaryCard
+            label="Average score"
+            value={summary.averagePercentage != null ? `${summary.averagePercentage}%` : "—"}
+          />
+          <SummaryCard
+            label="Highest"
+            value={summary.highestPercentage != null ? `${summary.highestPercentage}%` : "—"}
+          />
+          <SummaryCard
+            label="Lowest"
+            value={summary.lowestPercentage != null ? `${summary.lowestPercentage}%` : "—"}
+          />
+        </div>
+
+        {records.length > 0 && (
+          <PanelSearchBar value={search} onChange={setSearch} placeholder="Search tests…" className="max-w-md mb-4" />
+        )}
+        {records.length === 0 ? (
+          <EmptyBlock message="No tests recorded yet. Add quiz, weekly, or monthly tests per subject." />
+        ) : recordsFiltered.length === 0 ? (
+          <EmptyBlock message="No tests match your search." />
+        ) : (
+          <DataTable
+            headers={["Date", "Title", "Type", "Subject", "Obtained", "Total", "%", "Remarks", ""]}
+            rows={recordsFiltered.map((r: AcademyAssessmentRecord) => [
+              formatDate(r.examDate),
+              r.title,
+              ASSESSMENT_TYPE_LABELS[r.assessmentType as keyof typeof ASSESSMENT_TYPE_LABELS] ||
+                r.assessmentType,
+              r.subjectId ? subjectName(r.subjectId as AcademySubject) : "—",
+              r.obtainedMarks,
+              r.totalMarks,
+              examPercentage(r.obtainedMarks, r.totalMarks),
+              r.remarks || "—",
+              canManageTests ? (
+                <span className="flex gap-1">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setEditing(r);
+                      setDialogOpen(true);
+                    }}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-destructive"
+                    onClick={() => {
+                      if (window.confirm("Delete this test?")) deleteMut.mutate(r._id);
+                    }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </span>
+              ) : (
+                "—"
+              ),
+            ])}
+          />
+        )}
       </div>
 
-      {records.length === 0 ? (
-        <EmptyBlock message="No test reports or assessments recorded for this student yet." />
-      ) : (
-        <DataTable
-          headers={["Date", "Title", "Type", "Subject", "Obtained", "Total", "%", "Remarks"]}
-          rows={records.map((r: AcademyAssessmentRecord) => [
-            formatDate(r.examDate),
-            r.title,
-            r.assessmentType,
-            r.subjectId ? subjectName(r.subjectId as AcademySubject) : "—",
-            r.obtainedMarks,
-            r.totalMarks,
-            examPercentage(r.obtainedMarks, r.totalMarks),
-            r.remarks || "—",
-          ])}
-        />
-      )}
+      <div>
+        <SectionTitle>Term exam results (published)</SectionTitle>
+        <p className="text-xs text-muted-foreground mb-3">
+          Official multi-subject result cards from Exams → Term exams. Only published results appear here.
+          For bulk entry use Test And Exams management → Enter tests.
+        </p>
+        {termResults.length === 0 ? (
+          <EmptyBlock message="No published term exam results yet." />
+        ) : (
+          <div className="space-y-3">
+            {termResults.map((r: ExamResult) => {
+              const examTitle =
+                typeof r.exam === "object" && r.exam ? r.exam.title : "Exam";
+              return (
+                <div
+                  key={r._id}
+                  className="border rounded-lg p-4 flex flex-wrap items-center justify-between gap-3"
+                >
+                  <div>
+                    <p className="font-medium">{examTitle}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {Math.round(r.percentage)}% · Grade {r.grade}
+                      {r.position != null ? ` · Position #${r.position}` : ""}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={async () => {
+                      const token = getAccessToken();
+                      const res = await fetch(`${getApiRoot()}/results/${r._id}/pdf`, {
+                        headers: token ? { Authorization: `Bearer ${token}` } : {},
+                        credentials: "include",
+                      });
+                      if (!res.ok) return;
+                      const blob = await res.blob();
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `result-${r._id}.pdf`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                  >
+                    PDF
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <AssessmentFormDialog
+        open={dialogOpen}
+        onOpenChange={(o) => {
+          setDialogOpen(o);
+          if (!o) setEditing(null);
+        }}
+        classId={classId}
+        initial={editing}
+        loading={saveMut.isPending}
+        onSubmit={(body) => saveMut.mutate(body)}
+      />
     </div>
   );
 }
@@ -452,6 +667,7 @@ export default function StudentDetailPage({
             {student.studentName}
           </h2>
           <p className="text-sm text-muted-foreground font-mono">{student.studentId}</p>
+          <CreatedByLine createdBy={student.createdBy} />
           <div className="flex flex-wrap gap-2 items-center text-sm text-muted-foreground">
             <span>{classLabel(student.classId)}</span>
             <span>·</span>
@@ -528,7 +744,16 @@ export default function StudentDetailPage({
           <FeesTab record={record} />
         </TabsContent>
         <TabsContent value="tests" className="mt-6">
-          <TestsTab record={record} />
+          <TestsTab
+            record={record}
+            studentId={studentId}
+            classId={
+              typeof student.classId === "object" && student.classId
+                ? student.classId._id
+                : String(student.classId)
+            }
+            caps={caps}
+          />
         </TabsContent>
       </Tabs>
     </div>

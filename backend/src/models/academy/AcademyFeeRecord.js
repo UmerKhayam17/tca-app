@@ -14,6 +14,7 @@ const academyFeeRecordSchema = new mongoose.Schema(
     paymentMethod: { type: String, enum: ['cash', 'bank_transfer', 'online', 'other'], default: 'cash' },
     notes: { type: String, trim: true },
     recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }
 );

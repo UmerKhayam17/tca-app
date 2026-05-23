@@ -8,6 +8,7 @@ const subjectSchema = new mongoose.Schema(
     teacher: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     totalMarks: { type: Number, default: 100 },
     passingMarks: { type: Number, default: 40 },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }
 );

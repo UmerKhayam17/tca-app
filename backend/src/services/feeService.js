@@ -52,6 +52,7 @@ async function generateVoucherForStudent({
     status: 'pending',
     receiptNumber,
     generatedBy,
+    createdBy: generatedBy,
   });
 }
 

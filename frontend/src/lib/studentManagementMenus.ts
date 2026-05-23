@@ -73,6 +73,27 @@ export function isAcademyStudentId(value: string | undefined): value is string {
   return Boolean(value && MONGO_ID.test(value));
 }
 
+export function isAcademyClassId(value: string | undefined): value is string {
+  return isAcademyStudentId(value);
+}
+
+export type AcademyClassRoutes = {
+  list: string;
+  detail: (classId: string) => string;
+};
+
+export function academyClassRoutes(role: Role): AcademyClassRoutes {
+  const root = `/panel/${role}/student-management/classes`;
+  return {
+    list: root,
+    detail: (classId) => `${root}/${classId}`,
+  };
+}
+
+export function classDetailHref(role: Role, classId: string) {
+  return academyClassRoutes(role).detail(classId);
+}
+
 export function studentRegistrationListHref(role: Role) {
   return academyStudentRoutes(role, "registration").list;
 }

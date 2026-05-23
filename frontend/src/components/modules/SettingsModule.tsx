@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -7,12 +8,19 @@ import {
 import { Role } from "@/lib/auth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useToast } from "@/hooks/use-toast";
+import PanelSearchBar from "@/components/modules/PanelSearchBar";
+import { matchesPanelSearch } from "@/lib/panelSearch";
 
 const ROLES: Role[] = ["admin", "accountant", "teacher", "parent", "student"];
 
 const SettingsModule = () => {
   const { perms } = usePermissions();
   const { toast } = useToast();
+  const [search, setSearch] = useState("");
+  const modulesFiltered = useMemo(() => {
+    if (!search.trim()) return MODULES;
+    return MODULES.filter((m) => matchesPanelSearch(search, m.label, m.key));
+  }, [search]);
 
   const update = (role: Role, mod: ModuleKey, value: PermLevel) => {
     const next = loadPermissions();
@@ -32,6 +40,13 @@ const SettingsModule = () => {
         </Button>
       </Card>
 
+      <PanelSearchBar
+        value={search}
+        onChange={setSearch}
+        placeholder="Search modules…"
+        className="max-w-md"
+      />
+
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -42,7 +57,14 @@ const SettingsModule = () => {
               </tr>
             </thead>
             <tbody>
-              {MODULES.map((m) => (
+              {modulesFiltered.length === 0 ? (
+                <tr>
+                  <td colSpan={ROLES.length + 1} className="px-4 py-8 text-center text-muted-foreground">
+                    No modules match your search.
+                  </td>
+                </tr>
+              ) : (
+              modulesFiltered.map((m) => (
                 <tr key={m.key} className="border-t border-border">
                   <td className="px-4 py-3 font-medium text-primary">{m.label}</td>
                   {ROLES.map((r) => (
@@ -57,7 +79,7 @@ const SettingsModule = () => {
                     </td>
                   ))}
                 </tr>
-              ))}
+              )))}
             </tbody>
           </table>
         </div>

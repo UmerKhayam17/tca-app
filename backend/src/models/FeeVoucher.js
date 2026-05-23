@@ -20,6 +20,7 @@ const feeVoucherSchema = new mongoose.Schema(
     paymentMethod: { type: String, trim: true },
     receiptNumber: { type: String, unique: true, sparse: true, trim: true },
     generatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }
 );

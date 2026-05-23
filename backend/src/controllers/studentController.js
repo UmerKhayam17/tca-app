@@ -58,6 +58,7 @@ const register = catchAsync(async (req, res) => {
     session,
     status: 'pending_fee',
     registrationNumber,
+    createdBy: req.user._id,
   });
 
   res.status(201).json({ success: true, data: maskStudent(student) });

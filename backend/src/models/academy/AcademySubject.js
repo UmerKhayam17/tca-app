@@ -6,6 +6,7 @@ const academySubjectSchema = new mongoose.Schema(
     classId: { type: mongoose.Schema.Types.ObjectId, ref: 'AcademyClass', required: true, index: true },
     subjectCode: { type: String, required: true, trim: true, uppercase: true },
     status: { type: String, enum: ['active', 'inactive'], default: 'active' },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }
 );

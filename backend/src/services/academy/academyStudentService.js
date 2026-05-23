@@ -137,11 +137,14 @@ async function registerStudent(payload, userId) {
     status: 'pending',
     dueDate: now,
     receiptNumber,
+    createdBy: userId,
+    recordedBy: userId,
   });
 
   return student.populate([
     { path: 'classId', select: 'className' },
     { path: 'selectedSubjects', select: 'subjectName subjectCode' },
+    { path: 'createdBy', select: 'name email' },
   ]);
 }
 
@@ -191,6 +194,7 @@ async function updateStudent(id, payload) {
   return student.populate([
     { path: 'classId', select: 'className' },
     { path: 'selectedSubjects', select: 'subjectName subjectCode' },
+    { path: 'createdBy', select: 'name email' },
   ]);
 }
 
@@ -231,6 +235,7 @@ async function listStudents({
     AcademyStudent.find(q)
       .populate('classId', 'className')
       .populate('selectedSubjects', 'subjectName')
+      .populate('createdBy', 'name email')
       .sort(sort)
       .skip(skip)
       .limit(perPage),

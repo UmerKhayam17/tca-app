@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,8 @@ import {
   fetchClasses,
   fetchSubjects,
 } from "@/lib/configApi";
+import PanelSearchBar from "@/components/modules/PanelSearchBar";
+import { matchesPanelSearch } from "@/lib/panelSearch";
 
 export default function AcademicSetupTab({
   sessionId,
@@ -43,6 +45,16 @@ export default function AcademicSetupTab({
     queryFn: () => fetchSubjects(selectedClass),
     enabled: !!selectedClass,
   });
+
+  const [search, setSearch] = useState("");
+  const classesFiltered = useMemo(() => {
+    if (!search.trim()) return classes;
+    return classes.filter((c) => matchesPanelSearch(search, c.name));
+  }, [classes, search]);
+  const subjectsFiltered = useMemo(() => {
+    if (!search.trim()) return subjects;
+    return subjects.filter((s) => matchesPanelSearch(search, s.name, s.code));
+  }, [subjects, search]);
 
   const saveMut = useMutation({
     mutationFn: async () => {
@@ -98,6 +110,13 @@ export default function AcademicSetupTab({
         <p className="text-sm text-muted-foreground">Select or create a session using the bar above.</p>
       ) : (
         <>
+          <PanelSearchBar
+            value={search}
+            onChange={setSearch}
+            placeholder="Search classes and subjects…"
+            className="max-w-md"
+          />
+
           <Card className="p-4">
             <Label className="text-xs text-muted-foreground">Class for subjects (sections → Sections tab)</Label>
             <select
@@ -119,11 +138,14 @@ export default function AcademicSetupTab({
 
           <div className="grid md:grid-cols-2 gap-4">
             <Card className="p-4">
-              <h3 className="font-semibold mb-2">Classes ({classes.length})</h3>
+              <h3 className="font-semibold mb-2">Classes ({classesFiltered.length}{search.trim() ? ` of ${classes.length}` : ""})</h3>
               <ul className="text-sm space-y-1">
-                {classes.map((c) => (
+                {classesFiltered.length === 0 ? (
+                  <li className="text-muted-foreground">{classes.length === 0 ? "No classes yet." : "No classes match your search."}</li>
+                ) : (
+                classesFiltered.map((c) => (
                   <li key={c._id} className="text-muted-foreground">{c.name}</li>
-                ))}
+                )))}
               </ul>
             </Card>
             {selectedClass && (
@@ -131,9 +153,12 @@ export default function AcademicSetupTab({
                 <Card className="p-4 md:col-span-2">
                   <h3 className="font-semibold mb-2">Subjects</h3>
                   <ul className="text-sm flex flex-wrap gap-2">
-                    {subjects.map((s) => (
+                    {subjectsFiltered.length === 0 ? (
+                      <li className="text-muted-foreground">{subjects.length === 0 ? "No subjects yet." : "No subjects match your search."}</li>
+                    ) : (
+                    subjectsFiltered.map((s) => (
                       <li key={s._id} className="bg-muted px-2 py-1 rounded">{s.name} ({s.code})</li>
-                    ))}
+                    )))}
                   </ul>
                 </Card>
               </>

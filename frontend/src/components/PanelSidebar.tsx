@@ -13,9 +13,11 @@ import { Role, SessionUser, logout, panelPathFor } from "@/lib/auth";
 import { buildMenu, moduleHref } from "@/lib/panelMenus";
 import { SYSTEM_CONFIG_SECTIONS, systemConfigHref } from "@/lib/systemConfigMenus";
 import { STUDENT_MANAGEMENT_SECTIONS, studentManagementHref } from "@/lib/studentManagementMenus";
+import { TEST_EXAMS_SECTIONS, testExamsHref } from "@/lib/testExamsMenus";
 import { getTimetableSections, timetableHref } from "@/lib/timetableMenus";
 import { usePermissions } from "@/hooks/usePermissions";
 import { applyBackendModulePermissions, resolveModuleCaps } from "@/lib/permissions";
+import { cn } from "@/lib/utils";
 import logo from "@/assets/logo.png";
 
 const roleHeader: Record<Role, { title: string; Icon: React.ComponentType<{ className?: string }> }> = {
@@ -42,8 +44,14 @@ const PanelSidebar = ({ user }: { user: SessionUser }) => {
   const studentMgmtOpen = pathname.startsWith(studentMgmtBase);
   const timetableBase = `/panel/${user.role}/timetable`;
   const timetableOpen = pathname.startsWith(timetableBase);
+  const testExamsBase = `/panel/${user.role}/exams`;
+  const testExamsOpen = pathname.startsWith(testExamsBase);
   const timetableCaps = resolveModuleCaps("timetable", rolePerms.timetable, user.modulePermissions);
   const timetableSections = getTimetableSections({ caps: timetableCaps, role: user.role });
+
+  /** Parent rows with sub-menus: allow wrapped labels (default sidebar button is fixed h-8 + overflow hidden). */
+  const collapsibleTriggerClass =
+    "!h-auto min-h-9 py-2.5 items-start overflow-visible [&>span]:whitespace-normal [&>span]:leading-snug [&>span]:flex-1 [&>span]:min-w-0 [&>span]:break-words";
 
   return (
     <Sidebar collapsible="icon">
@@ -68,25 +76,33 @@ const PanelSidebar = ({ user }: { user: SessionUser }) => {
                 if (
                   m.key === "system-config" ||
                   m.key === "student-management" ||
-                  m.key === "timetable"
+                  m.key === "timetable" ||
+                  m.key === "exams"
                 ) {
                   const isSystemConfig = m.key === "system-config";
                   const isStudentMgmt = m.key === "student-management";
+                  const isTestExams = m.key === "exams";
                   const open = isSystemConfig
                     ? systemConfigOpen
                     : isStudentMgmt
                       ? studentMgmtOpen
-                      : timetableOpen;
+                      : isTestExams
+                        ? testExamsOpen
+                        : timetableOpen;
                   const sections = isSystemConfig
                     ? SYSTEM_CONFIG_SECTIONS
                     : isStudentMgmt
                       ? STUDENT_MANAGEMENT_SECTIONS
-                      : timetableSections;
+                      : isTestExams
+                        ? TEST_EXAMS_SECTIONS
+                        : timetableSections;
                   const hrefFor = isSystemConfig
                     ? systemConfigHref
                     : isStudentMgmt
                       ? studentManagementHref
-                      : timetableHref;
+                      : isTestExams
+                        ? testExamsHref
+                        : timetableHref;
 
                   return (
                     <Collapsible key={m.key} defaultOpen={open} className="group/collapsible">
@@ -95,18 +111,25 @@ const PanelSidebar = ({ user }: { user: SessionUser }) => {
                           <SidebarMenuButton
                             tooltip={m.label}
                             isActive={open}
-                            className="group-data-[state=open]/collapsible:bg-sidebar-accent/50"
+                            className={cn(
+                              collapsibleTriggerClass,
+                              "group-data-[state=open]/collapsible:bg-sidebar-accent/50"
+                            )}
                           >
-                            <m.Icon className="h-4 w-4" />
-                            <span>{m.label}</span>
-                            <ChevronDown className="ml-auto h-4 w-4 shrink-0 transition-transform group-data-[state=open]/collapsible:rotate-180" />
+                            <m.Icon className="h-4 w-4 shrink-0 mt-0.5" />
+                            <span>{m.shortLabel ?? m.label}</span>
+                            <ChevronDown className="ml-auto mt-0.5 h-4 w-4 shrink-0 transition-transform group-data-[state=open]/collapsible:rotate-180" />
                           </SidebarMenuButton>
                         </CollapsibleTrigger>
                         <CollapsibleContent>
                           <SidebarMenuSub>
                             {sections.map((sub) => {
                               const subHref = hrefFor(user.role, sub.key);
-                              const subActive = pathname === subHref;
+                              const subActive =
+                                pathname === subHref ||
+                                (isTestExams &&
+                                  sub.key === "enter-tests" &&
+                                  /^\/panel\/[^/]+\/exams\/enter-tests\/[a-f0-9]{24}$/i.test(pathname));
                               const SubIcon = sub.icon;
                               return (
                                 <SidebarMenuSubItem key={sub.key}>

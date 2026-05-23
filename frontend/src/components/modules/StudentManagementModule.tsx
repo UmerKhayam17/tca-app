@@ -4,7 +4,9 @@ import {
   academyStudentRoutes,
   DEFAULT_STUDENT_MANAGEMENT_SECTION,
   findStudentManagementSection,
+  isAcademyClassId,
   isAcademyStudentId,
+  studentManagementHref,
   type StudentManagementSection,
 } from "@/lib/studentManagementMenus";
 import { useAuth } from "@/hooks/useAuth";
@@ -15,6 +17,7 @@ import RegistrationTab from "@/components/modules/student-management/Registratio
 import RegisterStudentPage from "@/components/modules/student-management/RegisterStudentPage";
 import StudentDetailPage from "@/components/modules/student-management/StudentDetailPage";
 import FeesTab from "@/components/modules/student-management/FeesTab";
+import ClassDetailPage from "@/components/modules/student-management/ClassDetailPage";
 
 const StudentManagementModule = ({
   caps,
@@ -29,6 +32,7 @@ const StudentManagementModule = ({
   subAction?: string;
 }) => {
   const { user } = useAuth();
+  const role = user?.role ?? "admin";
   const registrationRoutes = user?.role ? academyStudentRoutes(user.role, "registration") : null;
   const registrationList = registrationRoutes?.list ?? "../registration";
 
@@ -59,6 +63,16 @@ const StudentManagementModule = ({
     }
     if (action) return <Navigate to={registrationList} replace />;
     return <RegistrationTab caps={caps} routes={registrationRoutes ?? undefined} />;
+  }
+
+  if (sectionParam === "classes") {
+    if (action && isAcademyClassId(action)) {
+      return <ClassDetailPage caps={caps} classId={action} />;
+    }
+    if (action) {
+      return <Navigate to={studentManagementHref(role, "classes")} replace />;
+    }
+    return <ClassesTab caps={caps} />;
   }
 
   const section: StudentManagementSection = sectionParam

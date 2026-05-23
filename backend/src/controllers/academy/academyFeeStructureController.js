@@ -29,4 +29,9 @@ const preview = catchAsync(async (req, res) => {
   res.json({ success: true, data });
 });
 
-module.exports = { list, getByClass, create, update, preview };
+const remove = catchAsync(async (req, res) => {
+  await feeStructureService.deleteStructure(req.params.id);
+  res.json({ success: true, data: { deleted: true } });
+});
+
+module.exports = { list, getByClass, create, update, preview, remove };

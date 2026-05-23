@@ -1,15 +1,26 @@
+import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Store, useStore } from "@/lib/store";
 import { ModuleActionCaps, PermLevel } from "@/lib/permissions";
 import { useToast } from "@/hooks/use-toast";
+import PanelToolbar from "@/components/modules/PanelToolbar";
+import { matchesPanelSearch } from "@/lib/panelSearch";
 
 const FeesModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActionCaps }) => {
   const fees = useStore(() => Store.listFees());
   const students = useStore(() => Store.listStudents());
   const canCollect = caps.canEdit;
   const { toast } = useToast();
+  const [search, setSearch] = useState("");
   const studentName = (id: string) => students.find((s) => s.id === id)?.name ?? "—";
+
+  const feesFiltered = useMemo(() => {
+    if (!search.trim()) return fees;
+    return fees.filter((f) =>
+      matchesPanelSearch(search, studentName(f.studentId), f.month, f.status, f.amount, f.paidOn)
+    );
+  }, [fees, search, students]);
 
   const collect = (id: string) => {
     Store.saveFees(Store.listFees().map((f) =>
@@ -29,6 +40,8 @@ const FeesModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleAction
         <Card className="p-4 col-span-2 sm:col-span-1"><div className="text-xs text-muted-foreground">Records</div><div className="font-display text-2xl font-bold text-primary">{fees.length}</div></Card>
       </div>
 
+      <PanelToolbar search={search} onSearchChange={setSearch} searchPlaceholder="Search student, month, status…" />
+
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -43,7 +56,14 @@ const FeesModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleAction
               </tr>
             </thead>
             <tbody>
-              {fees.map((f) => (
+              {feesFiltered.length === 0 && (
+                <tr>
+                  <td colSpan={canCollect ? 6 : 5} className="px-4 py-8 text-center text-muted-foreground">
+                    No fee records match your search.
+                  </td>
+                </tr>
+              )}
+              {feesFiltered.map((f) => (
                 <tr key={f.id} className="border-t border-border">
                   <td className="px-4 py-3 font-medium text-primary">{studentName(f.studentId)}</td>
                   <td className="px-4 py-3">{f.month}</td>

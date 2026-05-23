@@ -46,6 +46,8 @@ export type ModuleKey =
 export interface ModuleDef {
   key: ModuleKey;
   label: string;
+  /** Shorter label for sidebar when the full title would wrap or clip */
+  shortLabel?: string;
   icon: string;       // lucide icon name
   desc: string;
 }
@@ -58,7 +60,13 @@ export const MODULES: ModuleDef[] = [
   { key: "attendance",    label: "Attendance",      icon: "ClipboardList",   desc: "Daily attendance" },
   { key: "timetable",     label: "Timetable",       icon: "Calendar",        desc: "Build, publish & view class schedules" },
   { key: "assignments",   label: "Assignments",     icon: "BookOpen",        desc: "Homework & grading" },
-  { key: "exams",         label: "Exam & Results",  icon: "Award",           desc: "Marks and report cards" },
+  {
+    key: "exams",
+    label: "Test And Exams management",
+    shortLabel: "Tests & Exams",
+    icon: "Award",
+    desc: "Ongoing tests and term exam results",
+  },
   { key: "fees",          label: "Fee Management",  icon: "Wallet",          desc: "Collect and track fees" },
   { key: "salary",        label: "Salary",          icon: "DollarSign",      desc: "Staff payroll" },
   { key: "library",       label: "Library",         icon: "BookOpen",        desc: "Books & issuance" },
@@ -170,7 +178,7 @@ export function capsFromBackendActions(actions: string[]): ModuleActionCaps {
   const s = new Set((actions || []).map((a) => String(a).toLowerCase()));
   const has = (x: string) => s.has(x);
   const canParticipate = has("participate");
-  const canCreate = has("create") || has("generate") || has("publish");
+  const canCreate = has("create") || has("generate") || has("publish") || has("approve");
   const canEdit =
     has("edit")
     || has("correct")

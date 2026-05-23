@@ -1,5 +1,8 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/useAuth";
+import { classDetailHref } from "@/lib/studentManagementMenus";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,7 +10,8 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Pencil, Trash2, Search } from "lucide-react";
+import { Plus, Pencil, Trash2 } from "lucide-react";
+import PanelSearchBar from "@/components/modules/PanelSearchBar";
 import { useToast } from "@/hooks/use-toast";
 import type { ModuleActionCaps } from "@/lib/permissions";
 import {
@@ -18,6 +22,8 @@ const QK = ["academy-classes"] as const;
 
 export default function ClassesTab({ caps }: { caps: ModuleActionCaps }) {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const role = user?.role ?? "admin";
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
@@ -67,10 +73,12 @@ export default function ClassesTab({ caps }: { caps: ModuleActionCaps }) {
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-4">
       <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input className="pl-9" placeholder="Search classes…" value={search} onChange={(e) => setSearch(e.target.value)} />
-        </div>
+        <PanelSearchBar
+          value={search}
+          onChange={setSearch}
+          placeholder="Search classes…"
+          className="max-w-md"
+        />
         {caps.canCreate && (
           <Button onClick={openCreate} className="gap-2 shrink-0">
             <Plus className="h-4 w-4" /> Add Class
@@ -98,7 +106,14 @@ export default function ClassesTab({ caps }: { caps: ModuleActionCaps }) {
               )}
               {classes.map((c) => (
                 <tr key={c._id} className="border-b last:border-0 hover:bg-muted/30">
-                  <td className="p-3 font-medium">{c.className}</td>
+                  <td className="p-3 font-medium">
+                    <Link
+                      to={classDetailHref(role, c._id)}
+                      className="text-primary hover:underline"
+                    >
+                      {c.className}
+                    </Link>
+                  </td>
                   <td className="p-3">{c.totalSubjects}</td>
                   <td className="p-3">
                     <span className={`text-xs font-semibold rounded-full px-2 py-0.5 ${

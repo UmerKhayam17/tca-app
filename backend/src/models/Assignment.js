@@ -38,6 +38,7 @@ const assignmentSchema = new mongoose.Schema(
       default: 'active',
       index: true,
     },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }
 );

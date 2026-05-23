@@ -13,7 +13,11 @@ const list = catchAsync(async (req, res) => {
   if (audience) q.targetAudience = audience;
   if (classId) q.targetClass = classId;
   if (sectionId) q.targetSection = sectionId;
-  const rows = await Announcement.find(q).populate('targetClass').populate('targetSection').sort({ createdAt: -1 });
+  const rows = await Announcement.find(q)
+    .populate('targetClass')
+    .populate('targetSection')
+    .populate('createdBy', 'name email')
+    .sort({ createdAt: -1 });
   res.json({ success: true, data: rows });
 });
 

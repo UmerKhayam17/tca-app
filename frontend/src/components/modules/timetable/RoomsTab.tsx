@@ -9,6 +9,8 @@ import { Plus, Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { ModuleActionCaps } from "@/lib/permissions";
 import { createRoom, deleteRoom, fetchRooms, updateRoom, type Room } from "@/lib/timetableApi";
+import PanelSearchBar from "@/components/modules/PanelSearchBar";
+import { usePanelListSearch } from "@/hooks/usePanelListSearch";
 
 const QK = (sid: string) => ["timetable-rooms", sid] as const;
 
@@ -24,6 +26,13 @@ export default function RoomsTab({ sessionId, caps }: { sessionId: string; caps:
     queryFn: () => fetchRooms(sessionId),
     enabled: !!sessionId,
   });
+
+  const { search, setSearch, filtered: roomsFiltered } = usePanelListSearch(rooms, (r) => [
+    r.code,
+    r.name,
+    r.type,
+    r.capacity,
+  ]);
 
   const saveMut = useMutation({
     mutationFn: async () => {
@@ -53,18 +62,21 @@ export default function RoomsTab({ sessionId, caps }: { sessionId: string; caps:
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-4">
-      {caps.canCreate && (
-        <Button
-          className="gap-2"
-          onClick={() => {
-            setEdit(null);
-            setForm({ name: "", code: "", capacity: 35, type: "classroom" });
-            setOpen(true);
-          }}
-        >
-          <Plus className="h-4 w-4" /> Add room
-        </Button>
-      )}
+      <div className="flex flex-wrap items-center gap-2 justify-between">
+        <PanelSearchBar value={search} onChange={setSearch} placeholder="Search code, name, type…" className="max-w-md" />
+        {caps.canCreate && (
+          <Button
+            className="gap-2 shrink-0"
+            onClick={() => {
+              setEdit(null);
+              setForm({ name: "", code: "", capacity: 35, type: "classroom" });
+              setOpen(true);
+            }}
+          >
+            <Plus className="h-4 w-4" /> Add room
+          </Button>
+        )}
+      </div>
       <Card className="overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-muted/50 border-b">
@@ -84,14 +96,14 @@ export default function RoomsTab({ sessionId, caps }: { sessionId: string; caps:
                 </td>
               </tr>
             )}
-            {!isLoading && rooms.length === 0 && (
+            {!isLoading && roomsFiltered.length === 0 && (
               <tr>
                 <td colSpan={5} className="p-6 text-center text-muted-foreground">
-                  No rooms
+                  {rooms.length === 0 ? "No rooms" : "No rooms match your search."}
                 </td>
               </tr>
             )}
-            {rooms.map((r) => (
+            {roomsFiltered.map((r) => (
               <tr key={r._id} className="border-b last:border-0">
                 <td className="p-3 font-mono text-xs">{r.code}</td>
                 <td className="p-3 font-medium">{r.name}</td>

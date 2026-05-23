@@ -1,10 +1,12 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { fetchPermissionCatalog, type PermissionDefinition } from "@/lib/staffApi";
 import { moduleHref } from "@/lib/panelMenus";
 import type { Role } from "@/lib/auth";
+import PanelSearchBar from "@/components/modules/PanelSearchBar";
+import { matchesPanelSearch } from "@/lib/panelSearch";
 
 const PERM_CATALOG_QUERY = ["permissionCatalog"] as const;
 
@@ -25,7 +27,14 @@ const PermissionCatalogModule = ({ role }: { role: Role }) => {
     queryFn: fetchPermissionCatalog,
   });
 
+  const [search, setSearch] = useState("");
   const sorted = useMemo(() => sortRows(rows), [rows]);
+  const sortedFiltered = useMemo(() => {
+    if (!search.trim()) return sorted;
+    return sorted.filter((p) =>
+      matchesPanelSearch(search, p.name, p.module, p.action, p.description)
+    );
+  }, [sorted, search]);
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-6">
@@ -39,6 +48,13 @@ const PermissionCatalogModule = ({ role }: { role: Role }) => {
           page.
         </p>
       </Card>
+
+      <PanelSearchBar
+        value={search}
+        onChange={setSearch}
+        placeholder="Search permission name, module, action…"
+        className="max-w-md"
+      />
 
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
@@ -58,14 +74,14 @@ const PermissionCatalogModule = ({ role }: { role: Role }) => {
                     Loading…
                   </td>
                 </tr>
-              ) : sorted.length === 0 ? (
+              ) : sortedFiltered.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">
-                    No permissions returned from the server.
+                    {sorted.length === 0 ? "No permissions returned from the server." : "No permissions match your search."}
                   </td>
                 </tr>
               ) : (
-                sorted.map((p) => (
+                sortedFiltered.map((p) => (
                   <tr key={p._id} className="border-t border-border hover:bg-secondary/30">
                     <td className="px-4 py-3 font-mono text-xs text-primary whitespace-nowrap">{p.name}</td>
                     <td className="px-4 py-3 capitalize text-muted-foreground">{p.module}</td>

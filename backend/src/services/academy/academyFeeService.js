@@ -1,6 +1,7 @@
 const ApiError = require('../../utils/ApiError');
 const AcademyFeeRecord = require('../../models/academy/AcademyFeeRecord');
 const AcademyStudent = require('../../models/academy/AcademyStudent');
+const { populateCreatedBy } = require('../../utils/createdBy');
 
 function receiptNumber(studentDoc, month, year, feeType) {
   const sid = studentDoc.studentId || studentDoc._id.toString().slice(-6);
@@ -33,12 +34,13 @@ async function listFeeRecords({
   const perPage = Math.min(100, Math.max(1, limit));
 
   const [items, total] = await Promise.all([
-    AcademyFeeRecord.find(q)
-      .populate({
+    populateCreatedBy(
+      AcademyFeeRecord.find(q).populate({
         path: 'studentId',
         select: 'studentId studentName fatherName phone classId monthlyFee',
         populate: { path: 'classId', select: 'className' },
       })
+    )
       .sort({ year: -1, month: -1, createdAt: -1 })
       .skip(skip)
       .limit(perPage),
@@ -80,6 +82,7 @@ async function generateMonthlyFees({ month, year, classId }, userId) {
       dueDate,
       receiptNumber: receiptNumber(student, month, year, 'monthly'),
       recordedBy: userId,
+      createdBy: userId,
     });
     created.push(record);
   }

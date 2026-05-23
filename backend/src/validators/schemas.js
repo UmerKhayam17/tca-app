@@ -189,12 +189,22 @@ const feePay = Joi.object({
 const examBody = Joi.object({
   title: Joi.string().required(),
   type: Joi.string().required(),
-  class: Joi.string().hex().length(24).required(),
-  session: Joi.string().hex().length(24).required(),
+  academyClass: Joi.string().hex().length(24).required(),
+  sessionLabel: Joi.string().trim().allow('').optional(),
   startDate: Joi.date().required(),
   endDate: Joi.date().required(),
   dateSheet: Joi.array().optional(),
+  status: Joi.string().valid('scheduled', 'ongoing', 'completed', 'cancelled').optional(),
 });
+
+const examPatch = Joi.object({
+  title: Joi.string().trim(),
+  type: Joi.string().trim(),
+  sessionLabel: Joi.string().trim().allow(''),
+  startDate: Joi.date(),
+  endDate: Joi.date(),
+  status: Joi.string().valid('scheduled', 'ongoing', 'completed', 'cancelled'),
+}).min(1);
 
 const examMarks = Joi.object({
   marks: Joi.array()
@@ -300,6 +310,7 @@ module.exports = {
   feeVoucherGenerate,
   feePay,
   examBody,
+  examPatch,
   examMarks,
   announcementBody,
   assignmentBody,

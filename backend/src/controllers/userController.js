@@ -90,6 +90,7 @@ const createUser = catchAsync(async (req, res) => {
     isActive: typeof isActive === 'boolean' ? isActive : true,
     salary: typeof salary === 'number' && !Number.isNaN(salary) ? Math.max(0, salary) : 0,
     ...(profileImage ? { profileImage } : {}),
+    createdBy: req.user._id,
   });
 
   await user.populate('role');

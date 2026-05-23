@@ -4,7 +4,11 @@ const Assignment = require('../models/Assignment');
 const Student = require('../models/Student');
 
 const create = catchAsync(async (req, res) => {
-  const row = await Assignment.create({ ...req.body, teacher: req.user._id });
+  const row = await Assignment.create({
+    ...req.body,
+    teacher: req.user._id,
+    createdBy: req.user._id,
+  });
   res.status(201).json({ success: true, data: row });
 });
 
@@ -13,7 +17,11 @@ const list = catchAsync(async (req, res) => {
   const q = {};
   if (classId) q.class = classId;
   if (sectionId) q.section = sectionId;
-  const rows = await Assignment.find(q).populate('subject').populate('class').populate('section');
+  const rows = await Assignment.find(q)
+    .populate('subject')
+    .populate('class')
+    .populate('section')
+    .populate('createdBy', 'name email');
   res.json({ success: true, data: rows });
 });
 

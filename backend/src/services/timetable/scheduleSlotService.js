@@ -16,7 +16,7 @@ async function listSlots(timetableVersionId) {
     .sort({ day: 1 });
 }
 
-async function upsertSlot(timetableVersionId, body, { excludeSlotId } = {}) {
+async function upsertSlot(timetableVersionId, body, { excludeSlotId, userId } = {}) {
   const version = await TimetableVersion.findById(timetableVersionId);
   if (!version) throw new ApiError(404, 'Timetable version not found');
   if (version.status !== 'draft') {
@@ -80,8 +80,8 @@ async function upsertSlot(timetableVersionId, body, { excludeSlotId } = {}) {
     return slot;
   }
 
-  const slot = await ScheduleSlot.create(payload);
-  return ScheduleSlot.findById(slot._id).populate(slotPopulate);
+  const slot = await ScheduleSlot.create({ ...payload, createdBy: userId || undefined });
+  return ScheduleSlot.findById(slot._id).populate(slotPopulate).populate('createdBy', 'name email');
 }
 
 async function moveSlot(slotId, body) {
@@ -206,7 +206,7 @@ async function getRoomSchedule(sessionId, roomId, { status = 'published' } = {})
   return slots;
 }
 
-async function createSubstitution(body) {
+async function createSubstitution(body, userId) {
   const version = await TimetableVersion.findOne({
     session: body.sessionId,
     section: body.sectionId,
@@ -253,8 +253,9 @@ async function createSubstitution(body) {
     isSubstitute: true,
     substituteForTeacher: body.originalTeacherId,
     source: 'manual',
+    createdBy: userId,
   });
-  return ScheduleSlot.findById(slot._id).populate(slotPopulate);
+  return ScheduleSlot.findById(slot._id).populate(slotPopulate).populate('createdBy', 'name email');
 }
 
 module.exports = {

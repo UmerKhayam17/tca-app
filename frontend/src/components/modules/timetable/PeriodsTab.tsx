@@ -15,6 +15,8 @@ import {
   type PeriodSlot,
   type PeriodTemplate,
 } from "@/lib/timetableApi";
+import PanelSearchBar from "@/components/modules/PanelSearchBar";
+import { usePanelListSearch } from "@/hooks/usePanelListSearch";
 
 const QK = (sid: string) => ["timetable-periods", sid] as const;
 
@@ -64,17 +66,29 @@ export default function PeriodsTab({ sessionId, caps }: { sessionId: string; cap
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
+  const { search, setSearch, filtered: templatesFiltered } = usePanelListSearch(templates, (t) => [
+    t.name,
+    t.isDefault ? "default" : "",
+    ...t.slots.map((s) => [s.label, s.startTime, s.endTime, s.type].join(" ")),
+  ]);
+
   if (!sessionId) return <p className="p-6 text-muted-foreground text-sm">Select a session above.</p>;
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-4">
-      {caps.canCreate && (
-        <Button className="gap-2" onClick={() => { setName("Morning"); setSlots([emptySlot()]); setOpen(true); }}>
-          <Plus className="h-4 w-4" /> New period template
-        </Button>
-      )}
+      <div className="flex flex-wrap items-center gap-2 justify-between">
+        <PanelSearchBar value={search} onChange={setSearch} placeholder="Search templates, periods…" className="max-w-md" />
+        {caps.canCreate && (
+          <Button className="gap-2 shrink-0" onClick={() => { setName("Morning"); setSlots([emptySlot()]); setOpen(true); }}>
+            <Plus className="h-4 w-4" /> New period template
+          </Button>
+        )}
+      </div>
       {isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
-      {templates.map((t: PeriodTemplate) => (
+      {!isLoading && templates.length > 0 && templatesFiltered.length === 0 && (
+        <p className="text-sm text-muted-foreground">No templates match your search.</p>
+      )}
+      {templatesFiltered.map((t: PeriodTemplate) => (
         <Card key={t._id} className="p-4">
           <div className="flex justify-between items-start gap-2 mb-3">
             <div>

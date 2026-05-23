@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,6 +6,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Plus, Trash2, Download, FileSpreadsheet, ArrowLeft, Save } from "lucide-react";
 import { ModuleActionCaps, PermLevel } from "@/lib/permissions";
 import { useToast } from "@/hooks/use-toast";
+import PanelSearchBar from "@/components/modules/PanelSearchBar";
+import { matchesPanelSearch } from "@/lib/panelSearch";
 
 const KEY = "tces_datasheets_v1";
 const EVT = "tces-datasheets-change";
@@ -71,6 +73,7 @@ const DatasheetsModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Module
   const [newName, setNewName] = useState("");
   const [newCols, setNewCols] = useState("Name, Email, Phone");
   const [newRowCount, setNewRowCount] = useState(5);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     const sync = () => setSheets(load());
@@ -113,6 +116,20 @@ const DatasheetsModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Module
 
   const active = sheets.find((s) => s.id === activeId);
 
+  const sheetsFiltered = useMemo(() => {
+    if (!search.trim()) return sheets;
+    return sheets.filter((s) =>
+      matchesPanelSearch(search, s.name, s.columns.join(" "), String(s.rows.length))
+    );
+  }, [sheets, search]);
+
+  const editorRowIndexes = useMemo(() => {
+    if (!active || !search.trim()) return active.rows.map((_, i) => i);
+    return active.rows
+      .map((row, i) => (matchesPanelSearch(search, ...row, String(i + 1)) ? i : -1))
+      .filter((i) => i >= 0);
+  }, [active, search]);
+
   // -------- LIST VIEW --------
   if (!active) {
     return (
@@ -129,14 +146,18 @@ const DatasheetsModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Module
           )}
         </div>
 
+        <PanelSearchBar value={search} onChange={setSearch} placeholder="Search datasheet names…" className="max-w-md" />
+
         {sheets.length === 0 ? (
           <Card className="p-10 text-center text-muted-foreground">
             <FileSpreadsheet className="h-10 w-10 mx-auto mb-3 text-accent" />
             No datasheets yet. Click "New Datasheet" to get started.
           </Card>
+        ) : sheetsFiltered.length === 0 ? (
+          <Card className="p-10 text-center text-muted-foreground">No datasheets match your search.</Card>
         ) : (
           <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
-            {sheets.map((s) => (
+            {sheetsFiltered.map((s) => (
               <Card key={s.id} className="p-4 hover:shadow-elegant transition-smooth">
                 <div className="flex items-start gap-3">
                   <div className="h-10 w-10 rounded-lg bg-accent/10 grid place-items-center shrink-0">
@@ -214,6 +235,12 @@ const DatasheetsModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Module
             <h2 className="font-semibold text-primary truncate">{active.name}</h2>
           )}
         </div>
+        <PanelSearchBar
+          value={search}
+          onChange={setSearch}
+          placeholder="Search rows and columns…"
+          className="max-w-md w-full sm:w-auto"
+        />
         <div className="flex items-center gap-2 flex-wrap">
           <Button variant="outline" size="sm" onClick={() => downloadCSV(active)} className="gap-1">
             <Download className="h-4 w-4" /> Export CSV
@@ -267,7 +294,16 @@ const DatasheetsModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Module
               </tr>
             </thead>
             <tbody>
-              {active.rows.map((row, ri) => (
+              {editorRowIndexes.length === 0 && search.trim() && (
+                <tr>
+                  <td colSpan={active.columns.length + (canDelete ? 2 : 1)} className="p-6 text-center text-muted-foreground">
+                    No rows match your search.
+                  </td>
+                </tr>
+              )}
+              {editorRowIndexes.map((ri) => {
+                const row = active.rows[ri];
+                return (
                 <tr key={ri} className="border-b border-border hover:bg-muted/30">
                   <td className="px-2 py-1 text-xs text-muted-foreground text-center">{ri + 1}</td>
                   {active.columns.map((_, ci) => (
@@ -291,7 +327,8 @@ const DatasheetsModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Module
                     </td>
                   )}
                 </tr>
-              ))}
+                );
+              })}
               {active.rows.length === 0 && (
                 <tr><td colSpan={active.columns.length + 2} className="text-center text-muted-foreground py-6">No rows. Click "Row" to add one.</td></tr>
               )}

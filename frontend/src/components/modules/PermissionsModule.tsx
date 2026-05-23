@@ -31,6 +31,8 @@ import { useStaffRealtime } from "@/hooks/useStaffSocket";
 import ModuleAccessMatrix from "@/components/modules/ModuleAccessMatrix";
 import { moduleHref } from "@/lib/panelMenus";
 import { useAuth } from "@/hooks/useAuth";
+import PanelSearchBar from "@/components/modules/PanelSearchBar";
+import { matchesPanelSearch } from "@/lib/panelSearch";
 
 const ALL_USERS_QUERY = ["allUsers"] as const;
 const PERM_CATALOG_QUERY = ["permissionCatalog"] as const;
@@ -91,6 +93,14 @@ const PermissionsModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Modul
   const [editing, setEditing] = useState<UserWithAccess | null>(null);
   const [apiPermIds, setApiPermIds] = useState<Set<string>>(() => new Set());
   const [modulePerms, setModulePerms] = useState<Record<string, string[]>>({});
+  const [search, setSearch] = useState("");
+
+  const usersFiltered = useMemo(() => {
+    if (!search.trim()) return users;
+    return users.filter((u) =>
+      matchesPanelSearch(search, u.name, u.email, roleLabel(u), apiPermissionSummary(u), moduleSummary(u))
+    );
+  }, [users, search]);
 
   const openEdit = (u: UserWithAccess) => {
     if (!canEditMatrix) return;
@@ -179,6 +189,13 @@ const PermissionsModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Modul
         </p>
       </Card>
 
+      <PanelSearchBar
+        value={search}
+        onChange={setSearch}
+        placeholder="Search name, email, role, permissions…"
+        className="max-w-md"
+      />
+
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -199,14 +216,14 @@ const PermissionsModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Modul
                     Loading…
                   </td>
                 </tr>
-              ) : users.length === 0 ? (
+              ) : usersFiltered.length === 0 ? (
                 <tr>
                   <td colSpan={canEditMatrix ? 6 : 5} className="px-4 py-8 text-center text-muted-foreground">
-                    No users found.
+                    {users.length === 0 ? "No users found." : "No users match your search."}
                   </td>
                 </tr>
               ) : (
-                users.map((u) => (
+                usersFiltered.map((u) => (
                   <tr key={u._id} className="border-t border-border hover:bg-secondary/30">
                     <td className="px-4 py-3 font-medium text-primary">{u.name}</td>
                     <td className="px-4 py-3 text-muted-foreground">{u.email}</td>

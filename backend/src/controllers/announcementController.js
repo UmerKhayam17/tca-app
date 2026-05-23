@@ -21,4 +21,10 @@ const list = catchAsync(async (req, res) => {
   res.json({ success: true, data: rows });
 });
 
-module.exports = { create, list };
+const remove = catchAsync(async (req, res) => {
+  const ann = await Announcement.findByIdAndDelete(req.params.id);
+  if (!ann) throw new ApiError(404, 'Announcement not found');
+  res.json({ success: true, data: { deleted: true } });
+});
+
+module.exports = { create, list, remove };

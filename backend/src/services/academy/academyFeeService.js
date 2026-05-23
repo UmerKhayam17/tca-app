@@ -8,6 +8,38 @@ function receiptNumber(studentDoc, month, year, feeType) {
   return `RCP-${sid}-${feeType === 'admission' ? 'ADM' : `${year}${String(month).padStart(2, '0')}`}`;
 }
 
+async function buildFeeQuery({ studentId, status, month, year, classId, feeType }) {
+  const q = {};
+  if (status) q.status = status;
+  if (feeType) q.feeType = feeType;
+  if (month) q.month = Number(month);
+  if (year) q.year = Number(year);
+  if (studentId) {
+    q.studentId = studentId;
+    return q;
+  }
+  if (classId) {
+    const students = await AcademyStudent.find({ classId }).select('_id');
+    q.studentId = { $in: students.map((s) => s._id) };
+  }
+  return q;
+}
+
+/** Mark pending vouchers past due date as overdue. */
+async function syncOverdueFees(filter = {}) {
+  const q = await buildFeeQuery(filter);
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  await AcademyFeeRecord.updateMany(
+    {
+      ...q,
+      status: 'pending',
+      dueDate: { $lt: startOfToday },
+    },
+    { $set: { status: 'overdue' } }
+  );
+}
+
 async function listFeeRecords({
   page = 1,
   limit = 20,
@@ -16,19 +48,11 @@ async function listFeeRecords({
   month,
   year,
   classId,
+  feeType,
 }) {
-  const q = {};
-  if (studentId) q.studentId = studentId;
-  if (status) q.status = status;
-  if (month) q.month = Number(month);
-  if (year) q.year = Number(year);
+  await syncOverdueFees({ studentId, status, month, year, classId, feeType });
 
-  let studentFilter;
-  if (classId) {
-    const students = await AcademyStudent.find({ classId }).select('_id');
-    studentFilter = students.map((s) => s._id);
-    q.studentId = { $in: studentFilter };
-  }
+  const q = await buildFeeQuery({ studentId, status, month, year, classId, feeType });
 
   const skip = (Math.max(1, page) - 1) * Math.min(100, Math.max(1, limit));
   const perPage = Math.min(100, Math.max(1, limit));
@@ -110,8 +134,41 @@ async function recordPayment(feeRecordId, { paymentMethod, notes }, userId) {
 async function getStudentFeeHistory(studentId) {
   const student = await AcademyStudent.findById(studentId);
   if (!student) throw new ApiError(404, 'Student not found');
+  await syncOverdueFees({ studentId });
   const records = await AcademyFeeRecord.find({ studentId }).sort({ year: -1, month: -1 });
   return { student, records };
+}
+
+async function getFeeSummary({ month, year, classId, studentId }) {
+  await syncOverdueFees({ month, year, classId, studentId });
+  const q = await buildFeeQuery({ month, year, classId, studentId });
+  const records = await AcademyFeeRecord.find(q).lean();
+
+  const byStatus = { pending: 0, paid: 0, overdue: 0, waived: 0 };
+  let totalPaid = 0;
+  let totalPending = 0;
+
+  records.forEach((r) => {
+    if (byStatus[r.status] != null) byStatus[r.status] += 1;
+    if (r.status === 'paid') totalPaid += r.amount;
+    if (r.status === 'pending' || r.status === 'overdue') totalPending += r.amount;
+  });
+
+  let activeStudents = 0;
+  if (!studentId) {
+    const studentQ = { status: 'active' };
+    if (classId) studentQ.classId = classId;
+    activeStudents = await AcademyStudent.countDocuments(studentQ);
+  }
+
+  return {
+    recordsCount: records.length,
+    totalPaid,
+    totalPending,
+    totalAmount: records.reduce((s, r) => s + r.amount, 0),
+    byStatus,
+    activeStudents,
+  };
 }
 
 module.exports = {
@@ -119,5 +176,6 @@ module.exports = {
   generateMonthlyFees,
   recordPayment,
   getStudentFeeHistory,
+  getFeeSummary,
   receiptNumber,
 };

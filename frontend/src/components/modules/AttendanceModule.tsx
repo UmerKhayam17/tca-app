@@ -1,50 +1,142 @@
 import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Store, useStore, newId } from "@/lib/store";
 import { ModuleActionCaps, PermLevel } from "@/lib/permissions";
 import { useToast } from "@/hooks/use-toast";
 import PanelToolbar from "@/components/modules/PanelToolbar";
 import { matchesPanelSearch } from "@/lib/panelSearch";
+import {
+  fetchAcademyAttendanceDay,
+  fetchAcademyClasses,
+  markAcademyAttendance,
+  type AcademyAttendanceRecord,
+  type AcademyStudent,
+} from "@/lib/studentManagementApi";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
+function classLabel(s: AcademyStudent) {
+  const c = s.classId;
+  if (typeof c === "object" && c && "className" in c) return c.className;
+  return "—";
+}
+
 const AttendanceModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActionCaps }) => {
-  const students = useStore(() => Store.listStudents());
-  const attendance = useStore(() => Store.listAttendance());
-  const canMark = caps.canCreate || caps.canEdit;
   const { toast } = useToast();
+  const qc = useQueryClient();
+  const [date, setDate] = useState(today());
+  const [classFilter, setClassFilter] = useState("");
   const [search, setSearch] = useState("");
+  const canMark = caps.canCreate || caps.canEdit;
+
+  const { data: classes = [] } = useQuery({
+    queryKey: ["academy-classes-attendance"],
+    queryFn: () => fetchAcademyClasses({ status: "active" }),
+  });
+
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: ["academy-attendance-day", date, classFilter],
+    queryFn: () =>
+      fetchAcademyAttendanceDay({
+        date,
+        classId: classFilter || undefined,
+      }),
+  });
+
+  const markMut = useMutation({
+    mutationFn: (payload: { studentId: string; status: "present" | "absent" | "late" | "leave" }) =>
+      markAcademyAttendance({
+        date,
+        entries: [{ studentId: payload.studentId, status: payload.status }],
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["academy-attendance-day", date] });
+      qc.invalidateQueries({ queryKey: ["academy-attendance-summary"] });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const recordMap = useMemo(() => {
+    const m = new Map<string, AcademyAttendanceRecord>();
+    (data?.records ?? []).forEach((r) => {
+      const sid = typeof r.studentId === "object" ? (r.studentId as { _id?: string })._id : r.studentId;
+      if (sid) m.set(String(sid), r);
+    });
+    return m;
+  }, [data?.records]);
+
+  const students = data?.students ?? [];
+  const summary = data?.summary;
 
   const studentsFiltered = useMemo(() => {
     if (!search.trim()) return students;
-    return students.filter((s) => matchesPanelSearch(search, s.name, s.class, s.id));
+    return students.filter((s) =>
+      matchesPanelSearch(search, s.studentName, s.studentId, classLabel(s), s.phone)
+    );
   }, [students, search]);
 
-  const todayMap = new Map(attendance.filter((a) => a.date === today()).map((a) => [a.studentId, a]));
-
-  const mark = (studentId: string, status: "present" | "absent" | "leave") => {
-    const list = Store.listAttendance();
-    const existing = list.find((a) => a.studentId === studentId && a.date === today());
-    let next;
-    if (existing) next = list.map((a) => (a.id === existing.id ? { ...a, status } : a));
-    else next = [...list, { id: newId(), studentId, date: today(), status }];
-    Store.saveAttendance(next);
-    toast({ title: `Marked ${status}` });
-  };
-
-  const counts = {
-    present: [...todayMap.values()].filter((a) => a.status === "present").length,
-    absent:  [...todayMap.values()].filter((a) => a.status === "absent").length,
-    leave:   [...todayMap.values()].filter((a) => a.status === "leave").length,
+  const mark = (studentId: string, status: "present" | "absent" | "late" | "leave") => {
+    markMut.mutate(
+      { studentId, status },
+      { onSuccess: () => toast({ title: `Marked ${status}` }) }
+    );
   };
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-      <div className="grid grid-cols-3 gap-3">
-        <Card className="p-4"><div className="text-xs text-muted-foreground">Present</div><div className="font-display text-2xl font-bold text-accent">{counts.present}</div></Card>
-        <Card className="p-4"><div className="text-xs text-muted-foreground">Absent</div><div className="font-display text-2xl font-bold text-destructive">{counts.absent}</div></Card>
-        <Card className="p-4"><div className="text-xs text-muted-foreground">Leave</div><div className="font-display text-2xl font-bold text-primary">{counts.leave}</div></Card>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <Card className="p-4">
+          <div className="text-xs text-muted-foreground">Present</div>
+          <div className="font-display text-2xl font-bold text-accent">
+            {summary?.present ?? "—"}
+          </div>
+        </Card>
+        <Card className="p-4">
+          <div className="text-xs text-muted-foreground">Absent</div>
+          <div className="font-display text-2xl font-bold text-destructive">
+            {summary?.absent ?? "—"}
+          </div>
+        </Card>
+        <Card className="p-4">
+          <div className="text-xs text-muted-foreground">Leave</div>
+          <div className="font-display text-2xl font-bold text-primary">
+            {summary?.leave ?? "—"}
+          </div>
+        </Card>
+        <Card className="p-4">
+          <div className="text-xs text-muted-foreground">Unmarked</div>
+          <div className="font-display text-2xl font-bold text-muted-foreground">
+            {summary?.unmarked ?? "—"}
+          </div>
+        </Card>
+      </div>
+
+      <div className="flex flex-wrap gap-3 items-end">
+        <div>
+          <label className="text-xs text-muted-foreground block mb-1">Date</label>
+          <input
+            type="date"
+            className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground block mb-1">Class</label>
+          <select
+            className="h-9 rounded-md border border-input bg-background px-2 text-sm min-w-[10rem]"
+            value={classFilter}
+            onChange={(e) => setClassFilter(e.target.value)}
+          >
+            <option value="">All classes</option>
+            {classes.map((c) => (
+              <option key={c._id} value={c._id}>
+                {c.className}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <PanelToolbar
@@ -54,7 +146,9 @@ const AttendanceModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Module
       />
 
       <Card className="overflow-hidden">
-        <div className="px-4 py-3 border-b border-border font-semibold text-primary">Today — {today()}</div>
+        <div className="px-4 py-3 border-b border-border font-semibold text-primary">
+          Attendance — {date}
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-secondary/50 text-muted-foreground">
@@ -66,31 +160,76 @@ const AttendanceModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Module
               </tr>
             </thead>
             <tbody>
-              {studentsFiltered.length === 0 && (
+              {isLoading && (
                 <tr>
                   <td colSpan={canMark ? 4 : 3} className="px-4 py-8 text-center text-muted-foreground">
-                    No students match your search.
+                    Loading students…
+                  </td>
+                </tr>
+              )}
+              {isError && (
+                <tr>
+                  <td colSpan={canMark ? 4 : 3} className="px-4 py-8 text-center text-destructive">
+                    {(error as Error).message}
+                  </td>
+                </tr>
+              )}
+              {!isLoading && !isError && studentsFiltered.length === 0 && (
+                <tr>
+                  <td colSpan={canMark ? 4 : 3} className="px-4 py-8 text-center text-muted-foreground">
+                    {students.length === 0
+                      ? "No active academy students. Register students in Student Records."
+                      : "No students match your search."}
                   </td>
                 </tr>
               )}
               {studentsFiltered.map((s) => {
-                const cur = todayMap.get(s.id)?.status;
+                const cur = recordMap.get(s._id)?.status;
                 return (
-                  <tr key={s.id} className="border-t border-border">
-                    <td className="px-4 py-3 font-medium text-primary">{s.name}</td>
-                    <td className="px-4 py-3">{s.class}</td>
+                  <tr key={s._id} className="border-t border-border">
+                    <td className="px-4 py-3 font-medium text-primary">{s.studentName}</td>
+                    <td className="px-4 py-3">{classLabel(s)}</td>
                     <td className="px-4 py-3">
-                      <span className={`text-xs font-semibold rounded-full px-2 py-0.5 ${
-                        cur === "present" ? "bg-accent/15 text-accent" :
-                        cur === "absent" ? "bg-destructive/15 text-destructive" :
-                        cur === "leave" ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
-                      }`}>{cur || "unmarked"}</span>
+                      <span
+                        className={`text-xs font-semibold rounded-full px-2 py-0.5 ${
+                          cur === "present"
+                            ? "bg-accent/15 text-accent"
+                            : cur === "absent"
+                              ? "bg-destructive/15 text-destructive"
+                              : cur === "leave" || cur === "late"
+                                ? "bg-primary/15 text-primary"
+                                : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {cur || "unmarked"}
+                      </span>
                     </td>
                     {canMark && (
                       <td className="px-4 py-3 text-right whitespace-nowrap space-x-1">
-                        <Button size="sm" variant={cur === "present" ? "hero" : "outline"} onClick={() => mark(s.id, "present")}>P</Button>
-                        <Button size="sm" variant={cur === "absent" ? "hero" : "outline"} onClick={() => mark(s.id, "absent")}>A</Button>
-                        <Button size="sm" variant={cur === "leave" ? "hero" : "outline"} onClick={() => mark(s.id, "leave")}>L</Button>
+                        <Button
+                          size="sm"
+                          variant={cur === "present" ? "hero" : "outline"}
+                          disabled={markMut.isPending}
+                          onClick={() => mark(s._id, "present")}
+                        >
+                          P
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={cur === "absent" ? "hero" : "outline"}
+                          disabled={markMut.isPending}
+                          onClick={() => mark(s._id, "absent")}
+                        >
+                          A
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={cur === "leave" ? "hero" : "outline"}
+                          disabled={markMut.isPending}
+                          onClick={() => mark(s._id, "leave")}
+                        >
+                          L
+                        </Button>
                       </td>
                     )}
                   </tr>

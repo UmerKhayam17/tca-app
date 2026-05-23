@@ -19,11 +19,10 @@ import UsersModule from "@/components/modules/UsersModule";
 import AttendanceModule from "@/components/modules/AttendanceModule";
 import TimetableModule from "@/components/modules/TimetableModule";
 import SystemConfigModule from "@/components/modules/SystemConfigModule";
-import AssignmentsModule from "@/components/modules/AssignmentsModule";
 import ExamsModule from "@/components/modules/ExamsModule";
 import FeesModule from "@/components/modules/FeesModule";
 import SalaryModule from "@/components/modules/SalaryModule";
-import LibraryModule from "@/components/modules/LibraryModule";
+import ExpensesModule from "@/components/modules/ExpensesModule";
 import ChatModule from "@/components/modules/ChatModule";
 import AnnouncementsModule from "@/components/modules/AnnouncementsModule";
 import ReportsModule from "@/components/modules/ReportsModule";
@@ -32,8 +31,15 @@ import DatasheetsModule from "@/components/modules/DatasheetsModule";
 import PermissionsModule from "@/components/modules/PermissionsModule";
 import StudentManagementModule from "@/components/modules/StudentManagementModule";
 import PermissionCatalogModule from "@/components/modules/PermissionCatalogModule";
-import { Store, useStore } from "@/lib/store";
 import { fetchExams } from "@/lib/examApi";
+import { fetchAnnouncements } from "@/lib/announcementApi";
+import {
+  fetchAcademyAttendanceDay,
+  fetchAcademyFeeSummary,
+  fetchAcademySalarySummary,
+  fetchAcademyExpenseSummary,
+  fetchAcademyStudents,
+} from "@/lib/studentManagementApi";
 
 const Dashboard = ({
   role,
@@ -50,54 +56,101 @@ const Dashboard = ({
   const rolePerms = applyBackendModulePermissions(perms[role], modulePermissions);
   const items = buildMenu(rolePerms, modulePermissions).filter((m) => m.key !== "dashboard");
 
-  // Live stats from real store data
-  const students = useStore(() => Store.listStudents());
-  const fees = useStore(() => Store.listFees());
-  const attendance = useStore(() => Store.listAttendance());
-  const salary = useStore(() => Store.listSalary());
+  const today = new Date().toISOString().slice(0, 10);
   const { data: termExams = [] } = useQuery({
     queryKey: ["dashboard-term-exams"],
     queryFn: () => fetchExams(),
     retry: false,
   });
 
-  const today = new Date().toISOString().slice(0, 10);
-  const present = attendance.filter((a) => a.date === today && a.status === "present").length;
-  const collected = fees.filter((f) => f.status === "paid").reduce((s, f) => s + f.amount, 0);
-  const due = fees.filter((f) => f.status === "due").reduce((s, f) => s + f.amount, 0);
+  const useAcademyData = role === "admin" || role === "accountant";
+
+  const { data: feeSummary } = useQuery({
+    queryKey: ["academy-fees-summary-dashboard"],
+    queryFn: () => fetchAcademyFeeSummary(),
+    enabled: useAcademyData,
+    retry: false,
+  });
+
+  const { data: academyStudentTotal } = useQuery({
+    queryKey: ["academy-students-total"],
+    queryFn: async () => {
+      const r = await fetchAcademyStudents({ page: 1, limit: 1 });
+      return r.pagination?.total ?? r.students.length;
+    },
+    enabled: useAcademyData,
+    retry: false,
+  });
+
+  const now = new Date();
+  const dashPeriod = { month: now.getMonth() + 1, year: now.getFullYear() };
+
+  const { data: salarySummary } = useQuery({
+    queryKey: ["academy-salaries-summary-dashboard", dashPeriod],
+    queryFn: () => fetchAcademySalarySummary(dashPeriod),
+    enabled: useAcademyData,
+    retry: false,
+  });
+
+  const { data: expenseSummary } = useQuery({
+    queryKey: ["academy-expenses-summary-dashboard", dashPeriod],
+    queryFn: () => fetchAcademyExpenseSummary(dashPeriod),
+    enabled: useAcademyData,
+    retry: false,
+  });
+
+  const { data: todayAttendance } = useQuery({
+    queryKey: ["academy-attendance-today-dashboard", today],
+    queryFn: () => fetchAcademyAttendanceDay({ date: today }),
+    enabled: role === "admin" || role === "accountant" || role === "teacher",
+    retry: false,
+  });
+
+  const { data: announcements = [] } = useQuery({
+    queryKey: ["announcements-dashboard-count"],
+    queryFn: () => fetchAnnouncements(),
+    retry: false,
+  });
+
+  const present = todayAttendance?.summary?.present ?? 0;
+  const collected = feeSummary?.totalPaid ?? 0;
+  const due = feeSummary?.totalPending ?? 0;
   const termExamCount = termExams.length;
-  const pendingSalary = salary.filter((s) => s.status === "pending").length;
+  const pendingSalary = salarySummary?.byStatus?.pending ?? 0;
+  const monthExpenses = expenseSummary?.totalAmount ?? 0;
+  const studentTotal = academyStudentTotal ?? 0;
+  const announcementCount = announcements.length;
 
   const statsByRole: Record<Role, { label: string; value: string; hint: string }[]> = {
     admin: [
-      { label: "Total Students", value: String(students.length), hint: "All institutions" },
-      { label: "Fees Collected", value: `₨ ${collected.toLocaleString()}`, hint: "All time" },
-      { label: "Outstanding",    value: `₨ ${due.toLocaleString()}`, hint: "Due fees" },
-      { label: "Term exams",     value: String(termExamCount), hint: "Formal result events" },
+      { label: "Academy students", value: String(studentTotal), hint: "Registered tuition students" },
+      { label: "Fees collected", value: `₨ ${collected.toLocaleString()}`, hint: "Paid vouchers (all periods)" },
+      { label: "Outstanding", value: `₨ ${due.toLocaleString()}`, hint: "Pending & overdue" },
+      { label: "This month expenses", value: `₨ ${monthExpenses.toLocaleString()}`, hint: "Operating costs" },
     ],
     accountant: [
-      { label: "Collected",       value: `₨ ${collected.toLocaleString()}`, hint: "Fees received" },
-      { label: "Pending Dues",    value: `₨ ${due.toLocaleString()}`, hint: "Awaiting" },
-      { label: "Pending Salary",  value: String(pendingSalary), hint: "To process" },
-      { label: "Records",         value: String(fees.length), hint: "Fee entries" },
+      { label: "Collected", value: `₨ ${collected.toLocaleString()}`, hint: "Academy fees received" },
+      { label: "Outstanding", value: `₨ ${due.toLocaleString()}`, hint: "Pending & overdue" },
+      { label: "Pending salary", value: String(pendingSalary), hint: "This month vouchers" },
+      { label: "Month expenses", value: `₨ ${monthExpenses.toLocaleString()}`, hint: "Academy operating costs" },
     ],
     teacher: [
-      { label: "My Students", value: String(students.length), hint: "Across sections" },
-      { label: "Present Today", value: String(present), hint: today },
-      { label: "Term exams",  value: String(termExamCount), hint: "Mid / final terms" },
-      { label: "Assignments", value: String(Store.listAssignments().length), hint: "Active" },
+      { label: "Present today", value: String(present), hint: today },
+      { label: "Unmarked today", value: String(todayAttendance?.summary?.unmarked ?? "—"), hint: "Academy attendance" },
+      { label: "Term exams", value: String(termExamCount), hint: "Mid / final terms" },
+      { label: "Announcements", value: String(announcementCount), hint: "Published notices" },
     ],
     parent: [
-      { label: "Children", value: "1", hint: "Linked profile" },
-      { label: "Attendance", value: present ? "Present" : "Absent", hint: today },
+      { label: "Announcements", value: String(announcementCount), hint: "Published notices" },
       { label: "Term exams", value: String(termExamCount), hint: "Published results in Exams" },
-      { label: "Fee Status", value: due ? "Due" : "Paid", hint: "Current month" },
+      { label: "Fees outstanding", value: due ? `₨ ${due.toLocaleString()}` : "None", hint: "Academy fees" },
+      { label: "Fees collected", value: `₨ ${collected.toLocaleString()}`, hint: "All periods" },
     ],
     student: [
-      { label: "Attendance", value: present ? "Present" : "Absent", hint: today },
       { label: "Term exams", value: String(termExamCount), hint: "See student profile" },
-      { label: "Assignments", value: String(Store.listAssignments().length), hint: "Active" },
-      { label: "Fee Status", value: due ? "Due" : "Paid", hint: "Current month" },
+      { label: "Announcements", value: String(announcementCount), hint: "School notices" },
+      { label: "Fees outstanding", value: due ? `₨ ${due.toLocaleString()}` : "None", hint: "Academy fees" },
+      { label: "Fees collected", value: `₨ ${collected.toLocaleString()}`, hint: "All periods" },
     ],
   };
 
@@ -229,11 +282,10 @@ const Panel = () => {
       case "attendance":    return <AttendanceModule perm={perm} caps={caps} />;
       case "system-config": return <SystemConfigModule caps={caps} section={section} />;
       case "timetable":     return <TimetableModule caps={caps} section={section} role={r} />;
-      case "assignments":   return <AssignmentsModule perm={perm} caps={caps} />;
       case "exams":         return <ExamsModule perm={perm} caps={caps} section={section} action={action} subAction={subAction} />;
       case "fees":          return <FeesModule perm={perm} caps={caps} />;
       case "salary":        return <SalaryModule perm={perm} caps={caps} />;
-      case "library":       return <LibraryModule perm={perm} caps={caps} />;
+      case "expenses":      return <ExpensesModule perm={perm} caps={caps} />;
       case "chat":          return <ChatModule user={session} perm={perm} caps={caps} />;
       case "announcements": return <AnnouncementsModule perm={perm} caps={caps} />;
       case "reports":       return <ReportsModule />;

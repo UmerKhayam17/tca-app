@@ -44,7 +44,7 @@ const StudentsRecordsModule = ({
     <RegistrationTab
       caps={caps}
       routes={routes ?? undefined}
-      heading="Student records"
+      showHeading={false}
       registerLabel="Register student"
       emptyHint="No students on record yet."
     />

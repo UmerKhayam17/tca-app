@@ -426,18 +426,33 @@ export const exportStudentsCsv = async (params?: { search?: string; classId?: st
   return res.blob();
 };
 
+export interface AcademyFeeSummary {
+  recordsCount: number;
+  totalPaid: number;
+  totalPending: number;
+  totalAmount: number;
+  byStatus: { pending: number; paid: number; overdue: number; waived: number };
+  activeStudents: number;
+}
+
 // Fees
 export const fetchAcademyFees = async (params?: {
   page?: number;
+  limit?: number;
   status?: string;
+  feeType?: string;
   classId?: string;
+  studentId?: string;
   month?: number;
   year?: number;
 }) => {
   const q = new URLSearchParams();
   if (params?.page) q.set("page", String(params.page));
+  if (params?.limit) q.set("limit", String(params.limit));
   if (params?.status) q.set("status", params.status);
+  if (params?.feeType) q.set("feeType", params.feeType);
   if (params?.classId) q.set("classId", params.classId);
+  if (params?.studentId) q.set("studentId", params.studentId);
   if (params?.month) q.set("month", String(params.month));
   if (params?.year) q.set("year", String(params.year));
   const res = await authedFetch(`/student-management/fees?${q}`);
@@ -451,6 +466,21 @@ export const fetchAcademyFees = async (params?: {
   return { records: body.data || [], pagination: body.pagination };
 };
 
+export const fetchAcademyFeeSummary = (params?: {
+  month?: number;
+  year?: number;
+  classId?: string;
+  studentId?: string;
+}) => {
+  const q = new URLSearchParams();
+  if (params?.month) q.set("month", String(params.month));
+  if (params?.year) q.set("year", String(params.year));
+  if (params?.classId) q.set("classId", params.classId);
+  if (params?.studentId) q.set("studentId", params.studentId);
+  const qs = q.toString();
+  return api<AcademyFeeSummary>(`/fees/summary${qs ? `?${qs}` : ""}`);
+};
+
 export const generateMonthlyFees = (body: { month: number; year: number; classId?: string }) =>
   api<{ created: number; skipped: number }>("/fees/generate", {
     method: "POST",
@@ -462,6 +492,236 @@ export const payAcademyFee = (id: string, body?: { paymentMethod?: string; notes
 
 export const fetchStudentFeeHistory = (studentId: string) =>
   api<{ student: AcademyStudent; records: AcademyFeeRecord[] }>(`/fees/student/${studentId}`);
+
+// Teacher / staff salary
+export interface AcademySalaryRecord {
+  _id: string;
+  staffId: {
+    _id: string;
+    name: string;
+    email?: string;
+    phone?: string;
+    salary?: number;
+    role?: { name: string };
+  } | string;
+  month: number;
+  year: number;
+  amount: number;
+  status: "pending" | "paid" | "cancelled";
+  dueDate?: string;
+  paidAt?: string;
+  voucherNumber?: string;
+  paymentMethod?: string;
+  notes?: string;
+}
+
+export interface AcademySalarySummary {
+  recordsCount: number;
+  totalPaid: number;
+  totalPending: number;
+  byStatus: { pending: number; paid: number; cancelled: number };
+  activeStaff: number;
+}
+
+export const fetchAcademySalaries = async (params?: {
+  page?: number;
+  limit?: number;
+  status?: string;
+  month?: number;
+  year?: number;
+  roleName?: string;
+}) => {
+  const q = new URLSearchParams();
+  if (params?.page) q.set("page", String(params.page));
+  if (params?.limit) q.set("limit", String(params.limit));
+  if (params?.status) q.set("status", params.status);
+  if (params?.month) q.set("month", String(params.month));
+  if (params?.year) q.set("year", String(params.year));
+  if (params?.roleName) q.set("roleName", params.roleName);
+  const res = await authedFetch(`/student-management/salaries?${q}`);
+  const body = await parseJson<{
+    success?: boolean;
+    data?: AcademySalaryRecord[];
+    pagination?: Pagination;
+    message?: string;
+  }>(res);
+  if (!res.ok) throw new Error(body.message || "Failed to load salaries");
+  return { records: body.data || [], pagination: body.pagination };
+};
+
+export const fetchAcademySalarySummary = (params?: {
+  month?: number;
+  year?: number;
+  roleName?: string;
+}) => {
+  const q = new URLSearchParams();
+  if (params?.month) q.set("month", String(params.month));
+  if (params?.year) q.set("year", String(params.year));
+  if (params?.roleName) q.set("roleName", params.roleName);
+  const qs = q.toString();
+  return api<AcademySalarySummary>(`/salaries/summary${qs ? `?${qs}` : ""}`);
+};
+
+export const generateMonthlySalaries = (body: {
+  month: number;
+  year: number;
+  roleName?: "teacher" | "accountant";
+}) =>
+  api<{ created: number; skipped: number }>("/salaries/generate", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+export const payAcademySalary = (id: string, body?: { paymentMethod?: string; notes?: string }) =>
+  api<AcademySalaryRecord>(`/salaries/${id}/pay`, { method: "PATCH", body: JSON.stringify(body || {}) });
+
+// Academy expenses
+export type ExpenseCategory =
+  | "rent"
+  | "utilities"
+  | "supplies"
+  | "maintenance"
+  | "marketing"
+  | "transport"
+  | "staff_other"
+  | "other";
+
+export const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
+  rent: "Rent",
+  utilities: "Utilities",
+  supplies: "Supplies",
+  maintenance: "Maintenance",
+  marketing: "Marketing",
+  transport: "Transport",
+  staff_other: "Staff (other)",
+  other: "Other",
+};
+
+export interface AcademyExpense {
+  _id: string;
+  title: string;
+  category: ExpenseCategory;
+  amount: number;
+  expenseDate: string;
+  vendor?: string;
+  description?: string;
+  paymentMethod?: string;
+  referenceNumber?: string;
+  status: "paid" | "planned";
+}
+
+export interface AcademyExpenseSummary {
+  recordsCount: number;
+  totalAmount: number;
+  paidAmount: number;
+  plannedAmount: number;
+  byCategory: Record<string, number>;
+}
+
+export const fetchAcademyExpenses = async (params?: {
+  page?: number;
+  limit?: number;
+  category?: string;
+  status?: string;
+  month?: number;
+  year?: number;
+  search?: string;
+}) => {
+  const q = new URLSearchParams();
+  if (params?.page) q.set("page", String(params.page));
+  if (params?.limit) q.set("limit", String(params.limit));
+  if (params?.category) q.set("category", params.category);
+  if (params?.status) q.set("status", params.status);
+  if (params?.month) q.set("month", String(params.month));
+  if (params?.year) q.set("year", String(params.year));
+  if (params?.search) q.set("search", params.search);
+  const res = await authedFetch(`/student-management/expenses?${q}`);
+  const body = await parseJson<{
+    success?: boolean;
+    data?: AcademyExpense[];
+    pagination?: Pagination;
+    message?: string;
+  }>(res);
+  if (!res.ok) throw new Error(body.message || "Failed to load expenses");
+  return { records: body.data || [], pagination: body.pagination };
+};
+
+export const fetchAcademyExpenseSummary = (params?: {
+  month?: number;
+  year?: number;
+  category?: string;
+}) => {
+  const q = new URLSearchParams();
+  if (params?.month) q.set("month", String(params.month));
+  if (params?.year) q.set("year", String(params.year));
+  if (params?.category) q.set("category", params.category);
+  const qs = q.toString();
+  return api<AcademyExpenseSummary>(`/expenses/summary${qs ? `?${qs}` : ""}`);
+};
+
+export const createAcademyExpense = (body: {
+  title: string;
+  category: ExpenseCategory;
+  amount: number;
+  expenseDate: string;
+  vendor?: string;
+  description?: string;
+  paymentMethod?: string;
+  referenceNumber?: string;
+  status?: "paid" | "planned";
+}) =>
+  api<AcademyExpense>("/expenses", { method: "POST", body: JSON.stringify(body) });
+
+export const updateAcademyExpense = (id: string, body: Partial<AcademyExpense>) =>
+  api<AcademyExpense>(`/expenses/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+
+export const deleteAcademyExpense = (id: string) =>
+  api<{ deleted: boolean }>(`/expenses/${id}`, { method: "DELETE" });
+
+// Academy attendance
+export interface AcademyAttendanceDay {
+  date: string;
+  students: AcademyStudent[];
+  records: AcademyAttendanceRecord[];
+  summary: {
+    present: number;
+    absent: number;
+    leave: number;
+    late: number;
+    unmarked: number;
+  };
+}
+
+export interface AcademyAttendanceMonthSummary {
+  total: number;
+  present: number;
+  absent: number;
+  late: number;
+  leave: number;
+}
+
+export const fetchAcademyAttendanceDay = (params: { date: string; classId?: string }) => {
+  const q = new URLSearchParams({ date: params.date });
+  if (params.classId) q.set("classId", params.classId);
+  return api<AcademyAttendanceDay>(`/attendance?${q}`);
+};
+
+export const markAcademyAttendance = (body: {
+  date: string;
+  entries: { studentId: string; status: "present" | "absent" | "late" | "leave" }[];
+}) =>
+  api<AcademyAttendanceRecord[]>("/attendance/mark", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+export const fetchAcademyAttendanceSummary = (params: { month: number; year: number }) => {
+  const q = new URLSearchParams({
+    month: String(params.month),
+    year: String(params.year),
+  });
+  return api<AcademyAttendanceMonthSummary>(`/attendance/summary?${q}`);
+};
 
 // Assessments (ongoing tests — single subject per row)
 export type AssessmentType =

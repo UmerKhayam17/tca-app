@@ -1,7 +1,7 @@
 import {
   ShieldCheck, Calculator, GraduationCap, Users, LayoutDashboard,
   BookOpen, DollarSign, Calendar, Bell, BarChart3, UserCog, ClipboardList,
-  Wallet, MessageSquare, Award, Settings as SettingsIcon, FileText, School, KeyRound, ListTree,
+  Wallet, MessageSquare, Award, Receipt, Settings as SettingsIcon, FileText, School, KeyRound, ListTree,
   SlidersHorizontal,
 } from "lucide-react";
 import { Role } from "./auth";
@@ -10,13 +10,19 @@ import { studentManagementHref } from "./studentManagementMenus";
 import { defaultTimetableSection, timetableHref } from "./timetableMenus";
 import { testExamsHref } from "./testExamsMenus";
 import {
-  MODULES, ModuleKey, ModuleDef, ModuleActionCaps, PermLevel, resolveModuleCaps,
+  MODULES,
+  SIDEBAR_NAV_GROUPS,
+  ModuleKey,
+  ModuleDef,
+  ModuleActionCaps,
+  PermLevel,
+  resolveModuleCaps,
 } from "./permissions";
 
 export const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   LayoutDashboard, UserCog, GraduationCap, ClipboardList, Calendar,
   BookOpen, Award, Wallet, DollarSign, MessageSquare, Bell, BarChart3,
-  Settings: SettingsIcon, FileText, KeyRound, ListTree, School, SlidersHorizontal,
+  Settings: SettingsIcon, FileText, KeyRound, ListTree, School, SlidersHorizontal, Receipt,
 };
 
 export type MenuItem = ModuleDef & {
@@ -35,16 +41,56 @@ export const roleMeta: Record<Role, {
   student:    { title: "Student Panel",       accentLabel: "My Learning",       Icon: School },
 };
 
-/** Build the visible menu for a role given its current permission map and optional session module actions. */
+function moduleToMenuItem(
+  m: ModuleDef,
+  rolePerms: Record<ModuleKey, PermLevel>,
+  backendModulePerms?: Record<string, string[]>,
+): MenuItem | null {
+  if (m.key !== "dashboard" && !resolveModuleCaps(m.key, rolePerms[m.key], backendModulePerms).canView) {
+    return null;
+  }
+  return { ...m, Icon: ICONS[m.icon] || LayoutDashboard };
+}
+
+/** Build the visible flat menu (legacy / dashboard tiles). */
 export const buildMenu = (
   rolePerms: Record<ModuleKey, PermLevel>,
   backendModulePerms?: Record<string, string[]>,
-): MenuItem[] =>
-  MODULES.filter((m) => {
-    if (m.key === "dashboard") return true;
-    return resolveModuleCaps(m.key, rolePerms[m.key], backendModulePerms).canView;
-  })
-    .map((m) => ({ ...m, Icon: ICONS[m.icon] || LayoutDashboard }));
+): MenuItem[] => {
+  const byKey = Object.fromEntries(MODULES.map((m) => [m.key, m])) as Record<ModuleKey, ModuleDef>;
+  const orderedKeys = SIDEBAR_NAV_GROUPS.flatMap((g) => g.modules);
+  const seen = new Set<ModuleKey>();
+  const items: MenuItem[] = [];
+  for (const key of orderedKeys) {
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const item = moduleToMenuItem(byKey[key], rolePerms, backendModulePerms);
+    if (item) items.push(item);
+  }
+  for (const m of MODULES) {
+    if (seen.has(m.key)) continue;
+    const item = moduleToMenuItem(m, rolePerms, backendModulePerms);
+    if (item) items.push(item);
+  }
+  return items;
+};
+
+export type SidebarNavGroup = { id: string; label: string; items: MenuItem[] };
+
+/** Sidebar: grouped navigation in workflow order. */
+export const buildGroupedMenu = (
+  rolePerms: Record<ModuleKey, PermLevel>,
+  backendModulePerms?: Record<string, string[]>,
+): SidebarNavGroup[] => {
+  const byKey = Object.fromEntries(MODULES.map((m) => [m.key, m])) as Record<ModuleKey, ModuleDef>;
+  return SIDEBAR_NAV_GROUPS.map((group) => ({
+    id: group.id,
+    label: group.label,
+    items: group.modules
+      .map((key) => moduleToMenuItem(byKey[key], rolePerms, backendModulePerms))
+      .filter((item): item is MenuItem => item != null),
+  })).filter((g) => g.items.length > 0);
+};
 
 export const findModule = (slug: string | undefined): ModuleDef | undefined =>
   MODULES.find((m) => (slug ? m.key === slug : m.key === "dashboard"));

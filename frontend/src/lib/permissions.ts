@@ -1,4 +1,4 @@
-// Dynamic per-role module permissions, persisted in localStorage.
+// Per-role module defaults; live access comes from the server via `modulePermissions` on login.
 // Levels (in increasing power): none < view < mark < grade < process < crud < full
 // "process" / "mark" / "grade" are role-flavoured aliases that all imply read+write
 // on a constrained scope (kept distinct so labels in the UI match the spec sheet).
@@ -29,11 +29,10 @@ export type ModuleKey =
   | "students"
   | "attendance"
   | "timetable"
-  | "assignments"
   | "exams"
   | "fees"
   | "salary"
-  | "library"
+  | "expenses"
   | "chat"
   | "announcements"
   | "reports"
@@ -53,63 +52,98 @@ export interface ModuleDef {
 }
 
 export const MODULES: ModuleDef[] = [
-  { key: "dashboard",     label: "Dashboard",       icon: "LayoutDashboard", desc: "Overview & key metrics" },
-  { key: "users",         label: "Staff management", icon: "UserCog",         desc: "Teachers, accountants, access & salary" },
-  { key: "student-management", label: "Student Management", icon: "School", desc: "Classes, subjects, fees & tuition enrollment" },
-  { key: "students",      label: "Student Records", icon: "GraduationCap",   desc: "Enrollment, profiles, attendance & results" },
-  { key: "attendance",    label: "Attendance",      icon: "ClipboardList",   desc: "Daily attendance" },
-  { key: "timetable",     label: "Timetable",       icon: "Calendar",        desc: "Build, publish & view class schedules" },
-  { key: "assignments",   label: "Assignments",     icon: "BookOpen",        desc: "Homework & grading" },
+  { key: "dashboard", label: "Dashboard", icon: "LayoutDashboard", desc: "Overview & key metrics" },
+  { key: "students", label: "Student Records", icon: "GraduationCap", desc: "Enrollment, profiles, attendance & results" },
+  {
+    key: "student-management",
+    label: "Academy setup",
+    shortLabel: "Academy setup",
+    icon: "School",
+    desc: "Classes, subjects, fee structure & tuition billing",
+  },
+  { key: "attendance", label: "Attendance", icon: "ClipboardList", desc: "Daily attendance" },
+  { key: "timetable", label: "Timetable", icon: "Calendar", desc: "Build, publish & view class schedules" },
   {
     key: "exams",
-    label: "Test And Exams management",
-    shortLabel: "Tests & Exams",
+    label: "Tests & exams",
+    shortLabel: "Tests & exams",
     icon: "Award",
     desc: "Ongoing tests and term exam results",
   },
-  { key: "fees",          label: "Fee Management",  icon: "Wallet",          desc: "Collect and track fees" },
-  { key: "salary",        label: "Salary",          icon: "DollarSign",      desc: "Staff payroll" },
-  { key: "library",       label: "Library",         icon: "BookOpen",        desc: "Books & issuance" },
-  { key: "chat",          label: "Chat",            icon: "MessageSquare",   desc: "Real-time messaging" },
-  { key: "announcements", label: "Announcements",   icon: "Bell",            desc: "Publish notices" },
-  { key: "reports",       label: "Reports",         icon: "BarChart3",       desc: "Analytics & exports" },
-  { key: "datasheets",    label: "Datasheets",      icon: "FileText",        desc: "Create & manage spreadsheets" },
-  { key: "system-config", label: "System Configuration", icon: "SlidersHorizontal", desc: "Sessions, classes, timetable setup & rules" },
-  { key: "permissions",   label: "Permissions",     icon: "KeyRound",        desc: "Users, roles, API & module access" },
-  { key: "permission-catalog", label: "All API permissions", icon: "ListTree", desc: "Full table of permission definitions" },
-  { key: "settings",      label: "Settings",        icon: "Settings",        desc: "Local permission matrix (browser)" },
+  { key: "fees", label: "Fee Management", icon: "Wallet", desc: "Collect and track fees" },
+  { key: "salary", label: "Teacher salary", icon: "DollarSign", desc: "Monthly teacher & staff payroll" },
+  { key: "expenses", label: "Academy expenses", icon: "Receipt", desc: "Operating costs & expenses" },
+  { key: "chat", label: "Chat", icon: "MessageSquare", desc: "Real-time messaging" },
+  { key: "announcements", label: "Announcements", icon: "Bell", desc: "Publish notices" },
+  { key: "reports", label: "Reports", icon: "BarChart3", desc: "Analytics & exports" },
+  { key: "datasheets", label: "Datasheets", icon: "FileText", desc: "Create & manage spreadsheets" },
+  { key: "users", label: "Staff management", icon: "UserCog", desc: "Teachers, accountants, access & salary" },
+  {
+    key: "system-config",
+    label: "System configuration",
+    shortLabel: "System config",
+    icon: "SlidersHorizontal",
+    desc: "Sessions, classes, timetable setup & rules",
+  },
+  { key: "permissions", label: "Permissions", icon: "KeyRound", desc: "Users, roles, API & module access" },
+  {
+    key: "permission-catalog",
+    label: "API permissions",
+    shortLabel: "API permissions",
+    icon: "ListTree",
+    desc: "Full table of permission definitions",
+  },
+  { key: "settings", label: "Settings", icon: "Settings", desc: "Local permission matrix (browser)" },
+];
+
+/** Sidebar section order — modules appear under the first group that lists them. */
+export const SIDEBAR_NAV_GROUPS: { id: string; label: string; modules: ModuleKey[] }[] = [
+  { id: "overview", label: "Overview", modules: ["dashboard"] },
+  {
+    id: "academics",
+    label: "Students & academics",
+    modules: ["students", "student-management", "attendance", "timetable", "exams"],
+  },
+  { id: "finance", label: "Finance", modules: ["fees", "salary", "expenses"] },
+  { id: "communication", label: "Communication", modules: ["chat", "announcements"] },
+  { id: "resources", label: "Resources", modules: ["reports", "datasheets"] },
+  {
+    id: "administration",
+    label: "Administration",
+    modules: ["users", "system-config", "permissions", "permission-catalog", "settings"],
+  },
 ];
 
 // Default matrix — mirrors the reference spec sheet
 export const DEFAULT_PERMISSIONS: Record<Role, Record<ModuleKey, PermLevel>> = {
   admin: {
     dashboard: "full", users: "crud", "student-management": "crud", students: "crud", attendance: "crud",
-    timetable: "crud", assignments: "crud", exams: "crud", fees: "crud",
-    salary: "crud", library: "crud", chat: "full", announcements: "crud",
+    timetable: "crud", exams: "crud", fees: "crud",
+    salary: "crud", expenses: "crud", chat: "full", announcements: "crud",
     reports: "full", datasheets: "full", "system-config": "crud", settings: "full", permissions: "full", "permission-catalog": "full",
   },
   accountant: {
     dashboard: "view", users: "none", "student-management": "process", students: "view", attendance: "none",
-    timetable: "none", assignments: "none", exams: "none", fees: "crud",
-    salary: "process", library: "none", chat: "view", announcements: "none",
+    timetable: "none", exams: "none", fees: "crud",
+    salary: "process", expenses: "crud", chat: "view", announcements: "none",
     reports: "view", datasheets: "crud", "system-config": "none", settings: "none", permissions: "none", "permission-catalog": "none",
   },
   teacher: {
     dashboard: "view", users: "none", "student-management": "view", students: "grade", attendance: "mark",
-    timetable: "view", assignments: "grade", exams: "grade", fees: "none",
-    salary: "view", library: "view", chat: "view", announcements: "view",
+    timetable: "view", exams: "grade", fees: "none",
+    salary: "view", expenses: "none", chat: "view", announcements: "view",
     reports: "view", datasheets: "crud", "system-config": "none", settings: "none", permissions: "none", "permission-catalog": "none",
   },
   parent: {
     dashboard: "view", users: "none", "student-management": "none", students: "view", attendance: "view",
-    timetable: "view", assignments: "view", exams: "view", fees: "view",
-    salary: "none", library: "view", chat: "view", announcements: "view",
+    timetable: "view", exams: "view", fees: "view",
+    salary: "none", expenses: "none", chat: "view", announcements: "view",
     reports: "none", datasheets: "view", "system-config": "none", settings: "none", permissions: "none", "permission-catalog": "none",
   },
   student: {
     dashboard: "view", users: "none", "student-management": "none", students: "view", attendance: "view",
-    timetable: "view", assignments: "view", exams: "view", fees: "view",
-    salary: "none", library: "view", chat: "view", announcements: "view",
+    timetable: "view", exams: "view", fees: "view",
+    salary: "none", expenses: "none", chat: "view", announcements: "view",
     reports: "none", datasheets: "view", "system-config": "none", settings: "none", permissions: "none", "permission-catalog": "none",
   },
 };
@@ -119,7 +153,6 @@ const PERM_EVT = "tces-permissions-change";
 
 export const BACKEND_MODULE_KEY_MAP: Record<string, ModuleKey> = {
   exam: "exams",
-  assignment: "assignments",
   attendance: "attendance",
   student: "students",
   studentManagement: "student-management",
@@ -127,10 +160,10 @@ export const BACKEND_MODULE_KEY_MAP: Record<string, ModuleKey> = {
   timetable: "timetable",
   announcement: "announcements",
   chat: "chat",
-  library: "library",
   reports: "reports",
   datasheets: "datasheets",
   salary: "salary",
+  academyExpense: "expenses",
   config: "system-config",
   role: "permissions",
   user: "users",
@@ -228,6 +261,35 @@ export function permLevelFromActionCaps(caps: ModuleActionCaps): PermLevel {
   return "view";
 }
 
+function mergeActionCaps(a: ModuleActionCaps, b: ModuleActionCaps): ModuleActionCaps {
+  return {
+    canView: a.canView || b.canView,
+    canCreate: a.canCreate || b.canCreate,
+    canEdit: a.canEdit || b.canEdit,
+    canDelete: a.canDelete || b.canDelete,
+    canParticipate: a.canParticipate || b.canParticipate,
+  };
+}
+
+/** Panel Fee Management uses academy APIs under studentManagement permissions. */
+function capsForFeesModule(backendPerms: Record<string, string[]>): ModuleActionCaps {
+  const feeCaps = capsFromBackendActions(backendPerms.fee || []);
+  const academyCaps = capsFromBackendActions(backendPerms.studentManagement || []);
+  return mergeActionCaps(feeCaps, academyCaps);
+}
+
+function capsForSalaryModule(backendPerms: Record<string, string[]>): ModuleActionCaps {
+  const salaryCaps = capsFromBackendActions(backendPerms.salary || []);
+  const academyCaps = capsFromBackendActions(backendPerms.studentManagement || []);
+  return mergeActionCaps(salaryCaps, academyCaps);
+}
+
+function capsForExpensesModule(backendPerms: Record<string, string[]>): ModuleActionCaps {
+  const expenseCaps = capsFromBackendActions(backendPerms.academyExpense || []);
+  const academyCaps = capsFromBackendActions(backendPerms.studentManagement || []);
+  return mergeActionCaps(expenseCaps, academyCaps);
+}
+
 export function resolveModuleCaps(
   moduleKey: ModuleKey,
   rolePermLevel: PermLevel,
@@ -235,10 +297,22 @@ export function resolveModuleCaps(
 ): ModuleActionCaps {
   const explicit = sessionHasExplicitModulePayload(backendPerms);
   const backendKey = PANEL_MODULE_TO_BACKEND_KEY[moduleKey];
-  if (explicit && backendKey !== undefined && backendPerms) {
-    if (Object.prototype.hasOwnProperty.call(backendPerms, backendKey)) {
-      const arr = backendPerms[backendKey];
-      return capsFromBackendActions(Array.isArray(arr) ? arr : []);
+  if (explicit && backendPerms) {
+    if (moduleKey === "fees") {
+      return capsForFeesModule(backendPerms);
+    }
+    if (moduleKey === "salary") {
+      return capsForSalaryModule(backendPerms);
+    }
+    if (moduleKey === "expenses") {
+      return capsForExpensesModule(backendPerms);
+    }
+    if (backendKey !== undefined) {
+      if (Object.prototype.hasOwnProperty.call(backendPerms, backendKey)) {
+        const arr = backendPerms[backendKey];
+        return capsFromBackendActions(Array.isArray(arr) ? arr : []);
+      }
+      return emptyActionCaps();
     }
     return emptyActionCaps();
   }
@@ -282,6 +356,23 @@ export function applyBackendModulePermissions(
     const level = permLevelFromActionCaps(caps);
     if (level !== "none") next[key] = level;
   });
+
+  if (backendPerms.studentManagement) {
+    const feeLevel = permLevelFromActionCaps(capsForFeesModule(backendPerms));
+    if (feeLevel !== "none") next.fees = feeLevel;
+    const salaryLevel = permLevelFromActionCaps(capsForSalaryModule(backendPerms));
+    if (salaryLevel !== "none") next.salary = salaryLevel;
+    const expenseLevel = permLevelFromActionCaps(capsForExpensesModule(backendPerms));
+    if (expenseLevel !== "none") next.expenses = expenseLevel;
+  }
+  if (backendPerms.salary) {
+    const salaryLevel = permLevelFromActionCaps(capsForSalaryModule(backendPerms));
+    if (salaryLevel !== "none") next.salary = salaryLevel;
+  }
+  if (backendPerms.academyExpense) {
+    const expenseLevel = permLevelFromActionCaps(capsForExpensesModule(backendPerms));
+    if (expenseLevel !== "none") next.expenses = expenseLevel;
+  }
 
   return next;
 }

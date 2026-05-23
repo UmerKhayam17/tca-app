@@ -114,7 +114,7 @@ export default function AssignmentsTab({
           <tbody>
             {isLoading && <tr><td colSpan={5} className="p-6 text-center text-muted-foreground">Loading…</td></tr>}
             {!isLoading && rowsFiltered.length === 0 && (
-              <tr><td colSpan={5} className="p-6 text-center text-muted-foreground">{rows.length === 0 ? "No assignments yet." : "No assignments match your search."}</td></tr>
+              <tr><td colSpan={5} className="p-6 text-center text-muted-foreground">{rows.length === 0 ? "No teacher assignments yet." : "No rows match your search."}</td></tr>
             )}
             {rowsFiltered.map((r) => (
               <tr key={r._id} className="border-b">

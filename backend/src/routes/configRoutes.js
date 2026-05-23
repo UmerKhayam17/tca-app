@@ -38,7 +38,7 @@ router.post('/sections', requirePermission('manage_classes'), validate(schemas.s
 router.patch('/sections/:id', requirePermission('manage_classes'), validate(schemas.sectionPatch), ctrl.patchSection);
 router.delete('/sections/:id', requirePermission('manage_classes'), ctrl.deleteSection);
 
-router.get('/subjects', requireAnyPermission('manage_classes', 'view_timetables', 'enter_exam_marks', 'manage_assignments'), ctrl.listSubjects);
+router.get('/subjects', requireAnyPermission('manage_classes', 'view_timetables', 'enter_exam_marks'), ctrl.listSubjects);
 router.post('/subjects', requirePermission('manage_classes'), validate(schemas.subjectBody), ctrl.createSubject);
 router.patch('/subjects/:id', requirePermission('manage_classes'), validate(schemas.subjectPatch), ctrl.patchSubject);
 

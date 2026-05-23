@@ -28,12 +28,15 @@ export default function RegistrationTab({
   heading = "Enrolled students",
   registerLabel = "Register student",
   emptyHint = "No students enrolled yet.",
+  showHeading = true,
 }: {
   caps: ModuleActionCaps;
   routes?: AcademyStudentRoutes;
   heading?: string;
   registerLabel?: string;
   emptyHint?: string;
+  /** Hide when the panel module header already shows the page title */
+  showHeading?: boolean;
 }) {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -90,10 +93,18 @@ export default function RegistrationTab({
   const pagination = listData?.pagination;
 
   return (
-    <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-4">
-      <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-        <h2 className="font-display text-lg font-semibold text-primary">{heading}</h2>
-        <div className="flex flex-wrap gap-2 items-center">
+    <div className="px-4 sm:px-6 lg:px-8 py-4 space-y-3">
+      <div
+        className={
+          showHeading
+            ? "flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between border-b pb-3"
+            : "flex flex-col lg:flex-row gap-2 lg:items-center lg:justify-end border-b pb-3"
+        }
+      >
+        {showHeading && (
+          <h2 className="font-display text-base font-semibold text-primary shrink-0">{heading}</h2>
+        )}
+        <div className="flex flex-wrap gap-2 items-center sm:ml-auto">
           {caps.canCreate && (
             <Button className="gap-2" asChild>
               <Link to={registerHref}>

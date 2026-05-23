@@ -137,6 +137,52 @@ const academyFeeGenerate = Joi.object({
   classId: objectId.optional(),
 });
 
+const academySalaryPay = Joi.object({
+  paymentMethod: Joi.string().valid('cash', 'bank_transfer', 'online', 'other').optional(),
+  notes: Joi.string().allow('').trim(),
+});
+
+const academySalaryGenerate = Joi.object({
+  month: Joi.number().integer().min(1).max(12).required(),
+  year: Joi.number().integer().min(2000).max(2100).required(),
+  roleName: Joi.string().valid('teacher', 'accountant').optional(),
+});
+
+const expenseCategories = [
+  'rent',
+  'utilities',
+  'supplies',
+  'maintenance',
+  'marketing',
+  'transport',
+  'staff_other',
+  'other',
+];
+
+const academyExpenseBody = Joi.object({
+  title: Joi.string().trim().required(),
+  category: Joi.string().valid(...expenseCategories).default('other'),
+  amount: Joi.number().min(0).required(),
+  expenseDate: Joi.date().required(),
+  vendor: Joi.string().allow('').trim(),
+  description: Joi.string().allow('').trim(),
+  paymentMethod: Joi.string().valid('cash', 'bank_transfer', 'online', 'cheque', 'other').optional(),
+  referenceNumber: Joi.string().allow('').trim(),
+  status: Joi.string().valid('paid', 'planned').optional(),
+});
+
+const academyExpensePatch = Joi.object({
+  title: Joi.string().trim(),
+  category: Joi.string().valid(...expenseCategories),
+  amount: Joi.number().min(0),
+  expenseDate: Joi.date(),
+  vendor: Joi.string().allow('').trim(),
+  description: Joi.string().allow('').trim(),
+  paymentMethod: Joi.string().valid('cash', 'bank_transfer', 'online', 'cheque', 'other'),
+  referenceNumber: Joi.string().allow('').trim(),
+  status: Joi.string().valid('paid', 'planned'),
+}).min(1);
+
 const feePreview = Joi.object({
   classId: objectId.required(),
   selectedSubjects: Joi.array().items(objectId).default([]),
@@ -230,6 +276,20 @@ const academyAssessmentBulkBody = Joi.object({
     .required(),
 });
 
+const academyAttendanceMark = Joi.object({
+  date: Joi.string().isoDate().required(),
+  entries: Joi.array()
+    .items(
+      Joi.object({
+        studentId: objectId.required(),
+        status: Joi.string().valid('present', 'absent', 'late', 'leave').required(),
+        notes: Joi.string().allow('').trim(),
+      })
+    )
+    .min(1)
+    .required(),
+});
+
 module.exports = {
   academyClassBody,
   academyClassPatch,
@@ -241,6 +301,10 @@ module.exports = {
   academyStudentPatch,
   academyFeePay,
   academyFeeGenerate,
+  academySalaryPay,
+  academySalaryGenerate,
+  academyExpenseBody,
+  academyExpensePatch,
   feePreview,
   academyAssessmentBody,
   academyAssessmentPatch,
@@ -250,4 +314,5 @@ module.exports = {
   academyClassTestMarksBody,
   academyTimetableSlotBody,
   academyTimetableSlotPatch,
+  academyAttendanceMark,
 };

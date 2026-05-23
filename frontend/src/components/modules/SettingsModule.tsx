@@ -1,88 +1,52 @@
-import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  loadPermissions, savePermissions, resetPermissions,
-  MODULES, PERM_OPTIONS, PERM_LABELS, PermLevel, ModuleKey,
-} from "@/lib/permissions";
+import { useAuth } from "@/hooks/useAuth";
+import { moduleHref } from "@/lib/panelMenus";
 import { Role } from "@/lib/auth";
-import { usePermissions } from "@/hooks/usePermissions";
-import { useToast } from "@/hooks/use-toast";
-import PanelSearchBar from "@/components/modules/PanelSearchBar";
-import { matchesPanelSearch } from "@/lib/panelSearch";
-
-const ROLES: Role[] = ["admin", "accountant", "teacher", "parent", "student"];
 
 const SettingsModule = () => {
-  const { perms } = usePermissions();
-  const { toast } = useToast();
-  const [search, setSearch] = useState("");
-  const modulesFiltered = useMemo(() => {
-    if (!search.trim()) return MODULES;
-    return MODULES.filter((m) => matchesPanelSearch(search, m.label, m.key));
-  }, [search]);
-
-  const update = (role: Role, mod: ModuleKey, value: PermLevel) => {
-    const next = loadPermissions();
-    next[role][mod] = value;
-    savePermissions(next);
-  };
+  const { user } = useAuth();
+  const role = (user?.role ?? "admin") as Role;
 
   return (
-    <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-4">
-      <Card className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <div className="font-semibold text-primary">Permission Matrix</div>
-          <div className="text-xs text-muted-foreground">Changes apply instantly — sidebars and pages re-render.</div>
-        </div>
-        <Button variant="outline" onClick={() => { resetPermissions(); toast({ title: "Permissions reset to defaults" }); }}>
-          Reset to defaults
-        </Button>
+    <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-4 max-w-lg">
+      <Card className="p-4 space-y-3">
+        <div className="font-semibold text-primary">Your account</div>
+        {user ? (
+          <dl className="text-sm space-y-2">
+            <div>
+              <dt className="text-muted-foreground text-xs">Name</dt>
+              <dd className="font-medium">{user.name}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground text-xs">Email</dt>
+              <dd>{user.email}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground text-xs">Role</dt>
+              <dd className="capitalize">{user.role}</dd>
+            </div>
+          </dl>
+        ) : (
+          <p className="text-sm text-muted-foreground">Not signed in.</p>
+        )}
       </Card>
 
-      <PanelSearchBar
-        value={search}
-        onChange={setSearch}
-        placeholder="Search modules…"
-        className="max-w-md"
-      />
-
-      <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-secondary/50 text-muted-foreground sticky top-0">
-              <tr>
-                <th className="text-left px-4 py-3 font-medium">Module</th>
-                {ROLES.map((r) => <th key={r} className="text-left px-4 py-3 font-medium capitalize">{r}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {modulesFiltered.length === 0 ? (
-                <tr>
-                  <td colSpan={ROLES.length + 1} className="px-4 py-8 text-center text-muted-foreground">
-                    No modules match your search.
-                  </td>
-                </tr>
-              ) : (
-              modulesFiltered.map((m) => (
-                <tr key={m.key} className="border-t border-border">
-                  <td className="px-4 py-3 font-medium text-primary">{m.label}</td>
-                  {ROLES.map((r) => (
-                    <td key={r} className="px-4 py-3">
-                      <select
-                        className="h-9 rounded-md border border-input bg-background px-2 text-xs"
-                        value={perms[r][m.key]}
-                        onChange={(e) => update(r, m.key, e.target.value as PermLevel)}
-                      >
-                        {PERM_OPTIONS.map((o) => <option key={o} value={o}>{PERM_LABELS[o]}</option>)}
-                      </select>
-                    </td>
-                  ))}
-                </tr>
-              )))}
-            </tbody>
-          </table>
-        </div>
+      <Card className="p-4 space-y-2">
+        <div className="font-semibold text-primary">Access & permissions</div>
+        <p className="text-xs text-muted-foreground">
+          Module access is controlled by your account permissions on the server. Admins can assign
+          per-user access on the Permissions page.
+        </p>
+        {(role === "admin" || user?.modulePermissions) && (
+          <Button variant="outline" size="sm" asChild>
+            <Link to={moduleHref(role, "permissions")}>Open Permissions</Link>
+          </Button>
+        )}
+        <Button variant="ghost" size="sm" asChild className="block">
+          <Link to={moduleHref(role, "permission-catalog")}>View permission catalog</Link>
+        </Button>
       </Card>
     </div>
   );

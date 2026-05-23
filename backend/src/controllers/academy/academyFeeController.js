@@ -10,6 +10,7 @@ const list = catchAsync(async (req, res) => {
     month: req.query.month,
     year: req.query.year,
     classId: req.query.classId,
+    feeType: req.query.feeType,
   });
   res.json({ success: true, data: result.items, pagination: result.pagination });
 });
@@ -29,4 +30,14 @@ const studentHistory = catchAsync(async (req, res) => {
   res.json({ success: true, data });
 });
 
-module.exports = { list, generate, pay, studentHistory };
+const summary = catchAsync(async (req, res) => {
+  const data = await feeService.getFeeSummary({
+    month: req.query.month ? Number(req.query.month) : undefined,
+    year: req.query.year ? Number(req.query.year) : undefined,
+    classId: req.query.classId,
+    studentId: req.query.studentId,
+  });
+  res.json({ success: true, data });
+});
+
+module.exports = { list, generate, pay, studentHistory, summary };

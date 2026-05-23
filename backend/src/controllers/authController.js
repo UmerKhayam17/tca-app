@@ -52,12 +52,20 @@ function issueTokens(user) {
 
 const login = catchAsync(async (req, res) => {
   const { email, password } = req.body;
-  const user = await User.findOne({ email }).select('+password').populate('role');
+  const user = await User.findOne({ email: String(email).toLowerCase().trim() })
+    .select('+password')
+    .populate('role');
   if (!user || !user.isActive) {
+    throw new ApiError(401, 'Invalid credentials');
+  }
+  if (!user.password) {
     throw new ApiError(401, 'Invalid credentials');
   }
   const ok = await bcrypt.compare(password, user.password);
   if (!ok) throw new ApiError(401, 'Invalid credentials');
+  if (!user.role) {
+    throw new ApiError(500, 'User account has no role assigned. Contact an administrator.');
+  }
 
   const { accessToken, refreshToken } = issueTokens(user);
   user.refreshToken = hashToken(refreshToken);

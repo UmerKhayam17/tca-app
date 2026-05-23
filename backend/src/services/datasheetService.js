@@ -17,7 +17,7 @@ async function listDatasheets({ search, page = 1, limit = 50 }) {
   ]);
 
   return {
-    items,
+    items: items.map(normalizeSheet),
     pagination: {
       page: Math.max(1, page),
       limit: perPage,
@@ -27,10 +27,18 @@ async function listDatasheets({ search, page = 1, limit = 50 }) {
   };
 }
 
+function normalizeSheet(doc) {
+  if (!doc) return doc;
+  const o = doc.toObject ? doc.toObject() : { ...doc };
+  o.columns = Array.isArray(o.columns) ? o.columns : [];
+  o.rows = Array.isArray(o.rows) ? o.rows : [];
+  return o;
+}
+
 async function getDatasheet(id) {
   const row = await populateCreatedBy(Datasheet.findById(id));
   if (!row) throw new ApiError(404, 'Datasheet not found');
-  return row;
+  return normalizeSheet(row);
 }
 
 async function createDatasheet(body, userId) {
@@ -56,9 +64,12 @@ async function updateDatasheet(id, body) {
   if (body.columns !== undefined) {
     row.columns = body.columns.map((c) => String(c).trim()).filter(Boolean);
   }
-  if (body.rows !== undefined) row.rows = body.rows;
+  if (body.rows !== undefined) {
+    row.rows = Array.isArray(body.rows) ? body.rows : [];
+  }
   await row.save();
-  return populateCreatedBy(Datasheet.findById(id));
+  const updated = await populateCreatedBy(Datasheet.findById(id));
+  return normalizeSheet(updated);
 }
 
 async function deleteDatasheet(id) {

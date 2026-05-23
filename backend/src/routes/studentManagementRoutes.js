@@ -9,6 +9,9 @@ const subjectCtrl = require('../controllers/academy/academySubjectController');
 const feeStructureCtrl = require('../controllers/academy/academyFeeStructureController');
 const studentCtrl = require('../controllers/academy/academyStudentController');
 const feeCtrl = require('../controllers/academy/academyFeeController');
+const salaryCtrl = require('../controllers/academy/academySalaryController');
+const expenseCtrl = require('../controllers/academy/academyExpenseController');
+const attendanceCtrl = require('../controllers/academy/academyAttendanceController');
 const assessmentCtrl = require('../controllers/academy/academyAssessmentController');
 const classTestCtrl = require('../controllers/academy/academyClassTestController');
 const timetableSlotCtrl = require('../controllers/academy/academyClassTimetableController');
@@ -229,6 +232,11 @@ router.delete('/students/:id', requirePermission('manage_academy_students'), stu
 
 // Fee management
 router.get(
+  '/fees/summary',
+  requireAnyPermission('view_academy_fee_reports', 'manage_academy_fees'),
+  feeCtrl.summary
+);
+router.get(
   '/fees',
   requireAnyPermission('view_academy_fee_reports', 'manage_academy_fees'),
   feeCtrl.list
@@ -249,6 +257,77 @@ router.get(
   '/fees/student/:studentId',
   requireAnyPermission('view_academy_fee_reports', 'manage_academy_fees'),
   feeCtrl.studentHistory
+);
+
+// Teacher / staff salary
+router.get(
+  '/salaries/summary',
+  requireAnyPermission('view_academy_salaries', 'manage_academy_salaries'),
+  salaryCtrl.summary
+);
+router.get(
+  '/salaries',
+  requireAnyPermission('view_academy_salaries', 'manage_academy_salaries'),
+  salaryCtrl.list
+);
+router.post(
+  '/salaries/generate',
+  requirePermission('manage_academy_salaries'),
+  validate(schemas.academySalaryGenerate),
+  salaryCtrl.generate
+);
+router.patch(
+  '/salaries/:id/pay',
+  requirePermission('manage_academy_salaries'),
+  validate(schemas.academySalaryPay),
+  salaryCtrl.pay
+);
+
+// Academy expenses
+router.get(
+  '/expenses/summary',
+  requireAnyPermission('view_academy_expenses', 'manage_academy_expenses'),
+  expenseCtrl.summary
+);
+router.get(
+  '/expenses',
+  requireAnyPermission('view_academy_expenses', 'manage_academy_expenses'),
+  expenseCtrl.list
+);
+router.post(
+  '/expenses',
+  requirePermission('manage_academy_expenses'),
+  validate(schemas.academyExpenseBody),
+  expenseCtrl.create
+);
+router.patch(
+  '/expenses/:id',
+  requirePermission('manage_academy_expenses'),
+  validate(schemas.academyExpensePatch),
+  expenseCtrl.update
+);
+router.delete(
+  '/expenses/:id',
+  requirePermission('manage_academy_expenses'),
+  expenseCtrl.remove
+);
+
+// Academy attendance (tuition students)
+router.get(
+  '/attendance/summary',
+  requirePermission('view_attendance'),
+  attendanceCtrl.summary
+);
+router.get(
+  '/attendance',
+  requireAnyPermission('view_attendance', 'mark_attendance'),
+  attendanceCtrl.list
+);
+router.post(
+  '/attendance/mark',
+  requirePermission('mark_attendance'),
+  validate(schemas.academyAttendanceMark),
+  attendanceCtrl.mark
 );
 
 module.exports = router;

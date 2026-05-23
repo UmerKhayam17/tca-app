@@ -228,6 +228,19 @@ const examMarks = Joi.object({
     .required(),
 });
 
+const datasheetBody = Joi.object({
+  name: Joi.string().trim().required(),
+  columns: Joi.array().items(Joi.string().trim()).min(1).required(),
+  rows: Joi.array().items(Joi.array().items(Joi.string().allow(''))).optional(),
+  initialRows: Joi.number().integer().min(0).max(500).optional(),
+});
+
+const datasheetPatch = Joi.object({
+  name: Joi.string().trim(),
+  columns: Joi.array().items(Joi.string().trim()).min(1),
+  rows: Joi.array().items(Joi.array().items(Joi.string().allow(''))),
+}).min(1);
+
 const announcementBody = Joi.object({
   title: Joi.string().required(),
   body: Joi.string().required(),
@@ -238,20 +251,6 @@ const announcementBody = Joi.object({
   isPinned: Joi.boolean(),
   publishedAt: Joi.date().allow(null),
   expiresAt: Joi.date().allow(null),
-});
-
-const assignmentBody = Joi.object({
-  title: Joi.string().required(),
-  description: Joi.string().allow(''),
-  subject: Joi.string().hex().length(24).required(),
-  class: Joi.string().hex().length(24).required(),
-  section: Joi.string().hex().length(24).allow(null),
-  dueDate: Joi.date().required(),
-  totalMarks: Joi.number().allow(null),
-});
-
-const assignmentSubmit = Joi.object({
-  fileUrl: Joi.string().uri().required(),
 });
 
 const conversationBody = Joi.object({
@@ -312,9 +311,9 @@ module.exports = {
   examBody,
   examPatch,
   examMarks,
+  datasheetBody,
+  datasheetPatch,
   announcementBody,
-  assignmentBody,
-  assignmentSubmit,
   conversationBody,
   messageBody,
   timetableBody,

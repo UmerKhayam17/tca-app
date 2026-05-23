@@ -1,24 +1,30 @@
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
 import {
-  loadPermissions, PermLevel, ModuleKey, PERM_CHANGE_EVENT,
+  applyBackendModulePermissions,
+  DEFAULT_PERMISSIONS,
+  PermLevel,
+  ModuleKey,
 } from "@/lib/permissions";
 import { Role } from "@/lib/auth";
+import { useAuth } from "@/hooks/useAuth";
 
+/** Panel access matrix: server `modulePermissions` when present, otherwise role defaults. */
 export const usePermissions = () => {
-  const [perms, setPerms] = useState(() => loadPermissions());
+  const { user } = useAuth();
 
-  useEffect(() => {
-    const sync = () => setPerms(loadPermissions());
-    window.addEventListener(PERM_CHANGE_EVENT, sync);
-    window.addEventListener("storage", sync);
-    return () => {
-      window.removeEventListener(PERM_CHANGE_EVENT, sync);
-      window.removeEventListener("storage", sync);
-    };
-  }, []);
+  const perms = useMemo(() => {
+    const roles = Object.keys(DEFAULT_PERMISSIONS) as Role[];
+    const out = {} as Record<Role, Record<ModuleKey, PermLevel>>;
+    for (const role of roles) {
+      out[role] = applyBackendModulePermissions(
+        DEFAULT_PERMISSIONS[role],
+        role === user?.role ? user?.modulePermissions : undefined
+      );
+    }
+    return out;
+  }, [user?.role, user?.modulePermissions]);
 
-  const get = (role: Role, mod: ModuleKey): PermLevel =>
-    perms[role]?.[mod] ?? "none";
+  const get = (role: Role, mod: ModuleKey): PermLevel => perms[role]?.[mod] ?? "none";
 
   return { perms, get };
 };

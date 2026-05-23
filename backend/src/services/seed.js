@@ -26,8 +26,6 @@ const PERMISSIONS = [
   { name: 'publish_results', module: 'exam', action: 'approve', description: 'Publish results' },
   { name: 'view_results', module: 'exam', action: 'read', description: 'View results' },
   { name: 'manage_announcements', module: 'announcement', action: 'create', description: 'Announcements' },
-  { name: 'manage_assignments', module: 'assignment', action: 'create', description: 'Assignments' },
-  { name: 'submit_assignment', module: 'assignment', action: 'update', description: 'Student submission' },
   { name: 'manage_conversations', module: 'chat', action: 'create', description: 'Create chat groups' },
   { name: 'use_chat', module: 'chat', action: 'read', description: 'Participate in chat' },
   { name: 'view_timetables', module: 'config', action: 'read', description: 'View timetables' },
@@ -39,6 +37,12 @@ const PERMISSIONS = [
   { name: 'view_academy_students', module: 'studentManagement', action: 'read', description: 'View academy students' },
   { name: 'manage_academy_fees', module: 'studentManagement', action: 'update', description: 'Record academy fee payments' },
   { name: 'view_academy_fee_reports', module: 'studentManagement', action: 'read', description: 'Academy fee reports' },
+  { name: 'manage_academy_salaries', module: 'studentManagement', action: 'update', description: 'Teacher salary payroll' },
+  { name: 'view_academy_salaries', module: 'studentManagement', action: 'read', description: 'View teacher salaries' },
+  { name: 'manage_academy_expenses', module: 'studentManagement', action: 'create', description: 'Academy expenses' },
+  { name: 'view_academy_expenses', module: 'studentManagement', action: 'read', description: 'View academy expenses' },
+  { name: 'manage_datasheets', module: 'datasheets', action: 'create', description: 'Create and edit datasheets' },
+  { name: 'view_datasheets', module: 'datasheets', action: 'read', description: 'View datasheets' },
 ];
 
 async function ensureDefaultAdmin() {
@@ -152,35 +156,35 @@ function buildDefaultRoleDefs(allPermissionIds) {
         'view_attendance',
         'enter_exam_marks',
         'view_results',
-        'manage_assignments',
         'manage_announcements',
-        'submit_assignment',
         'use_chat',
         'view_students',
         'view_timetables',
+        'view_datasheets',
+        'manage_datasheets',
       ],
       description: 'Academic',
       modulePermissions: new Map([
         ['attendance', ['view', 'create', 'edit', 'correct']],
         ['exam', ['view', 'create', 'edit']],
-        ['assignment', ['view', 'create', 'edit', 'delete', 'submit']],
         ['announcement', ['view', 'create', 'edit', 'delete']],
         ['student', ['view']],
         ['studentManagement', ['view']],
         ['timetable', ['view']],
         ['chat', ['view', 'create', 'participate']],
+        ['datasheets', ['view', 'create', 'edit', 'delete']],
       ]),
     },
     student: {
       name: 'student',
-      permissionNames: ['view_attendance', 'view_results', 'use_chat', 'view_timetables', 'submit_assignment'],
+      permissionNames: ['view_attendance', 'view_results', 'use_chat', 'view_timetables'],
       description: 'Student and Parent portal',
       modulePermissions: new Map([
         ['attendance', ['view']],
         ['exam', ['view']],
-        ['assignment', ['view', 'submit']],
         ['timetable', ['view']],
         ['chat', ['view', 'create', 'participate']],
+        ['datasheets', ['view']],
       ]),
     },
     accountant: {
@@ -194,18 +198,27 @@ function buildDefaultRoleDefs(allPermissionIds) {
         'view_academy_students',
         'manage_academy_fees',
         'view_academy_fee_reports',
+        'manage_academy_salaries',
+        'view_academy_salaries',
+        'manage_academy_expenses',
+        'view_academy_expenses',
         'use_chat',
         'view_attendance',
         'view_results',
+        'view_datasheets',
+        'manage_datasheets',
       ],
       description: 'Finance',
       modulePermissions: new Map([
         ['student', ['view', 'activate']],
         ['fee', ['view', 'create', 'edit', 'generate', 'record']],
-        ['studentManagement', ['view', 'record', 'generate']],
+        ['studentManagement', ['view', 'record', 'generate', 'create', 'edit', 'delete']],
+        ['salary', ['view', 'process', 'generate', 'record']],
+        ['academyExpense', ['view', 'create', 'edit', 'delete', 'record']],
         ['attendance', ['view']],
         ['exam', ['view']],
         ['chat', ['view', 'create', 'participate']],
+        ['datasheets', ['view', 'create', 'edit', 'delete']],
       ]),
     },
   };
@@ -265,13 +278,23 @@ async function syncBuiltInRolePermissions() {
       'view_academy_students',
       'manage_academy_fees',
       'view_academy_fee_reports',
+      'manage_academy_salaries',
+      'view_academy_salaries',
+      'manage_academy_expenses',
+      'view_academy_expenses',
     ]);
     const set = new Set((accountantRole.permissions || []).map(String));
     extra.forEach((id) => set.add(String(id)));
     accountantRole.permissions = [...set];
     const mp = accountantRole.modulePermissions || new Map();
     if (!mp.has('studentManagement')) {
-      mp.set('studentManagement', ['view', 'record', 'generate']);
+      mp.set('studentManagement', ['view', 'record', 'generate', 'create', 'edit']);
+    }
+    if (!mp.has('salary')) {
+      mp.set('salary', ['view', 'process', 'generate', 'record']);
+    }
+    if (!mp.has('academyExpense')) {
+      mp.set('academyExpense', ['view', 'create', 'edit', 'record']);
     }
     accountantRole.modulePermissions = mp;
     await accountantRole.save();

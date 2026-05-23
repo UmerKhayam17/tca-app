@@ -20,7 +20,6 @@ import type { ModuleActionCaps } from "@/lib/permissions";
 import {
   type AcademyAssessmentRecord,
   type AcademyAttendanceRecord,
-  type AcademyFeeRecord,
   type AcademyStudent,
   type AcademyStudentRecord,
   type AcademySubject,
@@ -33,6 +32,7 @@ import {
 } from "@/lib/studentManagementApi";
 import { fetchStudentExamResults, type ExamResult } from "@/lib/examApi";
 import AssessmentFormDialog from "@/components/modules/exams/AssessmentFormDialog";
+import AcademyFeesManagement from "@/components/modules/student-management/AcademyFeesManagement";
 import PanelSearchBar from "@/components/modules/PanelSearchBar";
 import { matchesPanelSearch } from "@/lib/panelSearch";
 import { getAccessToken } from "@/lib/auth";
@@ -54,7 +54,16 @@ import {
 } from "./studentDisplayUtils";
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <h3 className="text-sm font-semibold text-primary border-b pb-2 mb-4">{children}</h3>;
+  return <h3 className="text-sm font-semibold text-primary border-b pb-1.5 mb-3">{children}</h3>;
+}
+
+function QuickStat({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-baseline gap-2 min-w-[7rem]">
+      <span className="text-xs text-muted-foreground whitespace-nowrap">{label}</span>
+      <span className="text-sm font-semibold text-primary tabular-nums">{value}</span>
+    </div>
+  );
 }
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
@@ -68,7 +77,7 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
 
 function EmptyBlock({ message }: { message: string }) {
   return (
-    <p className="text-sm text-muted-foreground py-8 text-center border rounded-md bg-muted/20">
+    <p className="text-sm text-muted-foreground py-5 text-center border rounded-md bg-muted/20">
       {message}
     </p>
   );
@@ -84,10 +93,10 @@ function SummaryCard({
   hint?: string;
 }) {
   return (
-    <div className="rounded-lg border bg-card p-4 space-y-1">
-      <p className="text-xs text-muted-foreground uppercase tracking-wide">{label}</p>
-      <p className="text-xl font-semibold text-primary">{value}</p>
-      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+    <div className="rounded-md border bg-card p-3 space-y-0.5">
+      <p className="text-[11px] text-muted-foreground uppercase tracking-wide">{label}</p>
+      <p className="text-lg font-semibold text-primary leading-tight">{value}</p>
+      {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
     </div>
   );
 }
@@ -155,10 +164,10 @@ function ProfileTab({ student }: { student: AcademyStudent }) {
   const subtotal = student.monthlyFee + student.admissionFee;
 
   return (
-    <div className="space-y-8">
-      <section className="space-y-4 pb-8 border-b">
+    <div className="space-y-4">
+      <section className="rounded-lg border p-4 space-y-3">
         <SectionTitle>Student information</SectionTitle>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3">
           <DetailRow label="Student name" value={student.studentName} />
           <DetailRow label="Father's name" value={student.fatherName} />
           <DetailRow label="Date of birth" value={formatDate(student.dateOfBirth)} />
@@ -168,9 +177,9 @@ function ProfileTab({ student }: { student: AcademyStudent }) {
         </div>
       </section>
 
-      <section className="space-y-4 pb-8 border-b">
+      <section className="rounded-lg border p-4 space-y-3">
         <SectionTitle>Guardian information</SectionTitle>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3">
           <DetailRow label="Guardian name" value={student.guardianName} />
           <DetailRow label="Relation" value={student.guardianRelation} />
           <DetailRow label="CNIC" value={student.fatherGuardianCnic} />
@@ -180,9 +189,9 @@ function ProfileTab({ student }: { student: AcademyStudent }) {
         </div>
       </section>
 
-      <section className="space-y-4 pb-8 border-b">
+      <section className="rounded-lg border p-4 space-y-3">
         <SectionTitle>Contact & address</SectionTitle>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3">
           <DetailRow label="Mobile" value={student.phone} />
           <DetailRow label="Residence phone" value={student.contactPhoneRes} />
           <DetailRow label="Postal address" value={student.postalAddress || student.address} />
@@ -190,13 +199,13 @@ function ProfileTab({ student }: { student: AcademyStudent }) {
         </div>
       </section>
 
-      <section className="space-y-4 pb-8 border-b">
+      <section className="rounded-lg border p-4 space-y-3">
         <SectionTitle>Previous school / college</SectionTitle>
         <DetailRow label="School / college" value={student.currentSchoolCollege} />
       </section>
 
       {student.academicHistory && student.academicHistory.length > 0 && (
-        <section className="space-y-4 pb-8 border-b">
+        <section className="rounded-lg border p-4 space-y-3">
           <SectionTitle>Academic history (prior institutions)</SectionTitle>
           <DataTable
             headers={["Institution", "Class", "Total", "Obtained", "%", "Year"]}
@@ -212,9 +221,9 @@ function ProfileTab({ student }: { student: AcademyStudent }) {
         </section>
       )}
 
-      <section className="space-y-4">
+      <section className="rounded-lg border p-4 space-y-3">
         <SectionTitle>Fee structure at registration</SectionTitle>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3">
           <DetailRow label="Class" value={classLabel(student.classId)} />
           <DetailRow label="Monthly fee" value={formatPkr(student.monthlyFee)} />
           <DetailRow label="Admission fee" value={formatPkr(student.admissionFee)} />
@@ -232,8 +241,8 @@ function EnrollmentTab({ record }: { record: AcademyStudentRecord }) {
   const subjects = enrollment.subjects as AcademySubject[];
 
   return (
-    <div className="space-y-6">
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="space-y-4">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <SummaryCard label="Enrolled subjects" value={enrollment.subjectCount} />
         <SummaryCard label="Class total subjects" value={enrollment.classSubjectsTotal} />
         <SummaryCard
@@ -273,7 +282,7 @@ function TimetableTab({ slots }: { slots: AcademyTimetableSlot[] }) {
   })).filter((g) => g.slots.length > 0);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {byDay.map(({ day, slots: daySlots }) => (
         <div key={day} className="space-y-2">
           <h4 className="text-sm font-semibold text-primary">{day}</h4>
@@ -303,7 +312,7 @@ function AttendanceTab({ record }: { record: AcademyStudentRecord }) {
   }, [records, search]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <SummaryCard label="Total marked days" value={summary.total} />
         <SummaryCard label="Present" value={summary.present} />
@@ -331,68 +340,6 @@ function AttendanceTab({ record }: { record: AcademyStudentRecord }) {
             <StatusBadge key="st" status={r.status} />,
             r.subjectId ? subjectName(r.subjectId as AcademySubject) : "General",
             r.notes || "—",
-          ])}
-        />
-      )}
-    </div>
-  );
-}
-
-function FeesTab({ record }: { record: AcademyStudentRecord }) {
-  const { summary, records } = record.fees;
-  const [search, setSearch] = useState("");
-  const recordsFiltered = useMemo(() => {
-    if (!search.trim()) return records;
-    return records.filter((r) =>
-      matchesPanelSearch(
-        search,
-        r.feeType,
-        r.status,
-        r.receiptNumber,
-        r.amount,
-        r.paidAt,
-        r.month,
-        r.year
-      )
-    );
-  }, [records, search]);
-
-  return (
-    <div className="space-y-6">
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <SummaryCard label="Fee records" value={summary.recordsCount} />
-        <SummaryCard label="Total paid" value={formatPkr(summary.totalPaid)} />
-        <SummaryCard label="Outstanding" value={formatPkr(summary.totalPending)} />
-        <SummaryCard
-          label="By status"
-          value={`${summary.byStatus.paid} paid · ${summary.byStatus.pending} pending`}
-          hint={
-            summary.byStatus.overdue
-              ? `${summary.byStatus.overdue} overdue`
-              : undefined
-          }
-        />
-      </div>
-
-      {records.length > 0 && (
-        <PanelSearchBar value={search} onChange={setSearch} placeholder="Search fees, receipt, status…" className="max-w-md" />
-      )}
-      {records.length === 0 ? (
-        <EmptyBlock message="No fee invoices or payments recorded yet." />
-      ) : recordsFiltered.length === 0 ? (
-        <EmptyBlock message="No fee records match your search." />
-      ) : (
-        <DataTable
-          headers={["Period", "Type", "Amount", "Status", "Receipt", "Paid on"]}
-          rows={recordsFiltered.map((r: AcademyFeeRecord) => [
-            r.feeType === "admission"
-              ? "Admission"
-              : `${MONTH_NAMES[(r.month || 1) - 1]} ${r.year}`,
-            r.feeType,
-            formatPkr(r.amount),
-            <StatusBadge key="st" status={r.status} />,
-            r.receiptNumber || "—",
-            r.paidAt ? formatDate(r.paidAt) : "—",
           ])}
         />
       )}
@@ -457,9 +404,9 @@ function TestsTab({
   });
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <div>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-3">
           <SectionTitle>Ongoing tests (this student)</SectionTitle>
           {canManageTests && (
             <Button
@@ -655,37 +602,36 @@ export default function StudentDetailPage({
   const { student, enrollment, attendance, fees, assessments } = record;
 
   return (
-    <div className="w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 border-b pb-6">
-        <div className="space-y-2">
-          <Button variant="ghost" size="sm" className="gap-1.5 -ml-2" asChild>
+    <div className="w-full px-4 sm:px-6 lg:px-8 py-4 space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b pb-3">
+        <div className="min-w-0 space-y-1">
+          <Button variant="ghost" size="sm" className="gap-1.5 -ml-2 h-8 px-2" asChild>
             <Link to={listHref}>
               <ArrowLeft className="h-4 w-4" /> {listBackLabel}
             </Link>
           </Button>
-          <h2 className="font-display text-xl sm:text-2xl font-semibold text-primary">
-            {student.studentName}
-          </h2>
-          <p className="text-sm text-muted-foreground font-mono">{student.studentId}</p>
-          <CreatedByLine createdBy={student.createdBy} />
-          <div className="flex flex-wrap gap-2 items-center text-sm text-muted-foreground">
-            <span>{classLabel(student.classId)}</span>
-            <span>·</span>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <h2 className="font-display text-lg sm:text-xl font-semibold text-primary">
+              {student.studentName}
+            </h2>
             <StatusBadge status={student.status} />
           </div>
+          <p className="text-xs text-muted-foreground font-mono">{student.studentId}</p>
+          <p className="text-xs text-muted-foreground">{classLabel(student.classId)}</p>
+          <CreatedByLine createdBy={student.createdBy} className="text-xs" />
         </div>
         {caps.canEdit && (
-          <Button className="gap-2 shrink-0" asChild>
+          <Button size="sm" className="gap-2 shrink-0" asChild>
             <Link to={editHref}>
-              <Pencil className="h-4 w-4" /> Edit student
+              <Pencil className="h-4 w-4" /> Edit
             </Link>
           </Button>
         )}
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <SummaryCard label="Subjects" value={enrollment.subjectCount} />
-        <SummaryCard
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg border bg-muted/25 px-4 py-2.5">
+        <QuickStat label="Subjects" value={enrollment.subjectCount} />
+        <QuickStat
           label="Attendance"
           value={
             attendance.summary.attendanceRate != null
@@ -693,11 +639,11 @@ export default function StudentDetailPage({
               : "—"
           }
         />
-        <SummaryCard label="Fee records" value={fees.summary.recordsCount} />
-        <SummaryCard label="Paid (PKR)" value={formatPkr(fees.summary.totalPaid)} />
-        <SummaryCard label="Tests" value={assessments.summary.count} />
-        <SummaryCard
-          label="Avg test %"
+        <QuickStat label="Fees" value={fees.summary.recordsCount} />
+        <QuickStat label="Paid" value={formatPkr(fees.summary.totalPaid)} />
+        <QuickStat label="Tests" value={assessments.summary.count} />
+        <QuickStat
+          label="Avg %"
           value={
             assessments.summary.averagePercentage != null
               ? `${assessments.summary.averagePercentage}%`
@@ -707,7 +653,7 @@ export default function StudentDetailPage({
       </div>
 
       <Tabs defaultValue="profile" className="w-full">
-        <TabsList className="w-full flex flex-wrap h-auto gap-1 p-1">
+        <TabsList className="w-full flex flex-wrap h-auto gap-0.5 p-0.5 bg-muted/40">
           <TabsTrigger value="profile" className="gap-1.5">
             <User className="h-3.5 w-3.5" /> Profile
           </TabsTrigger>
@@ -728,22 +674,28 @@ export default function StudentDetailPage({
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="profile" className="mt-6">
+        <TabsContent value="profile" className="mt-3 focus-visible:outline-none">
           <ProfileTab student={student} />
         </TabsContent>
-        <TabsContent value="enrollment" className="mt-6">
+        <TabsContent value="enrollment" className="mt-3 focus-visible:outline-none">
           <EnrollmentTab record={record} />
         </TabsContent>
-        <TabsContent value="timetable" className="mt-6">
+        <TabsContent value="timetable" className="mt-3 focus-visible:outline-none">
           <TimetableTab slots={record.timetable} />
         </TabsContent>
-        <TabsContent value="attendance" className="mt-6">
+        <TabsContent value="attendance" className="mt-3 focus-visible:outline-none">
           <AttendanceTab record={record} />
         </TabsContent>
-        <TabsContent value="fees" className="mt-6">
-          <FeesTab record={record} />
+        <TabsContent value="fees" className="mt-3 focus-visible:outline-none">
+          <AcademyFeesManagement
+            caps={caps}
+            studentId={studentId}
+            routes={routes ?? undefined}
+            showGenerate={false}
+            showFilters={false}
+          />
         </TabsContent>
-        <TabsContent value="tests" className="mt-6">
+        <TabsContent value="tests" className="mt-3 focus-visible:outline-none">
           <TestsTab
             record={record}
             studentId={studentId}

@@ -24,6 +24,15 @@ export interface ModuleRegistryEntry {
   actions: string[];
 }
 
+export interface LinkedStudentSummary {
+  _id: string;
+  studentId: string;
+  studentName: string;
+  className?: string | null;
+  sectionName?: string | null;
+  status?: string;
+}
+
 export interface StaffUser {
   _id: string;
   name: string;
@@ -35,6 +44,8 @@ export interface StaffUser {
   modulePermissions?: Record<string, string[]>;
   role?: RoleOption | string;
   createdAt?: string;
+  /** Populated for parent users on GET /users (all-users list). */
+  linkedStudents?: LinkedStudentSummary[];
 }
 
 /** Permission row from Mongo (GET /permissions). */
@@ -99,11 +110,11 @@ export function staffRolesOnly(roles: RoleOption[]): RoleOption[] {
   return roles.filter((r) => allow.has(String(r.name).toLowerCase()));
 }
 
-export async function fetchParentStudents(parentUserId: string): Promise<{ _id: string; studentId: string; studentName: string; fatherName?: string }[]> {
+export async function fetchParentStudents(parentUserId: string): Promise<LinkedStudentSummary[]> {
   const res = await authedFetch(`/users/${parentUserId}/parent-students`);
-  const body = await parseJson<{ success?: boolean; data?: any }>(res);
+  const body = await parseJson<{ success?: boolean; data?: LinkedStudentSummary[]; message?: string }>(res);
   if (!res.ok) throw new Error(body.message || "Failed to load parent students");
-  return (body.data || []) as any;
+  return body.data || [];
 }
 
 export async function assignParentStudents(parentUserId: string, studentIds: string[]): Promise<void> {

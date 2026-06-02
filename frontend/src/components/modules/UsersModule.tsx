@@ -38,6 +38,7 @@ import {
   normalizeModulePermissions,
   type ModuleRegistryEntry,
   type RoleOption,
+  type LinkedStudentSummary,
   type StaffUser,
 } from "@/lib/staffApi";
 import { useStaffRealtime } from "@/hooks/useStaffSocket";
@@ -171,6 +172,43 @@ function formatTableCell(user: StaffUser, key: UserFieldKey): React.ReactNode {
   return String(v);
 }
 
+function isParentUser(user: StaffUser): boolean {
+  const r = user.role;
+  const name =
+    r && typeof r === "object" && "name" in r
+      ? String((r as RoleOption).name)
+      : typeof r === "string"
+        ? r
+        : "";
+  return name.toLowerCase() === "parent";
+}
+
+function LinkedStudentsCell({ user }: { user: StaffUser }) {
+  if (!isParentUser(user)) return <span className="text-muted-foreground">—</span>;
+  const students = user.linkedStudents ?? [];
+  if (students.length === 0) {
+    return <span className="text-xs text-muted-foreground">No children linked</span>;
+  }
+  return (
+    <div className="flex flex-col gap-1.5 max-w-xs">
+      {students.map((s: LinkedStudentSummary) => {
+        const classSection = [s.className, s.sectionName].filter(Boolean).join(" · ");
+        return (
+          <div key={s._id} className="text-xs leading-snug">
+            <span className="font-medium text-foreground">{s.studentName}</span>
+            {s.studentId ? (
+              <span className="text-muted-foreground"> ({s.studentId})</span>
+            ) : null}
+            {classSection ? (
+              <div className="text-muted-foreground">{classSection}</div>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 const STAFF_QUERY = ["users-module-list"] as const;
 const ROLES_QUERY = ["staffRoles"] as const;
 const REGISTRY_QUERY = ["moduleRegistry"] as const;
@@ -258,6 +296,12 @@ const UsersModule = ({
     u.phone,
     typeof u.role === "object" && u.role ? (u.role as RoleOption).name : typeof u.role === "string" ? u.role : "",
     u.isActive ? "active" : "inactive",
+    ...(u.linkedStudents ?? []).flatMap((s) => [
+      s.studentName,
+      s.studentId,
+      s.className ?? "",
+      s.sectionName ?? "",
+    ]),
   ]);
 
   const saveMutation = useMutation({
@@ -279,7 +323,7 @@ const UsersModule = ({
       }
 
       const salaryNum = Math.max(0, Number(form.salary) || 0);
-      const permsPayload = { ...modulePerms };
+      const permsPayload = isParentRole ? {} : { ...modulePerms };
       if (isParentRole && parentStudentIds.length === 0) {
         throw new Error("Select at least one student for this parent.");
       }
@@ -395,6 +439,8 @@ const UsersModule = ({
   };
 
   const cols = tableColumns();
+  const showLinkedStudents = scope === "all";
+  const tableColSpan = cols.length + 3 + (showLinkedStudents ? 1 : 0);
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-6">
@@ -517,7 +563,7 @@ const UsersModule = ({
                     </div>
                   )}
 
-                  {modules.length > 0 && (
+                  {modules.length > 0 && !isParentRole && (
                     <ModuleAccessMatrix modules={modules} value={modulePerms} onChange={setModulePerms} />
                   )}
                 </div>
@@ -545,6 +591,9 @@ const UsersModule = ({
                     {c.label}
                   </th>
                 ))}
+                {showLinkedStudents && (
+                  <th className="text-left font-medium px-4 py-3 min-w-[10rem]">Linked students</th>
+                )}
                 <th className="text-left font-medium px-4 py-3">Modules</th>
                 {(caps.canEdit || caps.canDelete) && <th className="px-4 py-3 w-24" />}
               </tr>
@@ -552,13 +601,13 @@ const UsersModule = ({
             <tbody>
               {staffLoading ? (
                 <tr>
-                  <td colSpan={cols.length + 3} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={tableColSpan} className="px-4 py-8 text-center text-muted-foreground">
                     Loading…
                   </td>
                 </tr>
               ) : staff.length === 0 ? (
                 <tr>
-                  <td colSpan={cols.length + 3} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={tableColSpan} className="px-4 py-8 text-center text-muted-foreground">
                     {scope === "staff"
                       ? "No teachers or accountants yet."
                       : "No users found yet."}
@@ -566,7 +615,7 @@ const UsersModule = ({
                 </tr>
               ) : staffFiltered.length === 0 ? (
                 <tr>
-                  <td colSpan={cols.length + 3} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={tableColSpan} className="px-4 py-8 text-center text-muted-foreground">
                     No staff match your search.
                   </td>
                 </tr>
@@ -594,6 +643,11 @@ const UsersModule = ({
                           {formatTableCell(u, c.key)}
                         </td>
                       ))}
+                      {showLinkedStudents && (
+                        <td className="px-4 py-3 align-top">
+                          <LinkedStudentsCell user={u} />
+                        </td>
+                      )}
                       <td className="px-4 py-3 text-muted-foreground">
                         {(() => {
                           const mods = u.modulePermissions && typeof u.modulePermissions === "object"

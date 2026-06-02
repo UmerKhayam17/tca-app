@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,10 +9,12 @@ import { matchesPanelSearch } from "@/lib/panelSearch";
 import {
   fetchAcademyAttendanceDay,
   fetchAcademyClasses,
+  fetchAcademyStudents,
   markAcademyAttendance,
   type AcademyAttendanceRecord,
   type AcademyStudent,
 } from "@/lib/studentManagementApi";
+import { useAuth } from "@/hooks/useAuth";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -23,10 +25,19 @@ function classLabel(s: AcademyStudent) {
 }
 
 const AttendanceModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActionCaps }) => {
+  const { user } = useAuth();
+  const isParent = user?.role === "parent";
   const { toast } = useToast();
   const qc = useQueryClient();
   const [date, setDate] = useState(today());
   const [classFilter, setClassFilter] = useState("");
+  const [selectedStudentId, setSelectedStudentId] = useState<string>(() => {
+    try {
+      return localStorage.getItem("parent_selected_student_id") || "";
+    } catch {
+      return "";
+    }
+  });
   const [search, setSearch] = useState("");
   const canMark = caps.canCreate || caps.canEdit;
 
@@ -43,6 +54,36 @@ const AttendanceModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Module
         classId: classFilter || undefined,
       }),
   });
+
+  const { data: parentStudents = [] } = useQuery({
+    queryKey: ["parent-students-attendance"],
+    queryFn: async () => {
+      const r = await fetchAcademyStudents({ page: 1, limit: 200, status: "active" });
+      return r.students;
+    },
+    enabled: isParent,
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (!isParent) return;
+    try {
+      localStorage.setItem("parent_selected_student_id", selectedStudentId || "");
+    } catch {
+      // ignore
+    }
+  }, [isParent, selectedStudentId]);
+
+  useEffect(() => {
+    if (!isParent) return;
+    if (!parentStudents.length) {
+      if (selectedStudentId) setSelectedStudentId("");
+      return;
+    }
+    if (!selectedStudentId || !parentStudents.some((s) => s._id === selectedStudentId)) {
+      setSelectedStudentId(parentStudents[0]._id);
+    }
+  }, [isParent, parentStudents, selectedStudentId]);
 
   const markMut = useMutation({
     mutationFn: (payload: { studentId: string; status: "present" | "absent" | "late" | "leave" }) =>
@@ -70,11 +111,23 @@ const AttendanceModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Module
   const summary = data?.summary;
 
   const studentsFiltered = useMemo(() => {
-    if (!search.trim()) return students;
-    return students.filter((s) =>
+    const base = isParent && selectedStudentId
+      ? students.filter((s) => s._id === selectedStudentId)
+      : students;
+    if (!search.trim()) return base;
+    return base.filter((s) =>
       matchesPanelSearch(search, s.studentName, s.studentId, classLabel(s), s.phone)
     );
-  }, [students, search]);
+  }, [students, search, isParent, selectedStudentId]);
+
+  const parentSummary = useMemo(() => {
+    if (!isParent || !selectedStudentId) return summary;
+    const rec = recordMap.get(selectedStudentId);
+    const counts = { present: 0, absent: 0, leave: 0, late: 0, unmarked: 0 };
+    if (!rec) counts.unmarked = 1;
+    else if (rec.status in counts) (counts as any)[rec.status] += 1;
+    return counts;
+  }, [isParent, selectedStudentId, recordMap, summary]);
 
   const mark = (studentId: string, status: "present" | "absent" | "late" | "leave") => {
     markMut.mutate(
@@ -89,25 +142,25 @@ const AttendanceModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Module
         <Card className="p-4">
           <div className="text-xs text-muted-foreground">Present</div>
           <div className="font-display text-2xl font-bold text-accent">
-            {summary?.present ?? "—"}
+            {parentSummary?.present ?? "—"}
           </div>
         </Card>
         <Card className="p-4">
           <div className="text-xs text-muted-foreground">Absent</div>
           <div className="font-display text-2xl font-bold text-destructive">
-            {summary?.absent ?? "—"}
+            {parentSummary?.absent ?? "—"}
           </div>
         </Card>
         <Card className="p-4">
           <div className="text-xs text-muted-foreground">Leave</div>
           <div className="font-display text-2xl font-bold text-primary">
-            {summary?.leave ?? "—"}
+            {parentSummary?.leave ?? "—"}
           </div>
         </Card>
         <Card className="p-4">
           <div className="text-xs text-muted-foreground">Unmarked</div>
           <div className="font-display text-2xl font-bold text-muted-foreground">
-            {summary?.unmarked ?? "—"}
+            {parentSummary?.unmarked ?? "—"}
           </div>
         </Card>
       </div>
@@ -122,21 +175,39 @@ const AttendanceModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Module
             onChange={(e) => setDate(e.target.value)}
           />
         </div>
-        <div>
-          <label className="text-xs text-muted-foreground block mb-1">Class</label>
-          <select
-            className="h-9 rounded-md border border-input bg-background px-2 text-sm min-w-[10rem]"
-            value={classFilter}
-            onChange={(e) => setClassFilter(e.target.value)}
-          >
-            <option value="">All classes</option>
-            {classes.map((c) => (
-              <option key={c._id} value={c._id}>
-                {c.className}
-              </option>
-            ))}
-          </select>
-        </div>
+        {isParent ? (
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1">Child</label>
+            <select
+              className="h-9 rounded-md border border-input bg-background px-2 text-sm min-w-[14rem]"
+              value={selectedStudentId}
+              onChange={(e) => setSelectedStudentId(e.target.value)}
+            >
+              <option value="">Select child…</option>
+              {parentStudents.map((s) => (
+                <option key={s._id} value={s._id}>
+                  {s.studentName} ({s.studentId})
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1">Class</label>
+            <select
+              className="h-9 rounded-md border border-input bg-background px-2 text-sm min-w-[10rem]"
+              value={classFilter}
+              onChange={(e) => setClassFilter(e.target.value)}
+            >
+              <option value="">All classes</option>
+              {classes.map((c) => (
+                <option key={c._id} value={c._id}>
+                  {c.className}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       <PanelToolbar

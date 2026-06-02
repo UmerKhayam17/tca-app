@@ -1,7 +1,120 @@
 const ApiError = require('../../utils/ApiError');
 const AcademyFeeRecord = require('../../models/academy/AcademyFeeRecord');
 const AcademyStudent = require('../../models/academy/AcademyStudent');
+const AcademyClass = require('../../models/academy/AcademyClass');
 const { populateCreatedBy } = require('../../utils/createdBy');
+
+function daysSince(date) {
+  if (!date) return 0;
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return Math.max(0, Math.floor((startOfToday - d) / (24 * 60 * 60 * 1000)));
+}
+
+function escapeCsvCell(value) {
+  const s = String(value ?? '');
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function buildDefaulterFeeMatch({ classId, month, year, studentIds }) {
+  const feeMatch = { status: { $in: ['pending', 'overdue'] } };
+  if (month) feeMatch.month = Number(month);
+  if (year) feeMatch.year = Number(year);
+  if (studentIds?.length) feeMatch.studentId = { $in: studentIds };
+  return feeMatch;
+}
+
+async function resolveActiveStudentIds(classId) {
+  const studentQ = { status: 'active' };
+  if (classId) studentQ.classId = classId;
+  const students = await AcademyStudent.find(studentQ).select('_id').lean();
+  return students.map((s) => s._id);
+}
+
+function buildDefaultersPipeline({ feeMatch, search }) {
+  const pipeline = [
+    { $match: feeMatch },
+    {
+      $group: {
+        _id: '$studentId',
+        totalDue: { $sum: '$amount' },
+        unpaidCount: { $sum: 1 },
+        overdueCount: {
+          $sum: { $cond: [{ $eq: ['$status', 'overdue'] }, 1, 0] },
+        },
+        pendingCount: {
+          $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] },
+        },
+        oldestDueDate: { $min: '$dueDate' },
+      },
+    },
+    {
+      $lookup: {
+        from: AcademyStudent.collection.name,
+        localField: '_id',
+        foreignField: '_id',
+        as: 'student',
+      },
+    },
+    { $unwind: '$student' },
+    { $match: { 'student.status': 'active' } },
+    {
+      $lookup: {
+        from: AcademyClass.collection.name,
+        localField: 'student.classId',
+        foreignField: '_id',
+        as: 'classDoc',
+      },
+    },
+    {
+      $addFields: {
+        className: { $arrayElemAt: ['$classDoc.className', 0] },
+      },
+    },
+  ];
+
+  if (search && String(search).trim()) {
+    const s = String(search).trim();
+    const rx = new RegExp(s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    pipeline.push({
+      $match: {
+        $or: [
+          { 'student.studentName': rx },
+          { 'student.fatherName': rx },
+          { 'student.phone': rx },
+          { 'student.studentId': rx },
+        ],
+      },
+    });
+  }
+
+  return pipeline;
+}
+
+function mapDefaulterRow(row) {
+  const daysOverdue = daysSince(row.oldestDueDate);
+  return {
+    studentId: row._id,
+    totalDue: row.totalDue,
+    unpaidCount: row.unpaidCount,
+    overdueCount: row.overdueCount,
+    pendingCount: row.pendingCount,
+    oldestDueDate: row.oldestDueDate,
+    daysOverdue,
+    student: {
+      _id: row.student._id,
+      studentId: row.student.studentId,
+      studentName: row.student.studentName,
+      fatherName: row.student.fatherName,
+      phone: row.student.phone,
+      classId: row.student.classId,
+    },
+    className: row.className || null,
+  };
+}
 
 function receiptNumber(studentDoc, month, year, feeType) {
   const sid = studentDoc.studentId || studentDoc._id.toString().slice(-6);
@@ -171,11 +284,164 @@ async function getFeeSummary({ month, year, classId, studentId }) {
   };
 }
 
+/** Students with at least one pending or overdue fee voucher. */
+async function listFeeDefaulters({
+  page = 1,
+  limit = 20,
+  classId,
+  month,
+  year,
+  search,
+}) {
+  await syncOverdueFees({ classId, month, year });
+
+  let studentIds;
+  if (classId) {
+    studentIds = await resolveActiveStudentIds(classId);
+    if (!studentIds.length) {
+      const perPage = Math.min(100, Math.max(1, limit));
+      return {
+        items: [],
+        pagination: { page: 1, limit: perPage, total: 0, pages: 1 },
+      };
+    }
+  }
+
+  const feeMatch = buildDefaulterFeeMatch({ classId, month, year, studentIds });
+  const perPage = Math.min(100, Math.max(1, limit));
+  const skip = (Math.max(1, page) - 1) * perPage;
+
+  const pipeline = buildDefaultersPipeline({ feeMatch, search });
+  pipeline.push({ $sort: { oldestDueDate: 1, totalDue: -1 } });
+  pipeline.push({
+    $facet: {
+      metadata: [{ $count: 'total' }],
+      items: [
+        { $skip: skip },
+        { $limit: perPage },
+        {
+          $project: {
+            _id: 1,
+            totalDue: 1,
+            unpaidCount: 1,
+            overdueCount: 1,
+            pendingCount: 1,
+            oldestDueDate: 1,
+            className: 1,
+            student: {
+              _id: '$student._id',
+              studentId: '$student.studentId',
+              studentName: '$student.studentName',
+              fatherName: '$student.fatherName',
+              phone: '$student.phone',
+              classId: '$student.classId',
+            },
+          },
+        },
+      ],
+    },
+  });
+
+  const [result] = await AcademyFeeRecord.aggregate(pipeline);
+  const total = result?.metadata?.[0]?.total ?? 0;
+  const items = (result?.items || []).map(mapDefaulterRow);
+
+  return {
+    items,
+    pagination: {
+      page: Math.max(1, page),
+      limit: perPage,
+      total,
+      pages: Math.ceil(total / perPage) || 1,
+    },
+  };
+}
+
+async function getDefaultersSummary({ classId, month, year }) {
+  await syncOverdueFees({ classId, month, year });
+
+  let studentIds;
+  if (classId) {
+    studentIds = await resolveActiveStudentIds(classId);
+    if (!studentIds.length) {
+      return {
+        defaulterCount: 0,
+        totalOutstanding: 0,
+        totalUnpaidVouchers: 0,
+        overdueVouchers: 0,
+      };
+    }
+  }
+
+  const feeMatch = buildDefaulterFeeMatch({ classId, month, year, studentIds });
+  const pipeline = buildDefaultersPipeline({ feeMatch });
+  pipeline.push({
+    $group: {
+      _id: null,
+      defaulterCount: { $sum: 1 },
+      totalOutstanding: { $sum: '$totalDue' },
+      totalUnpaidVouchers: { $sum: '$unpaidCount' },
+      overdueVouchers: { $sum: '$overdueCount' },
+    },
+  });
+
+  const [row] = await AcademyFeeRecord.aggregate(pipeline);
+  return {
+    defaulterCount: row?.defaulterCount ?? 0,
+    totalOutstanding: row?.totalOutstanding ?? 0,
+    totalUnpaidVouchers: row?.totalUnpaidVouchers ?? 0,
+    overdueVouchers: row?.overdueVouchers ?? 0,
+  };
+}
+
+function defaultersToCsv(items) {
+  const header = [
+    'Student ID',
+    'Student Name',
+    'Father Name',
+    'Phone',
+    'Class',
+    'Total Due (PKR)',
+    'Unpaid Vouchers',
+    'Overdue Vouchers',
+    'Oldest Due Date',
+    'Days Overdue',
+  ];
+  const rows = items.map((d) => [
+    d.student?.studentId ?? '',
+    d.student?.studentName ?? '',
+    d.student?.fatherName ?? '',
+    d.student?.phone ?? '',
+    d.className ?? '',
+    d.totalDue ?? 0,
+    d.unpaidCount ?? 0,
+    d.overdueCount ?? 0,
+    d.oldestDueDate ? new Date(d.oldestDueDate).toISOString().slice(0, 10) : '',
+    d.daysOverdue ?? 0,
+  ]);
+  return [header, ...rows].map((r) => r.map(escapeCsvCell).join(',')).join('\n');
+}
+
+async function exportFeeDefaulters({ classId, month, year, search }) {
+  const { items } = await listFeeDefaulters({
+    page: 1,
+    limit: 10000,
+    classId,
+    month,
+    year,
+    search,
+  });
+  return defaultersToCsv(items);
+}
+
 module.exports = {
   listFeeRecords,
   generateMonthlyFees,
   recordPayment,
   getStudentFeeHistory,
   getFeeSummary,
+  listFeeDefaulters,
+  getDefaultersSummary,
+  exportFeeDefaulters,
   receiptNumber,
 };

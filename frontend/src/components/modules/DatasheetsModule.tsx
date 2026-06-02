@@ -33,6 +33,16 @@ const downloadCSV = (s: Pick<Datasheet, "name" | "columns" | "rows">) => {
   URL.revokeObjectURL(url);
 };
 
+/** API may return null rows/columns for legacy documents. */
+function normalizeDatasheet(s: Datasheet): Datasheet {
+  const columns = Array.isArray(s.columns) ? s.columns : [];
+  const rawRows = Array.isArray(s.rows) ? s.rows : [];
+  const rows = rawRows.map((r) =>
+    Array.isArray(r) ? [...r] : columns.map(() => "")
+  );
+  return { ...s, columns, rows };
+}
+
 const DatasheetsModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActionCaps }) => {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -62,7 +72,7 @@ const DatasheetsModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Module
   });
 
   useEffect(() => {
-    if (activeSheet) setDraft(activeSheet);
+    if (activeSheet) setDraft(normalizeDatasheet(activeSheet));
   }, [activeSheet]);
 
   const sheets = listData?.sheets ?? [];
@@ -142,15 +152,25 @@ const DatasheetsModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Module
 
   const sheetsFiltered = useMemo(() => {
     if (!search.trim()) return sheets;
-    return sheets.filter((s) =>
-      matchesPanelSearch(search, s.name, s.columns.join(" "), String(s.rows.length))
-    );
+    return sheets.filter((s) => {
+      const norm = normalizeDatasheet(s);
+      return matchesPanelSearch(
+        search,
+        norm.name,
+        norm.columns.join(" "),
+        String(norm.rows.length)
+      );
+    });
   }, [sheets, search]);
 
   const editorRowIndexes = useMemo(() => {
-    if (!active || !search.trim()) return active.rows.map((_, i) => i);
-    return active.rows
-      .map((row, i) => (matchesPanelSearch(search, ...row, String(i + 1)) ? i : -1))
+    if (!active) return [];
+    const rows = active.rows ?? [];
+    if (!search.trim()) return rows.map((_, i) => i);
+    return rows
+      .map((row, i) =>
+        matchesPanelSearch(search, ...(row ?? []), String(i + 1)) ? i : -1
+      )
       .filter((i) => i >= 0);
   }, [active, search]);
 
@@ -193,7 +213,9 @@ const DatasheetsModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Module
         )}
         {!listLoading && sheetsFiltered.length > 0 && (
           <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
-            {sheetsFiltered.map((s) => (
+            {sheetsFiltered.map((raw) => {
+              const s = normalizeDatasheet(raw);
+              return (
               <Card key={s._id} className="p-4 hover:shadow-elegant transition-smooth">
                 <div className="flex items-start gap-3">
                   <div className="h-10 w-10 rounded-lg bg-accent/10 grid place-items-center shrink-0">
@@ -236,7 +258,8 @@ const DatasheetsModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Module
                   )}
                 </div>
               </Card>
-            ))}
+            );
+            })}
           </div>
         )}
 

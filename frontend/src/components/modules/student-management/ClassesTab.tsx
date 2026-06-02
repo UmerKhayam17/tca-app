@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { classDetailHref } from "@/lib/studentManagementMenus";
@@ -23,6 +23,7 @@ const QK = ["academy-classes"] as const;
 export default function ClassesTab({ caps }: { caps: ModuleActionCaps }) {
   const { toast } = useToast();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const role = user?.role ?? "admin";
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
@@ -105,14 +106,13 @@ export default function ClassesTab({ caps }: { caps: ModuleActionCaps }) {
                 <tr><td colSpan={4} className="p-8 text-center text-muted-foreground">No classes yet</td></tr>
               )}
               {classes.map((c) => (
-                <tr key={c._id} className="border-b last:border-0 hover:bg-muted/30">
-                  <td className="p-3 font-medium">
-                    <Link
-                      to={classDetailHref(role, c._id)}
-                      className="text-primary hover:underline"
-                    >
-                      {c.className}
-                    </Link>
+                <tr
+                  key={c._id}
+                  className="border-b last:border-0 hover:bg-muted/30 cursor-pointer"
+                  onClick={() => navigate(classDetailHref(role, c._id))}
+                >
+                  <td className="p-3 font-medium text-primary">
+                    {c.className}
                   </td>
                   <td className="p-3">{c.totalSubjects}</td>
                   <td className="p-3">
@@ -123,7 +123,7 @@ export default function ClassesTab({ caps }: { caps: ModuleActionCaps }) {
                   {(caps.canEdit || caps.canDelete) && (
                     <td className="p-3 text-right space-x-1">
                       {caps.canEdit && (
-                        <Button variant="ghost" size="icon" onClick={() => openEdit(c)} aria-label="Edit">
+                        <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); openEdit(c); }} aria-label="Edit">
                           <Pencil className="h-4 w-4" />
                         </Button>
                       )}
@@ -131,7 +131,8 @@ export default function ClassesTab({ caps }: { caps: ModuleActionCaps }) {
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             if (confirm(`Delete class "${c.className}"?`)) delMut.mutate(c._id);
                           }}
                           aria-label="Delete"

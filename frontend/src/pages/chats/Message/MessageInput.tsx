@@ -410,6 +410,7 @@ export default function MessageInput({
       onCancelReply?.();
     } catch (err) {
       console.error("Upload failed", err);
+      alert(err instanceof Error ? err.message : "File upload failed");
     } finally {
       setUploading(false);
       setUploadPct(0);

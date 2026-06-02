@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { BookOpen, GraduationCap, Receipt, Wallet } from "lucide-react";
+import { AlertTriangle, BookOpen, GraduationCap, Receipt, Wallet } from "lucide-react";
 import type { Role } from "./auth";
 
 export type StudentManagementSection =
@@ -7,7 +7,8 @@ export type StudentManagementSection =
   | "subjects"
   | "fees-structure"
   | "registration"
-  | "fees";
+  | "fees"
+  | "fee-defaulters";
 
 /** Setup & billing — student enrollment lives under Student Records in the main sidebar. */
 export const STUDENT_MANAGEMENT_SECTIONS: {
@@ -19,6 +20,7 @@ export const STUDENT_MANAGEMENT_SECTIONS: {
   { key: "subjects", label: "Subjects", icon: BookOpen },
   { key: "fees-structure", label: "Fee structure", icon: Wallet },
   { key: "fees", label: "Fee management", icon: Receipt },
+  { key: "fee-defaulters", label: "Fee defaulters", icon: AlertTriangle },
 ];
 
 export const DEFAULT_STUDENT_MANAGEMENT_SECTION: StudentManagementSection = "classes";

@@ -27,6 +27,11 @@ function enrichConversation(conv) {
   };
 }
 
+/** Routes use `:id`; some handlers/docs use `:conversationId`. */
+function conversationIdFromReq(req) {
+  return req.params.conversationId || req.params.id;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // GET all conversations for logged-in user
 // ─────────────────────────────────────────────────────────────────────────────
@@ -176,7 +181,7 @@ exports.createGroup = async (req, res) => {
 exports.updateGroup = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { conversationId } = req.params;
+    const conversationId = conversationIdFromReq(req);
     const { title, description, avatar, settings } = req.body;
 
     const conv = await Conversation.findOne({
@@ -216,7 +221,7 @@ exports.updateGroup = async (req, res) => {
 exports.updateGroupSettings = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { conversationId } = req.params;
+    const conversationId = conversationIdFromReq(req);
 
     const allowedKeys = [
       "onlyAdminsCanSend",
@@ -271,7 +276,7 @@ exports.updateGroupSettings = async (req, res) => {
 exports.addParticipants = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { conversationId } = req.params;
+    const conversationId = conversationIdFromReq(req);
     const { userIds } = req.body;
 
     const conv = await Conversation.findOne({
@@ -324,7 +329,8 @@ exports.addParticipants = async (req, res) => {
 exports.removeParticipant = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { conversationId, targetUserId } = req.params;
+    const conversationId = conversationIdFromReq(req);
+    const { targetUserId } = req.params;
 
     const conv = await Conversation.findOne({ _id: conversationId, type: "group", isDeleted: false });
     if (!conv) return res.status(404).json({ ok: false, error: "Group not found" });
@@ -369,7 +375,8 @@ exports.removeParticipant = async (req, res) => {
 exports.changeParticipantRole = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { conversationId, targetUserId } = req.params;
+    const conversationId = conversationIdFromReq(req);
+    const { targetUserId } = req.params;
     const { role } = req.body;
 
     if (!["admin", "member"].includes(role))
@@ -427,7 +434,7 @@ exports.changeParticipantRole = async (req, res) => {
 exports.leaveGroup = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { conversationId } = req.params;
+    const conversationId = conversationIdFromReq(req);
     const { newAdminId } = req.body || {};
 
     const conv = await Conversation.findOne({
@@ -506,7 +513,7 @@ exports.leaveGroup = async (req, res) => {
 exports.deleteGroup = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { conversationId } = req.params;
+    const conversationId = conversationIdFromReq(req);
 
     const conv = await Conversation.findOne({
       _id:       conversationId,
@@ -541,7 +548,7 @@ exports.deleteGroup = async (req, res) => {
 exports.getConversation = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { conversationId } = req.params;
+    const conversationId = conversationIdFromReq(req);
 
     const conv = await Conversation.findOne({
       _id:                   conversationId,

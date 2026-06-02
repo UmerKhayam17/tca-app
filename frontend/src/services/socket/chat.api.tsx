@@ -102,8 +102,10 @@ const api = {
       xhr.onload = () => {
         try {
           const data = JSON.parse(xhr.responseText || "{}");
-          if (xhr.status >= 200 && xhr.status < 300) resolve({ data });
-          else reject(new Error(data?.error || "Upload failed"));
+          if (xhr.status >= 200 && xhr.status < 300) {
+            if (!data?.file) reject(new Error(data?.error || "Upload failed"));
+            else resolve(data);
+          } else reject(new Error(data?.error || "Upload failed"));
         } catch {
           reject(new Error("Upload failed"));
         }

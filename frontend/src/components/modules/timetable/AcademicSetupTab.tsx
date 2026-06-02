@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus } from "lucide-react";
+import { GraduationCap, Plus } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { ModuleActionCaps } from "@/lib/permissions";
 import {
@@ -117,53 +118,106 @@ export default function AcademicSetupTab({
             className="max-w-md"
           />
 
-          <Card className="p-4">
-            <Label className="text-xs text-muted-foreground">Class for subjects (sections → Sections tab)</Label>
-            <select
-              className="mt-1 w-full max-w-xs h-10 rounded-md border px-3 text-sm"
-              value={selectedClass}
-              onChange={(e) => setSelectedClass(e.target.value)}
-            >
-              <option value="">Select class</option>
-              {classes.map((c) => <option key={c._id} value={c._id}>{c.name}</option>)}
-            </select>
-            {selectedClass && caps.canCreate && (
-              <div className="flex gap-2 mt-3">
-                <Button size="sm" variant="outline" onClick={() => { setDialog("subject"); setForm({ name: "", code: "" }); }}>
-                  Add subject
-                </Button>
+          <div className="space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <h3 className="font-display font-semibold text-primary">
+                Classes ({classesFiltered.length}
+                {search.trim() ? ` of ${classes.length}` : ""})
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Select a class to manage subjects · sections are on the Sections tab
+              </p>
+            </div>
+
+            {classesFiltered.length === 0 ? (
+              <Card className="p-10 text-center text-muted-foreground text-sm">
+                {classes.length === 0
+                  ? "No classes yet. Click + Class to add one for this session."
+                  : "No classes match your search."}
+              </Card>
+            ) : (
+              <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                {classesFiltered.map((c) => {
+                  const isSelected = selectedClass === c._id;
+                  return (
+                    <Card
+                      key={c._id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setSelectedClass(c._id)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setSelectedClass(c._id);
+                        }
+                      }}
+                      className={cn(
+                        "p-4 cursor-pointer transition-smooth hover:shadow-elegant hover:border-accent/50 text-left",
+                        isSelected && "ring-2 ring-accent border-accent shadow-elegant"
+                      )}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div
+                          className={cn(
+                            "h-10 w-10 rounded-lg grid place-items-center shrink-0",
+                            isSelected ? "bg-accent text-accent-foreground" : "bg-accent/10"
+                          )}
+                        >
+                          <GraduationCap
+                            className={cn("h-5 w-5", !isSelected && "text-accent")}
+                          />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-semibold text-primary truncate">{c.name}</div>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            {isSelected ? "Selected · manage subjects below" : "Click to view subjects"}
+                          </div>
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                })}
               </div>
             )}
-          </Card>
-
-          <div className="grid md:grid-cols-2 gap-4">
-            <Card className="p-4">
-              <h3 className="font-semibold mb-2">Classes ({classesFiltered.length}{search.trim() ? ` of ${classes.length}` : ""})</h3>
-              <ul className="text-sm space-y-1">
-                {classesFiltered.length === 0 ? (
-                  <li className="text-muted-foreground">{classes.length === 0 ? "No classes yet." : "No classes match your search."}</li>
-                ) : (
-                classesFiltered.map((c) => (
-                  <li key={c._id} className="text-muted-foreground">{c.name}</li>
-                )))}
-              </ul>
-            </Card>
-            {selectedClass && (
-              <>
-                <Card className="p-4 md:col-span-2">
-                  <h3 className="font-semibold mb-2">Subjects</h3>
-                  <ul className="text-sm flex flex-wrap gap-2">
-                    {subjectsFiltered.length === 0 ? (
-                      <li className="text-muted-foreground">{subjects.length === 0 ? "No subjects yet." : "No subjects match your search."}</li>
-                    ) : (
-                    subjectsFiltered.map((s) => (
-                      <li key={s._id} className="bg-muted px-2 py-1 rounded">{s.name} ({s.code})</li>
-                    )))}
-                  </ul>
-                </Card>
-              </>
-            )}
           </div>
+
+          {selectedClass && (
+            <Card className="p-4 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="font-semibold text-primary">
+                  Subjects — {classes.find((c) => c._id === selectedClass)?.name ?? "Class"}
+                </h3>
+                {caps.canCreate && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setDialog("subject");
+                      setForm({ name: "", code: "" });
+                    }}
+                  >
+                    <Plus className="h-4 w-4 mr-1" /> Add subject
+                  </Button>
+                )}
+              </div>
+              {subjectsFiltered.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  {subjects.length === 0
+                    ? "No subjects for this class yet."
+                    : "No subjects match your search."}
+                </p>
+              ) : (
+                <ul className="text-sm flex flex-wrap gap-2">
+                  {subjectsFiltered.map((s) => (
+                    <li key={s._id} className="bg-muted px-2.5 py-1 rounded-md font-medium">
+                      {s.name}{" "}
+                      <span className="text-muted-foreground font-normal">({s.code})</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          )}
         </>
       )}
 

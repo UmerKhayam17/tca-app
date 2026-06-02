@@ -6,8 +6,7 @@
 import React, { useState } from "react";
 import { Pin, X, ChevronRight, ChevronDown } from "lucide-react";
 import { format } from "date-fns";
-
-const API_URL = import.meta.env.VITE_REACT_APP_API_URL || "";
+import { chatMediaUrl } from "../chatMediaUrl";
 
 function AllPinnedPanel({ pinnedMessages, onClose, onJump }) {
   return (
@@ -63,7 +62,7 @@ function AllPinnedPanel({ pinnedMessages, onClose, onJump }) {
                   </div>
                   {msg?.type === "image" && msg?.file?.url && (
                     <div className="flex items-center gap-2">
-                      <img src={API_URL + msg.file.url} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                      <img src={chatMediaUrl(msg.file.url)} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
                       <p className="text-[13px] italic" style={{ color: "#8696a0" }}>Photo</p>
                     </div>
                   )}
@@ -130,7 +129,7 @@ export default function PinnedMessageBar({ pinnedMessages, onJumpToMessage }) {
           className="flex-1 flex items-center gap-3 px-3 py-2 text-left hover:bg-gray-50 transition-colors min-w-0"
         >
           {msg?.type === "image" && msg?.file?.url && (
-            <img src={API_URL + msg.file.url} alt="" className="w-8 h-8 rounded-md object-cover flex-shrink-0" />
+            <img src={chatMediaUrl(msg.file.url)} alt="" className="w-8 h-8 rounded-md object-cover flex-shrink-0" />
           )}
           <div className="min-w-0 flex-1">
             <p className="text-[11.5px] font-semibold leading-snug" style={{ color: "#075e54" }}>

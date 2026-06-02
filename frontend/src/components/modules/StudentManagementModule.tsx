@@ -17,6 +17,7 @@ import RegistrationTab from "@/components/modules/student-management/Registratio
 import RegisterStudentPage from "@/components/modules/student-management/RegisterStudentPage";
 import StudentDetailPage from "@/components/modules/student-management/StudentDetailPage";
 import FeesTab from "@/components/modules/student-management/FeesTab";
+import FeeDefaultersTab from "@/components/modules/student-management/FeeDefaultersTab";
 import ClassDetailPage from "@/components/modules/student-management/ClassDetailPage";
 
 const StudentManagementModule = ({
@@ -90,6 +91,7 @@ const StudentManagementModule = ({
       {section === "fees-structure" && <FeeStructureTab caps={caps} />}
       {section === "registration" && <RegistrationTab caps={caps} />}
       {section === "fees" && <FeesTab caps={caps} />}
+      {section === "fee-defaulters" && <FeeDefaultersTab caps={caps} />}
     </>
   );
 };

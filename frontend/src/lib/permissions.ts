@@ -140,13 +140,13 @@ export const DEFAULT_PERMISSIONS: Record<Role, Record<ModuleKey, PermLevel>> = {
     dashboard: "view", users: "none", "staff-management": "none", "student-management": "none", students: "view", attendance: "view",
     timetable: "view", exams: "view", fees: "view",
     salary: "none", expenses: "none", chat: "view", announcements: "view",
-    reports: "none", datasheets: "view", "system-config": "none", settings: "none", permissions: "none", "permission-catalog": "none",
+    reports: "none", datasheets: "view", "system-config": "none", settings: "view", permissions: "none", "permission-catalog": "none",
   },
   student: {
     dashboard: "view", users: "none", "staff-management": "none", "student-management": "none", students: "view", attendance: "view",
     timetable: "view", exams: "view", fees: "view",
     salary: "none", expenses: "none", chat: "view", announcements: "view",
-    reports: "none", datasheets: "view", "system-config": "none", settings: "none", permissions: "none", "permission-catalog": "none",
+    reports: "none", datasheets: "view", "system-config": "none", settings: "view", permissions: "none", "permission-catalog": "none",
   },
 };
 

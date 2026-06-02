@@ -584,7 +584,27 @@ const UsersModule = ({
                           {formatTableCell(u, c.key)}
                         </td>
                       ))}
-                      <td className="px-4 py-3 text-muted-foreground">{modCount ? `${modCount} module(s)` : "—"}</td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {(() => {
+                          const mods = u.modulePermissions && typeof u.modulePermissions === "object"
+                            ? Object.keys(u.modulePermissions)
+                            : [];
+                          if (!mods || mods.length === 0) return "—";
+                          const show = mods.slice(0, 3);
+                          return (
+                            <div className="flex flex-wrap items-center gap-2">
+                              {show.map((m) => (
+                                <span key={m} className="text-xs bg-muted/20 rounded-full px-2 py-0.5 capitalize">
+                                  {m}
+                                </span>
+                              ))}
+                              {mods.length > 3 ? (
+                                <span className="text-xs text-muted-foreground">+{mods.length - 3}</span>
+                              ) : null}
+                            </div>
+                          );
+                        })()}
+                      </td>
                       {(caps.canEdit || caps.canDelete) && (
                         <td className="px-4 py-3 text-right whitespace-nowrap">
                           {caps.canEdit && (

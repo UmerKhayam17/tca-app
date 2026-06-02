@@ -197,8 +197,6 @@ function buildDefaultRoleDefs(allPermissionIds) {
         ['timetable', ['view']],
         ['chat', ['view', 'create', 'participate']],
         ['datasheets', ['view']],
-        ['studentManagement', ['view']],
-        ['student', ['view']],
         ['fee', ['view']],
       ]),
     },

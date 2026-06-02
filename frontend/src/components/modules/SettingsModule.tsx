@@ -9,8 +9,11 @@ const SettingsModule = () => {
   const { user } = useAuth();
   const role = (user?.role ?? "admin") as Role;
 
+  // Get module permissions for display
+  const modulePerms = user?.modulePermissions ? Object.entries(user.modulePermissions) : [];
+
   return (
-    <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-4 max-w-lg">
+    <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-4 max-w-2xl">
       <Card className="p-4 space-y-3">
         <div className="font-semibold text-primary">Your account</div>
         {user ? (
@@ -33,6 +36,27 @@ const SettingsModule = () => {
         )}
       </Card>
 
+      {modulePerms.length > 0 && (
+        <Card className="p-4 space-y-3">
+          <div className="font-semibold text-primary">Module permissions</div>
+          <p className="text-xs text-muted-foreground">
+            Your account has access to the following modules with these actions:
+          </p>
+          <div className="space-y-2">
+            {modulePerms.map(([moduleName, actions]) => (
+              <div key={moduleName} className="text-sm bg-muted/40 rounded p-3">
+                <div className="font-medium text-primary capitalize">{moduleName}</div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {Array.isArray(actions) && actions.length > 0
+                    ? actions.join(", ")
+                    : "No actions"}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
       <Card className="p-4 space-y-2">
         <div className="font-semibold text-primary">Access & permissions</div>
         <p className="text-xs text-muted-foreground">
@@ -53,3 +77,4 @@ const SettingsModule = () => {
 };
 
 export default SettingsModule;
+

@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const catchAsync = require('../utils/catchAsync');
 const ApiError = require('../utils/ApiError');
 const User = require('../models/User');
+const AcademyStudent = require('../models/academy/AcademyStudent');
 const { MODULES } = require('../modules');
 const { getSystemModulesForApi } = require('../config/systemModules');
 
@@ -59,6 +60,50 @@ const listUsers = catchAsync(async (req, res) => {
     });
   }
   res.json({ success: true, data: list.map(serializeUser) });
+});
+
+const getParentStudents = catchAsync(async (req, res) => {
+  const user = await User.findById(req.params.id).populate('role');
+  if (!user) throw new ApiError(404, 'User not found');
+  if (!user.role || user.role.name !== 'parent') throw new ApiError(400, 'User is not a parent');
+
+  const students = await AcademyStudent.find({
+    guardianEmail: String(user.email || '').trim().toLowerCase(),
+  })
+    .select('_id studentId studentName fatherName classId status')
+    .sort({ createdAt: -1 });
+
+  res.json({ success: true, data: students });
+});
+
+const patchParentStudents = catchAsync(async (req, res) => {
+  const { studentIds } = req.body;
+
+  const user = await User.findById(req.params.id).populate('role');
+  if (!user) throw new ApiError(404, 'User not found');
+  if (!user.role || user.role.name !== 'parent') throw new ApiError(400, 'User is not a parent');
+
+  const email = String(user.email || '').trim().toLowerCase();
+  if (!email) throw new ApiError(400, 'Parent email missing');
+
+  // Clear existing mapping for this parent email, then set the new selection.
+  await AcademyStudent.updateMany(
+    { guardianEmail: email },
+    { $unset: { guardianEmail: '' } }
+  );
+
+  if (Array.isArray(studentIds) && studentIds.length > 0) {
+    await AcademyStudent.updateMany(
+      { _id: { $in: studentIds } },
+      { guardianEmail: email, guardianName: user.name }
+    );
+  }
+
+  const students = await AcademyStudent.find({ guardianEmail: email })
+    .select('_id studentId studentName fatherName classId status')
+    .sort({ createdAt: -1 });
+
+  res.json({ success: true, data: students });
 });
 
 const createUser = catchAsync(async (req, res) => {
@@ -230,4 +275,6 @@ module.exports = {
   patchPermissions,
   patchModulePermissions,
   revokeModulePermissions,
+  getParentStudents,
+  patchParentStudents,
 };

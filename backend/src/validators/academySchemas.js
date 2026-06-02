@@ -23,6 +23,21 @@ const academySubjectPatch = Joi.object({
   status: Joi.string().valid('active', 'inactive'),
 }).min(1);
 
+const academySectionBody = Joi.object({
+  sectionName: Joi.string().trim().required(),
+  classId: objectId.required(),
+  useClassSubjects: Joi.boolean().default(true),
+  subjectIds: Joi.array().items(objectId).default([]),
+  status: Joi.string().valid('active', 'inactive').optional(),
+});
+
+const academySectionPatch = Joi.object({
+  sectionName: Joi.string().trim(),
+  useClassSubjects: Joi.boolean(),
+  subjectIds: Joi.array().items(objectId),
+  status: Joi.string().valid('active', 'inactive'),
+}).min(1);
+
 const academyFeeStructureBody = Joi.object({
   classId: objectId.required(),
   perSubjectFee: Joi.number().min(0).required(),
@@ -91,11 +106,15 @@ const academyStudentRegister = Joi.object({
   phone: Joi.string().trim(),
   gender: Joi.string().valid('male', 'female', 'other').required(),
   classId: objectId.required(),
+  sectionId: objectId.required(),
   selectedSubjects: Joi.array().items(objectId).default([]),
   isFullPackage: Joi.boolean().default(false),
   discountAmount: Joi.number().min(0).default(0),
   status: Joi.string().valid('active', 'inactive', 'suspended').optional(),
   ...studentProfileFields,
+  // Parent login (required for creating a parent account).
+  guardianEmail: Joi.string().trim().email({ tlds: { allow: false } }).required(),
+  parentPassword: Joi.string().min(8).required(),
 }).or('phone', 'mobileNo');
 
 const academyStudentPatch = Joi.object({
@@ -104,6 +123,7 @@ const academyStudentPatch = Joi.object({
   phone: Joi.string().trim(),
   gender: Joi.string().valid('male', 'female', 'other'),
   classId: objectId,
+  sectionId: objectId,
   selectedSubjects: Joi.array().items(objectId),
   isFullPackage: Joi.boolean(),
   discountAmount: Joi.number().min(0),
@@ -304,6 +324,8 @@ module.exports = {
   academyClassPatch,
   academySubjectBody,
   academySubjectPatch,
+  academySectionBody,
+  academySectionPatch,
   academyFeeStructureBody,
   academyFeeStructurePatch,
   academyStudentRegister,

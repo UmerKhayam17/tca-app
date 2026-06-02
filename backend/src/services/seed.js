@@ -187,6 +187,21 @@ function buildDefaultRoleDefs(allPermissionIds) {
         ['datasheets', ['view']],
       ]),
     },
+    parent: {
+      name: 'parent',
+      permissionNames: ['view_attendance', 'view_results', 'use_chat', 'view_timetables'],
+      description: 'Parent portal',
+      modulePermissions: new Map([
+        ['attendance', ['view']],
+        ['exam', ['view']],
+        ['timetable', ['view']],
+        ['chat', ['view', 'create', 'participate']],
+        ['datasheets', ['view']],
+        ['studentManagement', ['view']],
+        ['student', ['view']],
+        ['fee', ['view']],
+      ]),
+    },
     accountant: {
       name: 'accountant',
       permissionNames: [

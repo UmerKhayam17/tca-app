@@ -95,8 +95,24 @@ export async function fetchAllRoles(): Promise<RoleOption[]> {
 }
 
 export function staffRolesOnly(roles: RoleOption[]): RoleOption[] {
-  const allow = new Set(["teacher", "accountant"]);
+  const allow = new Set(["teacher", "accountant", "parent"]);
   return roles.filter((r) => allow.has(String(r.name).toLowerCase()));
+}
+
+export async function fetchParentStudents(parentUserId: string): Promise<{ _id: string; studentId: string; studentName: string; fatherName?: string }[]> {
+  const res = await authedFetch(`/users/${parentUserId}/parent-students`);
+  const body = await parseJson<{ success?: boolean; data?: any }>(res);
+  if (!res.ok) throw new Error(body.message || "Failed to load parent students");
+  return (body.data || []) as any;
+}
+
+export async function assignParentStudents(parentUserId: string, studentIds: string[]): Promise<void> {
+  const res = await authedFetch(`/users/${parentUserId}/parent-students`, {
+    method: "PATCH",
+    body: JSON.stringify({ studentIds }),
+  });
+  const body = await parseJson<{ success?: boolean; message?: string }>(res);
+  if (!res.ok) throw new Error(body.message || "Failed to assign parent students");
 }
 
 export async function createStaffUser(payload: {

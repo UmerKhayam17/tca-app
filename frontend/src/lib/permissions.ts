@@ -25,6 +25,7 @@ export const canCRUD  = (p: PermLevel) => PERM_RANK[p] >= PERM_RANK.crud;
 export type ModuleKey =
   | "dashboard"
   | "users"
+  | "staff-management"
   | "student-management"
   | "students"
   | "attendance"
@@ -53,6 +54,7 @@ export interface ModuleDef {
 
 export const MODULES: ModuleDef[] = [
   { key: "dashboard", label: "Dashboard", icon: "LayoutDashboard", desc: "Overview & key metrics" },
+  { key: "staff-management", label: "Staff management", icon: "UserCog", desc: "Teachers and accountants only" },
   { key: "students", label: "Student Records", icon: "GraduationCap", desc: "Enrollment, profiles, attendance & results" },
   {
     key: "student-management",
@@ -77,7 +79,7 @@ export const MODULES: ModuleDef[] = [
   { key: "announcements", label: "Announcements", icon: "Bell", desc: "Publish notices" },
   { key: "reports", label: "Reports", icon: "BarChart3", desc: "Analytics & exports" },
   { key: "datasheets", label: "Datasheets", icon: "FileText", desc: "Create & manage spreadsheets" },
-  { key: "users", label: "Staff management", icon: "UserCog", desc: "Teachers, accountants, access & salary" },
+  { key: "users", label: "Users management", icon: "UserCog", desc: "Manage all users, roles, and access" },
   {
     key: "system-config",
     label: "System configuration",
@@ -110,38 +112,38 @@ export const SIDEBAR_NAV_GROUPS: { id: string; label: string; modules: ModuleKey
   {
     id: "administration",
     label: "Administration",
-    modules: ["users", "system-config", "permissions", "permission-catalog", "settings"],
+    modules: ["users", "staff-management", "system-config", "permissions", "permission-catalog", "settings"],
   },
 ];
 
 // Default matrix — mirrors the reference spec sheet
 export const DEFAULT_PERMISSIONS: Record<Role, Record<ModuleKey, PermLevel>> = {
   admin: {
-    dashboard: "full", users: "crud", "student-management": "crud", students: "crud", attendance: "crud",
+    dashboard: "full", users: "crud", "staff-management": "crud", "student-management": "crud", students: "crud", attendance: "crud",
     timetable: "crud", exams: "crud", fees: "crud",
     salary: "crud", expenses: "crud", chat: "full", announcements: "crud",
     reports: "full", datasheets: "full", "system-config": "crud", settings: "full", permissions: "full", "permission-catalog": "full",
   },
   accountant: {
-    dashboard: "view", users: "none", "student-management": "process", students: "view", attendance: "none",
+    dashboard: "view", users: "none", "staff-management": "none", "student-management": "process", students: "view", attendance: "none",
     timetable: "none", exams: "none", fees: "crud",
     salary: "process", expenses: "crud", chat: "view", announcements: "none",
     reports: "view", datasheets: "crud", "system-config": "none", settings: "none", permissions: "none", "permission-catalog": "none",
   },
   teacher: {
-    dashboard: "view", users: "none", "student-management": "view", students: "grade", attendance: "mark",
+    dashboard: "view", users: "none", "staff-management": "none", "student-management": "view", students: "grade", attendance: "mark",
     timetable: "view", exams: "grade", fees: "none",
     salary: "view", expenses: "none", chat: "view", announcements: "view",
     reports: "view", datasheets: "crud", "system-config": "none", settings: "none", permissions: "none", "permission-catalog": "none",
   },
   parent: {
-    dashboard: "view", users: "none", "student-management": "none", students: "view", attendance: "view",
+    dashboard: "view", users: "none", "staff-management": "none", "student-management": "none", students: "view", attendance: "view",
     timetable: "view", exams: "view", fees: "view",
     salary: "none", expenses: "none", chat: "view", announcements: "view",
     reports: "none", datasheets: "view", "system-config": "none", settings: "none", permissions: "none", "permission-catalog": "none",
   },
   student: {
-    dashboard: "view", users: "none", "student-management": "none", students: "view", attendance: "view",
+    dashboard: "view", users: "none", "staff-management": "none", "student-management": "none", students: "view", attendance: "view",
     timetable: "view", exams: "view", fees: "view",
     salary: "none", expenses: "none", chat: "view", announcements: "view",
     reports: "none", datasheets: "view", "system-config": "none", settings: "none", permissions: "none", "permission-catalog": "none",
@@ -314,6 +316,10 @@ export function resolveModuleCaps(
       }
       return emptyActionCaps();
     }
+    if (moduleKey === "staff-management") {
+      const arr = backendPerms.user;
+      return capsFromBackendActions(Array.isArray(arr) ? arr : []);
+    }
     return emptyActionCaps();
   }
   return capsFromPermLevel(rolePermLevel);
@@ -364,6 +370,10 @@ export function applyBackendModulePermissions(
     if (salaryLevel !== "none") next.salary = salaryLevel;
     const expenseLevel = permLevelFromActionCaps(capsForExpensesModule(backendPerms));
     if (expenseLevel !== "none") next.expenses = expenseLevel;
+  }
+  if (backendPerms.user) {
+    const userLevel = permLevelFromActionCaps(capsFromBackendActions(backendPerms.user));
+    if (userLevel !== "none") next["staff-management"] = userLevel;
   }
   if (backendPerms.salary) {
     const salaryLevel = permLevelFromActionCaps(capsForSalaryModule(backendPerms));

@@ -1,26 +1,23 @@
 const catchAsync = require('../../utils/catchAsync');
-const subjectService = require('../../services/academy/academySubjectService');
+const sectionService = require('../../services/academy/academySectionService');
 
 const listByClass = catchAsync(async (req, res) => {
-  const data = await subjectService.listByClass(req.params.classId, {
-    status: req.query.status,
-    sectionId: req.query.sectionId,
-  });
+  const data = await sectionService.listByClass(req.params.classId, { status: req.query.status });
   res.json({ success: true, data });
 });
 
 const create = catchAsync(async (req, res) => {
-  const data = await subjectService.createSubject(req.body, req.user._id);
+  const data = await sectionService.createSection(req.body, req.user._id);
   res.status(201).json({ success: true, data });
 });
 
 const update = catchAsync(async (req, res) => {
-  const data = await subjectService.updateSubject(req.params.id, req.body);
+  const data = await sectionService.updateSection(req.params.id, req.body);
   res.json({ success: true, data });
 });
 
 const remove = catchAsync(async (req, res) => {
-  await subjectService.deleteSubject(req.params.id);
+  await sectionService.deleteSection(req.params.id);
   res.json({ success: true, data: { deleted: true } });
 });
 

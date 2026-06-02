@@ -11,6 +11,7 @@ import {
 } from "@/lib/studentManagementMenus";
 import { useAuth } from "@/hooks/useAuth";
 import ClassesTab from "@/components/modules/student-management/ClassesTab";
+import SectionsTab from "@/components/modules/student-management/SectionsTab";
 import SubjectsTab from "@/components/modules/student-management/SubjectsTab";
 import FeeStructureTab from "@/components/modules/student-management/FeeStructureTab";
 import RegistrationTab from "@/components/modules/student-management/RegistrationTab";
@@ -87,6 +88,7 @@ const StudentManagementModule = ({
   return (
     <>
       {section === "classes" && <ClassesTab caps={caps} />}
+      {section === "sections" && <SectionsTab caps={caps} />}
       {section === "subjects" && <SubjectsTab caps={caps} />}
       {section === "fees-structure" && <FeeStructureTab caps={caps} />}
       {section === "registration" && <RegistrationTab caps={caps} />}

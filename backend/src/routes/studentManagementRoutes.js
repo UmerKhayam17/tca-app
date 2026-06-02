@@ -6,6 +6,7 @@ const schemas = require('../validators/academySchemas');
 
 const classCtrl = require('../controllers/academy/academyClassController');
 const subjectCtrl = require('../controllers/academy/academySubjectController');
+const sectionCtrl = require('../controllers/academy/academySectionController');
 const feeStructureCtrl = require('../controllers/academy/academyFeeStructureController');
 const studentCtrl = require('../controllers/academy/academyStudentController');
 const feeCtrl = require('../controllers/academy/academyFeeController');
@@ -49,6 +50,32 @@ router.get(
   requireAnyPermission('view_academy_students', 'manage_academy_classes'),
   classCtrl.getRecord
 );
+
+// Subjects
+router.get(
+  '/classes/:classId/sections',
+  requireAnyPermission(
+    'view_academy_students',
+    'manage_academy_classes',
+    'manage_academy_students',
+    'enter_exam_marks',
+    'view_results'
+  ),
+  sectionCtrl.listByClass
+);
+router.post(
+  '/sections',
+  requirePermission('manage_academy_classes'),
+  validate(schemas.academySectionBody),
+  sectionCtrl.create
+);
+router.patch(
+  '/sections/:id',
+  requirePermission('manage_academy_classes'),
+  validate(schemas.academySectionPatch),
+  sectionCtrl.update
+);
+router.delete('/sections/:id', requirePermission('manage_academy_classes'), sectionCtrl.remove);
 
 // Subjects
 router.get(

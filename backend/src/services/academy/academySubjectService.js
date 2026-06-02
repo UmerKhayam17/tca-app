@@ -1,12 +1,27 @@
 const ApiError = require('../../utils/ApiError');
 const AcademySubject = require('../../models/academy/AcademySubject');
 const AcademyClass = require('../../models/academy/AcademyClass');
+const AcademySection = require('../../models/academy/AcademySection');
 const { syncSubjectCount } = require('./academyClassService');
 const { populateCreatedBy } = require('../../utils/createdBy');
 
-async function listByClass(classId, { status } = {}) {
+async function listByClass(classId, { status, sectionId } = {}) {
   const cls = await AcademyClass.findById(classId);
   if (!cls) throw new ApiError(404, 'Class not found');
+
+  if (sectionId) {
+    const section = await AcademySection.findById(sectionId);
+    if (!section) throw new ApiError(404, 'Section not found');
+    if (String(section.classId) !== String(classId)) {
+      throw new ApiError(400, 'Section does not belong to this class');
+    }
+    if (!section.useClassSubjects) {
+      const sq = { _id: { $in: section.subjectIds }, classId };
+      if (status) sq.status = status;
+      return populateCreatedBy(AcademySubject.find(sq)).sort({ subjectName: 1 });
+    }
+  }
+
   const q = { classId };
   if (status) q.status = status;
   return populateCreatedBy(AcademySubject.find(q)).sort({ subjectName: 1 });

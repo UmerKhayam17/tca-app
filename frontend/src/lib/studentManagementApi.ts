@@ -38,6 +38,16 @@ export interface AcademySubject {
   createdBy?: CreatedByUser | string;
 }
 
+export interface AcademySection {
+  _id: string;
+  sectionName: string;
+  classId: string | AcademyClass;
+  useClassSubjects: boolean;
+  subjectIds: AcademySubject[] | string[];
+  status: "active" | "inactive";
+  createdBy?: CreatedByUser | string;
+}
+
 export interface AcademyFeeStructure {
   _id: string;
   classId: string | AcademyClass;
@@ -69,6 +79,7 @@ export interface AcademyStudentRegisterBody {
   guardianOccupation?: string;
   guardianWorkAddress?: string;
   guardianEmail?: string;
+  parentPassword?: string;
   studentEmail?: string;
   postalAddress?: string;
   contactPhoneRes?: string;
@@ -79,6 +90,7 @@ export interface AcademyStudentRegisterBody {
   academicHistory?: AcademicRecord[];
   gender: string;
   classId: string;
+  sectionId: string;
   selectedSubjects: string[];
   isFullPackage: boolean;
   discountAmount?: number;
@@ -107,6 +119,7 @@ export interface AcademyStudent {
   gender: "male" | "female" | "other";
   address?: string;
   classId: string | AcademyClass;
+  sectionId?: string | AcademySection;
   selectedSubjects: AcademySubject[] | string[];
   isFullPackage: boolean;
   monthlyFee: number;
@@ -284,10 +297,32 @@ export const getAcademyClassRecord = (classId: string) =>
   api<AcademyClassRecord>(`/classes/${classId}/record`);
 
 // Subjects
-export const fetchSubjectsByClass = (classId: string, params?: { status?: string }) => {
-  const q = params?.status ? `?status=${params.status}` : "";
-  return api<AcademySubject[]>(`/classes/${classId}/subjects${q}`);
+export const fetchSubjectsByClass = (classId: string, params?: { status?: string; sectionId?: string }) => {
+  const qp = new URLSearchParams();
+  if (params?.status) qp.set("status", params.status);
+  if (params?.sectionId) qp.set("sectionId", params.sectionId);
+  const q = qp.toString();
+  return api<AcademySubject[]>(`/classes/${classId}/subjects${q ? `?${q}` : ""}`);
 };
+
+export const fetchSectionsByClass = (classId: string, params?: { status?: string }) => {
+  const q = params?.status ? `?status=${params.status}` : "";
+  return api<AcademySection[]>(`/classes/${classId}/sections${q}`);
+};
+
+export const createAcademySection = (body: {
+  sectionName: string;
+  classId: string;
+  useClassSubjects?: boolean;
+  subjectIds?: string[];
+  status?: string;
+}) => api<AcademySection>("/sections", { method: "POST", body: JSON.stringify(body) });
+
+export const updateAcademySection = (id: string, body: Partial<AcademySection> & { subjectIds?: string[] }) =>
+  api<AcademySection>(`/sections/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+
+export const deleteAcademySection = (id: string) =>
+  api<{ deleted: boolean }>(`/sections/${id}`, { method: "DELETE" });
 
 export const createAcademySubject = (body: {
   subjectName: string;

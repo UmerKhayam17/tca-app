@@ -110,4 +110,6 @@ export const moduleHref = (
           ? timetableHref(role, defaultTimetableSection({ caps: opts.caps, role }))
           : key === "exams"
             ? testExamsHref(role)
+        : key === "staff-management"
+          ? `/panel/${role}/staff-management`
             : `/panel/${role}/${key}`;

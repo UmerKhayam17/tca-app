@@ -89,6 +89,7 @@ export default function SubjectsTab({ caps }: { caps: ModuleActionCaps }) {
   });
 
   const classesHref = session?.role ? studentManagementHref(session.role, "classes") : "#";
+  const hasActions = caps.canEdit || caps.canDelete;
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-4">
@@ -154,23 +155,23 @@ export default function SubjectsTab({ caps }: { caps: ModuleActionCaps }) {
                   <th className="text-left p-3">Subject</th>
                   <th className="text-left p-3">Code</th>
                   <th className="text-left p-3">Status</th>
-                  {(caps.canEdit || caps.canDelete) && <th className="text-right p-3">Actions</th>}
+                  {hasActions && <th className="text-right p-3">Actions</th>}
                 </tr>
               </thead>
               <tbody>
                 {subjectsLoading && (
-                  <tr><td colSpan={4} className="p-8 text-center text-muted-foreground">Loading…</td></tr>
+                  <tr><td colSpan={hasActions ? 4 : 3} className="p-8 text-center text-muted-foreground">Loading…</td></tr>
                 )}
                 {!subjectsLoading && subjects.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="p-8 text-center text-muted-foreground">
+                    <td colSpan={hasActions ? 4 : 3} className="p-8 text-center text-muted-foreground">
                       No subjects for this class yet.
                     </td>
                   </tr>
                 )}
                 {subjectsFiltered.length === 0 && !subjectsLoading && (
                   <tr>
-                    <td colSpan={canSave ? 4 : 3} className="p-8 text-center text-muted-foreground">
+                    <td colSpan={hasActions ? 4 : 3} className="p-8 text-center text-muted-foreground">
                       {subjects.length === 0 ? "No subjects yet." : "No subjects match your search."}
                     </td>
                   </tr>
@@ -180,7 +181,7 @@ export default function SubjectsTab({ caps }: { caps: ModuleActionCaps }) {
                     <td className="p-3 font-medium">{s.subjectName}</td>
                     <td className="p-3">{s.subjectCode}</td>
                     <td className="p-3">{s.status}</td>
-                    {(caps.canEdit || caps.canDelete) && (
+                    {hasActions && (
                       <td className="p-3 text-right">
                         {caps.canEdit && (
                           <Button variant="ghost" size="icon" onClick={() => openEditSubject(s)} aria-label="Edit subject">

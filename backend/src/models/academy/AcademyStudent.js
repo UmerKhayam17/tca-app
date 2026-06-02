@@ -36,6 +36,7 @@ const academyStudentSchema = new mongoose.Schema(
     /** @deprecated use postalAddress */
     address: { type: String, trim: true },
     classId: { type: mongoose.Schema.Types.ObjectId, ref: 'AcademyClass', required: true, index: true },
+    sectionId: { type: mongoose.Schema.Types.ObjectId, ref: 'AcademySection', index: true },
     selectedSubjects: [{ type: mongoose.Schema.Types.ObjectId, ref: 'AcademySubject' }],
     isFullPackage: { type: Boolean, default: false },
     monthlyFee: { type: Number, required: true, min: 0 },

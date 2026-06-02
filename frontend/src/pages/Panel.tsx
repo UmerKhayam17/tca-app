@@ -272,7 +272,8 @@ const Panel = () => {
 
   const renderModule = () => {
     switch (mod.key) {
-      case "users":         return <UsersModule perm={perm} caps={caps} />;
+      case "users":         return <UsersModule perm={perm} caps={caps} scope="all" />;
+      case "staff-management": return <UsersModule perm={perm} caps={caps} scope="staff" />;
       case "student-management": return (
         <StudentManagementModule perm={perm} caps={caps} section={section} action={action} subAction={subAction} />
       );

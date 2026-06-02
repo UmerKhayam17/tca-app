@@ -121,7 +121,7 @@ function receiptNumber(studentDoc, month, year, feeType) {
   return `RCP-${sid}-${feeType === 'admission' ? 'ADM' : `${year}${String(month).padStart(2, '0')}`}`;
 }
 
-async function buildFeeQuery({ studentId, status, month, year, classId, feeType }) {
+async function buildFeeQuery({ studentId, studentIds, status, month, year, classId, feeType }) {
   const q = {};
   if (status) q.status = status;
   if (feeType) q.feeType = feeType;
@@ -129,6 +129,10 @@ async function buildFeeQuery({ studentId, status, month, year, classId, feeType 
   if (year) q.year = Number(year);
   if (studentId) {
     q.studentId = studentId;
+    return q;
+  }
+  if (studentIds?.length) {
+    q.studentId = { $in: studentIds };
     return q;
   }
   if (classId) {
@@ -157,15 +161,16 @@ async function listFeeRecords({
   page = 1,
   limit = 20,
   studentId,
+  studentIds,
   status,
   month,
   year,
   classId,
   feeType,
 }) {
-  await syncOverdueFees({ studentId, status, month, year, classId, feeType });
+  await syncOverdueFees({ studentId, studentIds, status, month, year, classId, feeType });
 
-  const q = await buildFeeQuery({ studentId, status, month, year, classId, feeType });
+  const q = await buildFeeQuery({ studentId, studentIds, status, month, year, classId, feeType });
 
   const skip = (Math.max(1, page) - 1) * Math.min(100, Math.max(1, limit));
   const perPage = Math.min(100, Math.max(1, limit));
@@ -252,9 +257,9 @@ async function getStudentFeeHistory(studentId) {
   return { student, records };
 }
 
-async function getFeeSummary({ month, year, classId, studentId }) {
-  await syncOverdueFees({ month, year, classId, studentId });
-  const q = await buildFeeQuery({ month, year, classId, studentId });
+async function getFeeSummary({ month, year, classId, studentId, studentIds }) {
+  await syncOverdueFees({ month, year, classId, studentId, studentIds });
+  const q = await buildFeeQuery({ month, year, classId, studentId, studentIds });
   const records = await AcademyFeeRecord.find(q).lean();
 
   const byStatus = { pending: 0, paid: 0, overdue: 0, waived: 0 };
@@ -268,10 +273,12 @@ async function getFeeSummary({ month, year, classId, studentId }) {
   });
 
   let activeStudents = 0;
-  if (!studentId) {
+  if (!studentId && !(studentIds?.length)) {
     const studentQ = { status: 'active' };
     if (classId) studentQ.classId = classId;
     activeStudents = await AcademyStudent.countDocuments(studentQ);
+  } else if (studentIds?.length) {
+    activeStudents = await AcademyStudent.countDocuments({ _id: { $in: studentIds }, status: 'active' });
   }
 
   return {

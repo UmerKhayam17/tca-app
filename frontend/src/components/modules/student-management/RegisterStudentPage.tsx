@@ -25,6 +25,9 @@ import {
   Smartphone,
   Tag,
   Trash2,
+  KeyRound,
+  Eye,
+  EyeOff,
   User,
   Users,
 } from "lucide-react";
@@ -39,6 +42,7 @@ import {
 import {
   fetchAcademyClasses,
   fetchSubjectsByClass,
+  fetchSectionsByClass,
   getAcademyStudent,
   previewFees,
   registerAcademyStudent,
@@ -144,6 +148,7 @@ export default function RegisterStudentPage({
   const [form, setForm] = useState(defaultRegisterForm);
   const [feePreview, setFeePreview] = useState<FeePreview | null>(null);
   const [formReady, setFormReady] = useState(!isEdit);
+  const [showParentPassword, setShowParentPassword] = useState(false);
 
   const routes =
     routesProp ?? (user?.role ? academyStudentRoutes(user.role, "registration") : null);
@@ -172,8 +177,14 @@ export default function RegisterStudentPage({
   });
 
   const { data: subjects = [], isLoading: subjectsLoading } = useQuery({
-    queryKey: ["academy-subjects", form.classId],
-    queryFn: () => fetchSubjectsByClass(form.classId, { status: "active" }),
+    queryKey: ["academy-subjects", form.classId, form.sectionId],
+    queryFn: () => fetchSubjectsByClass(form.classId, { status: "active", sectionId: form.sectionId || undefined }),
+    enabled: Boolean(form.classId) && Boolean(form.sectionId),
+  });
+
+  const { data: sections = [], isLoading: sectionsLoading } = useQuery({
+    queryKey: ["academy-sections", form.classId],
+    queryFn: () => fetchSectionsByClass(form.classId, { status: "active" }),
     enabled: Boolean(form.classId),
   });
 
@@ -251,7 +262,11 @@ export default function RegisterStudentPage({
     && form.dateOfBirth
     && form.mobileNo.trim()
     && form.classId
-    && subjectSelectionValid;
+    && form.sectionId
+    && subjectSelectionValid
+    && (!isEdit
+      ? Boolean(form.guardianEmail.trim()) && form.parentPassword.trim().length >= 8
+      : true);
 
   const selectedClassName = classes.find((c) => c._id === form.classId)?.className;
 
@@ -398,7 +413,7 @@ export default function RegisterStudentPage({
                 onChange={(e) => setForm((f) => ({ ...f, guardianWorkAddress: e.target.value }))}
               />
             </FormField>
-            <FormField label="Guardian email">
+            <FormField label="Guardian email" required>
               <IconInput
                 icon={Mail}
                 type="email"
@@ -406,6 +421,27 @@ export default function RegisterStudentPage({
                 value={form.guardianEmail}
                 onChange={(e) => setForm((f) => ({ ...f, guardianEmail: e.target.value }))}
               />
+            </FormField>
+            <FormField label="Parent login password" required={!isEdit}>
+              <div className="relative">
+                <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  type={showParentPassword ? "text" : "password"}
+                  className="pl-9 pr-10"
+                  placeholder="Minimum 8 characters"
+                  value={form.parentPassword}
+                  disabled={isEdit}
+                  onChange={(e) => setForm((f) => ({ ...f, parentPassword: e.target.value }))}
+                />
+                <button
+                  type="button"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary"
+                  onClick={() => setShowParentPassword((p) => !p)}
+                  aria-label={showParentPassword ? "Hide password" : "Show password"}
+                >
+                  {showParentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </FormField>
           </div>
         </section>
@@ -544,6 +580,7 @@ export default function RegisterStudentPage({
               onChange={(e) => setForm((f) => ({
                 ...f,
                 classId: e.target.value,
+                sectionId: "",
                 selectedSubjects: [],
                 isFullPackage: false,
               }))}
@@ -555,7 +592,27 @@ export default function RegisterStudentPage({
             </IconSelect>
           </FormField>
 
-          {form.classId && (
+          <FormField label="Section" required>
+            <IconSelect
+              id="enroll-section"
+              icon={GraduationCap}
+              value={form.sectionId}
+              onChange={(e) => setForm((f) => ({
+                ...f,
+                sectionId: e.target.value,
+                selectedSubjects: [],
+                isFullPackage: false,
+              }))}
+              disabled={!form.classId || sectionsLoading}
+            >
+              <option value="">{form.classId ? "Choose section…" : "Select class first…"}</option>
+              {sections.map((s) => (
+                <option key={s._id} value={s._id}>{s.sectionName}</option>
+              ))}
+            </IconSelect>
+          </FormField>
+
+          {form.classId && form.sectionId && (
             <div className="space-y-4 rounded-lg border bg-muted/20 p-4">
               <p className="text-sm font-medium">
                 Subjects for {selectedClassName}

@@ -1,9 +1,10 @@
 import type { ComponentType } from "react";
-import { AlertTriangle, BookOpen, GraduationCap, Receipt, Wallet } from "lucide-react";
+import { AlertTriangle, BookOpen, GraduationCap, Layers, Receipt, Wallet } from "lucide-react";
 import type { Role } from "./auth";
 
 export type StudentManagementSection =
   | "classes"
+  | "sections"
   | "subjects"
   | "fees-structure"
   | "registration"
@@ -17,6 +18,7 @@ export const STUDENT_MANAGEMENT_SECTIONS: {
   icon: ComponentType<{ className?: string }>;
 }[] = [
   { key: "classes", label: "Classes", icon: GraduationCap },
+  { key: "sections", label: "Sections", icon: Layers },
   { key: "subjects", label: "Subjects", icon: BookOpen },
   { key: "fees-structure", label: "Fee structure", icon: Wallet },
   { key: "fees", label: "Fee management", icon: Receipt },

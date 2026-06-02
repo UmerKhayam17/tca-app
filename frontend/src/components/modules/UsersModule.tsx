@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -232,6 +232,21 @@ const UsersModule = ({
     retry: false,
   });
 
+  const { data: currentParentStudents = [] } = useQuery({
+    queryKey: ["parent-students", editingId],
+    queryFn: async () => {
+      if (!editingId) return [];
+      return await fetchParentStudents(editingId);
+    },
+    enabled: open && mode === "edit" && Boolean(editingId) && isParentRole,
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (!(open && mode === "edit" && isParentRole)) return;
+    setParentStudentIds(currentParentStudents.map((r: any) => r._id));
+  }, [open, mode, isParentRole, currentParentStudents]);
+
   const { data: modules = [] } = useQuery({
     queryKey: REGISTRY_QUERY,
     queryFn: fetchModuleRegistry,
@@ -364,11 +379,6 @@ const UsersModule = ({
       if (u.profileImage.startsWith("http")) return u.profileImage;
       return u.profileImage.startsWith("/") ? u.profileImage : `/${u.profileImage}`;
     });
-    if (uRoleName === "parent") {
-      void fetchParentStudents(u._id).then((rows) => {
-        setParentStudentIds(rows.map((r: any) => r._id));
-      });
-    }
     setOpen(true);
   };
 

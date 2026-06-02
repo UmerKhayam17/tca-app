@@ -189,14 +189,21 @@ function buildDefaultRoleDefs(allPermissionIds) {
     },
     parent: {
       name: 'parent',
-      permissionNames: ['view_attendance', 'view_results', 'use_chat', 'view_timetables'],
+      permissionNames: [
+        'view_attendance',
+        'view_results',
+        'use_chat',
+        'view_timetables',
+        'view_academy_students',
+        'view_academy_fee_reports',
+      ],
       description: 'Parent portal',
       modulePermissions: new Map([
+        ['student', ['view']],
         ['attendance', ['view']],
         ['exam', ['view']],
         ['timetable', ['view']],
         ['chat', ['view', 'create', 'participate']],
-        ['datasheets', ['view']],
         ['fee', ['view']],
       ]),
     },
@@ -311,6 +318,28 @@ async function syncBuiltInRolePermissions() {
     }
     accountantRole.modulePermissions = mp;
     await accountantRole.save();
+  }
+
+  const parentRole = await Role.findOne({ name: 'parent' });
+  if (parentRole) {
+    const parentPerms = await permissionIdsByNames([
+      'view_attendance',
+      'view_results',
+      'use_chat',
+      'view_timetables',
+      'view_academy_students',
+      'view_academy_fee_reports',
+    ]);
+    parentRole.permissions = parentPerms;
+    parentRole.modulePermissions = new Map([
+      ['student', ['view']],
+      ['attendance', ['view']],
+      ['exam', ['view']],
+      ['timetable', ['view']],
+      ['chat', ['view', 'create', 'participate']],
+      ['fee', ['view']],
+    ]);
+    await parentRole.save();
   }
 }
 

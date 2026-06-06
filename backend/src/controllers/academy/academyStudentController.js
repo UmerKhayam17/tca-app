@@ -81,4 +81,33 @@ const remove = catchAsync(async (req, res) => {
   res.json({ success: true, data });
 });
 
-module.exports = { register, update, getById, getRecord, list, exportCsv, previewFees, remove };
+const discountReport = catchAsync(async (req, res) => {
+  const result = await studentService.getDiscountReport({
+    page: Number(req.query.page) || 1,
+    limit: Number(req.query.limit) || 20,
+    classId: req.query.classId,
+    search: req.query.search,
+    from: req.query.from,
+    to: req.query.to,
+  });
+  res.json({ success: true, data: result.items, summary: result.summary, pagination: result.pagination });
+});
+
+const uploadPhoto = catchAsync(async (req, res) => {
+  if (!req.file) throw new ApiError(400, 'Image file required');
+  const data = await studentService.uploadStudentPhoto(req.params.id, req.file);
+  res.json({ success: true, data });
+});
+
+module.exports = {
+  register,
+  update,
+  getById,
+  getRecord,
+  list,
+  exportCsv,
+  previewFees,
+  remove,
+  discountReport,
+  uploadPhoto,
+};

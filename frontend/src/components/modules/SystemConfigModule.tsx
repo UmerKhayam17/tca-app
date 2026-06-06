@@ -4,6 +4,7 @@ import type { ModuleActionCaps } from "@/lib/permissions";
 import {
   DEFAULT_SYSTEM_CONFIG_SECTION,
   findSystemConfigSection,
+  isSessionMongoId,
   type SystemConfigSection,
 } from "@/lib/systemConfigMenus";
 import SessionBar, { useActiveSessionId } from "@/components/modules/timetable/SessionBar";
@@ -16,29 +17,42 @@ import AssignmentsTab from "@/components/modules/timetable/AssignmentsTab";
 import RequirementsTab from "@/components/modules/timetable/RequirementsTab";
 import TimetableSettingsTab from "@/components/modules/timetable/TimetableSettingsTab";
 import SessionHistoryTab from "@/components/modules/timetable/SessionHistoryTab";
+import SessionDetailPage from "@/components/modules/timetable/SessionDetailPage";
 
 const SystemConfigModule = ({
   caps,
   section: sectionParam,
+  action,
 }: {
   caps: ModuleActionCaps;
   section?: string;
+  action?: string;
 }) => {
-  const section: SystemConfigSection = sectionParam
-    ? findSystemConfigSection(sectionParam)
-  : DEFAULT_SYSTEM_CONFIG_SECTION;
-
-  if (sectionParam && sectionParam !== section) {
-    return <Navigate to={`../${section}`} replace />;
-  }
-
-  const [sessionId, setSessionId] = useState("");
+  const isDetailView = sectionParam === "academic" && action && isSessionMongoId(action);
+  const [sessionId, setSessionId] = useState(isDetailView ? action : "");
   useActiveSessionId(sessionId, setSessionId);
 
   if (!caps.canView) {
     return (
       <p className="p-6 text-muted-foreground text-sm">You do not have access to system configuration.</p>
     );
+  }
+
+  if (isDetailView) {
+    return (
+      <div>
+        <SessionBar sessionId={sessionId} onSessionChange={setSessionId} />
+        <SessionDetailPage sessionId={action} caps={caps} />
+      </div>
+    );
+  }
+
+  const section: SystemConfigSection = sectionParam
+    ? findSystemConfigSection(sectionParam)
+    : DEFAULT_SYSTEM_CONFIG_SECTION;
+
+  if (sectionParam && sectionParam !== section) {
+    return <Navigate to={`../${section}`} replace />;
   }
 
   const needsSession = section !== "history";

@@ -15,7 +15,7 @@ const create = catchAsync(async (req, res) => {
 });
 
 const update = catchAsync(async (req, res) => {
-  const data = await subjectService.updateSubject(req.params.id, req.body);
+  const data = await subjectService.updateSubject(req.params.id, req.body, req.user._id);
   res.json({ success: true, data });
 });
 

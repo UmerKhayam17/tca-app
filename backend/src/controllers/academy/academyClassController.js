@@ -6,6 +6,7 @@ const list = catchAsync(async (req, res) => {
   const data = await classService.listClasses({
     status: req.query.status,
     search: req.query.search,
+    sessionId: req.query.sessionId,
   });
   res.json({ success: true, data });
 });

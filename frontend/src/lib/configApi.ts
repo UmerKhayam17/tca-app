@@ -63,6 +63,17 @@ export interface SessionHistory {
     scheduleSlots: number;
     versionsByStatus: Record<string, number>;
   };
+  academy: {
+    classCount: number;
+    sectionCount: number;
+    studentCount: number;
+    classes: {
+      _id: string;
+      className: string;
+      status: string;
+      sections: { _id: string; sectionName: string; status: string }[];
+    }[];
+  };
   classes: { _id: string; name: string; sections: { _id: string; name: string }[]; subjects: { _id: string; name: string; code: string }[] }[];
   timetableVersions: {
     _id: string;
@@ -172,6 +183,27 @@ export const cloneSessionStructure = (
     `/sessions/${sourceSessionId}/clone-structure`,
     { method: "POST", body: JSON.stringify(body) }
   );
+
+export type SessionEnrollmentImportInput = {
+  sourceSessionId: string;
+  classIds?: string[];
+  includeFeeStructure?: boolean;
+};
+
+export type SessionEnrollmentImportResult = {
+  classes: number;
+  sections: number;
+  subjects: number;
+  feeStructures: number;
+  skipped: { className: string; reason: string }[];
+  importedClassNames: string[];
+};
+
+export const importSessionEnrollment = (targetSessionId: string, body: SessionEnrollmentImportInput) =>
+  api<SessionEnrollmentImportResult>(`/sessions/${targetSessionId}/import-enrollment`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 
 export const fetchClasses = (sessionId?: string) => {
   const q = sessionId ? `?sessionId=${sessionId}` : "";

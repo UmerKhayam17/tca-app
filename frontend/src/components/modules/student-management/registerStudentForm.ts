@@ -44,6 +44,8 @@ export const defaultRegisterForm = () => ({
   isFullPackage: false,
   selectedSubjects: [] as string[],
   discountAmount: "",
+  monthlyFeeDiscount: "",
+  admissionFeeDiscount: "",
   status: "active" as "active" | "inactive" | "suspended",
 });
 
@@ -85,6 +87,8 @@ export function mapStudentToForm(student: AcademyStudent) {
     isFullPackage: student.isFullPackage ?? false,
     selectedSubjects: resolveSubjectIds(student.selectedSubjects),
     discountAmount: String(student.discountAmount ?? 0),
+    monthlyFeeDiscount: String(student.monthlyFeeDiscount ?? 0),
+    admissionFeeDiscount: String(student.admissionFeeDiscount ?? 0),
     status: (student.status as "active" | "inactive" | "suspended") || "active",
   };
 }
@@ -114,7 +118,8 @@ export function buildStudentPayload(form: ReturnType<typeof defaultRegisterForm>
     sectionId: form.sectionId,
     selectedSubjects: form.selectedSubjects,
     isFullPackage: form.isFullPackage,
-    discountAmount: Number(form.discountAmount) || 0,
+    monthlyFeeDiscount: Number(form.monthlyFeeDiscount) || 0,
+    admissionFeeDiscount: Number(form.admissionFeeDiscount) || 0,
     status: form.status,
   };
 }

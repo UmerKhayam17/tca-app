@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Navigate } from "react-router-dom";
 import type { ModuleActionCaps, PermLevel } from "@/lib/permissions";
 import {
@@ -5,6 +6,8 @@ import {
   isAcademyStudentId,
 } from "@/lib/studentManagementMenus";
 import { useAuth } from "@/hooks/useAuth";
+import SessionBar, { useActiveSessionId } from "@/components/modules/timetable/SessionBar";
+import AcademySetupWorkflow from "@/components/modules/student-management/AcademySetupWorkflow";
 import RegistrationTab from "@/components/modules/student-management/RegistrationTab";
 import RegisterStudentPage from "@/components/modules/student-management/RegisterStudentPage";
 import StudentDetailPage from "@/components/modules/student-management/StudentDetailPage";
@@ -21,33 +24,48 @@ const StudentsRecordsModule = ({
   action?: string;
 }) => {
   const { user } = useAuth();
+  const role = user?.role ?? "admin";
+  const [sessionId, setSessionId] = useState("");
+  useActiveSessionId(sessionId, setSessionId);
+
   const routes = user?.role ? academyStudentRoutes(user.role, "records") : null;
   const listHref = routes?.list ?? "..";
 
-  if (section === "new") {
-    if (!caps.canCreate) return <Navigate to={listHref} replace />;
-    return <RegisterStudentPage caps={caps} routes={routes ?? undefined} />;
-  }
-
-  if (section && isAcademyStudentId(section)) {
-    if (action === "edit") {
-      if (!caps.canEdit) return <Navigate to={routes?.detail(section) ?? listHref} replace />;
-      return <RegisterStudentPage caps={caps} studentId={section} routes={routes ?? undefined} />;
+  const body = (() => {
+    if (section === "new") {
+      if (!caps.canCreate) return <Navigate to={listHref} replace />;
+      return <RegisterStudentPage caps={caps} routes={routes ?? undefined} sessionId={sessionId} />;
     }
-    if (action) return <Navigate to={routes?.detail(section) ?? listHref} replace />;
-    return <StudentDetailPage caps={caps} studentId={section} routes={routes ?? undefined} />;
-  }
 
-  if (section) return <Navigate to={listHref} replace />;
+    if (section && isAcademyStudentId(section)) {
+      if (action === "edit") {
+        if (!caps.canEdit) return <Navigate to={routes?.detail(section) ?? listHref} replace />;
+        return <RegisterStudentPage caps={caps} studentId={section} routes={routes ?? undefined} sessionId={sessionId} />;
+      }
+      if (action) return <Navigate to={routes?.detail(section) ?? listHref} replace />;
+      return <StudentDetailPage caps={caps} studentId={section} routes={routes ?? undefined} />;
+    }
+
+    if (section) return <Navigate to={listHref} replace />;
+
+    return (
+      <RegistrationTab
+        caps={caps}
+        routes={routes ?? undefined}
+        sessionId={sessionId}
+        showHeading={false}
+        registerLabel="Register student"
+        emptyHint="No students on record yet."
+      />
+    );
+  })();
 
   return (
-    <RegistrationTab
-      caps={caps}
-      routes={routes ?? undefined}
-      showHeading={false}
-      registerLabel="Register student"
-      emptyHint="No students on record yet."
-    />
+    <div>
+      <SessionBar sessionId={sessionId} onSessionChange={setSessionId} />
+      <AcademySetupWorkflow role={role} sessionId={sessionId} currentSection="registration" />
+      {body}
+    </div>
   );
 };
 

@@ -13,11 +13,14 @@ function resolveClassId(student) {
 }
 
 function resolveEnrolledSubjectIds(student, allClassSubjects) {
+  const selected = student.selectedSubjects || [];
+  if (selected.length > 0) {
+    return selected.map((s) => String(s._id || s));
+  }
   if (student.isFullPackage) {
     return allClassSubjects.map((s) => String(s._id));
   }
-  const selected = student.selectedSubjects || [];
-  return selected.map((s) => String(s._id || s));
+  return [];
 }
 
 function attendanceSummary(records) {
@@ -94,7 +97,12 @@ async function getStudentRecord(id) {
     ]);
 
   const enrolledIds = new Set(resolveEnrolledSubjectIds(student, allClassSubjects));
-  const enrollmentSubjects = student.isFullPackage ? allClassSubjects : student.selectedSubjects;
+  const enrollmentSubjects =
+    student.selectedSubjects?.length > 0
+      ? student.selectedSubjects
+      : student.isFullPackage
+        ? allClassSubjects
+        : [];
 
   const timetable = classTimetable.filter((slot) => {
     const sid = slot.subjectId?._id || slot.subjectId;

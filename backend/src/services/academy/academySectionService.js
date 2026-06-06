@@ -27,9 +27,37 @@ async function listByClass(classId, { status } = {}) {
     .sort({ sectionName: 1 });
 }
 
+async function listBySession(sessionId, { status } = {}) {
+  if (!sessionId) throw new ApiError(400, 'sessionId required');
+
+  const classes = await AcademyClass.find({ sessionId }).select('_id className status');
+  if (!classes.length) return [];
+
+  const classIds = classes.map((c) => c._id);
+  const classMap = Object.fromEntries(classes.map((c) => [String(c._id), c]));
+
+  const q = { classId: { $in: classIds } };
+  if (status) q.status = status;
+
+  const sections = await AcademySection.find(q)
+    .populate('classId', 'className status sessionId')
+    .sort({ sectionName: 1 })
+    .lean();
+
+  return sections.map((s) => ({
+    ...s,
+    className: classMap[String(s.classId?._id || s.classId)]?.className
+      || s.classId?.className
+      || null,
+  }));
+}
+
 async function createSection(payload, userId) {
   const cls = await AcademyClass.findById(payload.classId);
   if (!cls) throw new ApiError(404, 'Class not found');
+  if (!cls.sessionId) {
+    throw new ApiError(400, 'Class is not linked to an academic session. Create the class under an active session first.');
+  }
 
   const sectionName = String(payload.sectionName || '').trim();
   if (!sectionName) throw new ApiError(400, 'Section name is required');
@@ -93,6 +121,7 @@ async function deleteSection(id) {
 
 module.exports = {
   listByClass,
+  listBySession,
   createSection,
   updateSection,
   deleteSection,

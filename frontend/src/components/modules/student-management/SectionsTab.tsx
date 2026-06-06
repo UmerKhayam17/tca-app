@@ -21,7 +21,7 @@ import {
 import PanelSearchBar from "@/components/modules/PanelSearchBar";
 import { matchesPanelSearch } from "@/lib/panelSearch";
 
-export default function SectionsTab({ caps }: { caps: ModuleActionCaps }) {
+export default function SectionsTab({ caps, sessionId }: { caps: ModuleActionCaps; sessionId: string }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [classId, setClassId] = useState("");
@@ -36,8 +36,9 @@ export default function SectionsTab({ caps }: { caps: ModuleActionCaps }) {
   });
 
   const { data: classes = [] } = useQuery({
-    queryKey: ["academy-classes"],
-    queryFn: () => fetchAcademyClasses({ status: "active" }),
+    queryKey: ["academy-classes", sessionId],
+    queryFn: () => fetchAcademyClasses({ status: "active", sessionId }),
+    enabled: Boolean(sessionId),
   });
   const selectedClass = classes.find((c) => c._id === classId);
 
@@ -129,12 +130,23 @@ export default function SectionsTab({ caps }: { caps: ModuleActionCaps }) {
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-4">
+      {!sessionId && (
+        <p className="text-sm text-muted-foreground rounded-lg border border-dashed p-4">
+          Select an academic session above before creating sections.
+        </p>
+      )}
+      {sessionId && classes.length === 0 && (
+        <p className="text-sm text-muted-foreground rounded-lg border border-dashed p-4">
+          Create a class for this session first, then add sections here.
+        </p>
+      )}
       <div className="max-w-sm space-y-1">
         <Label>Select class</Label>
         <select
           className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
           value={classId}
           onChange={(e) => setClassId(e.target.value)}
+          disabled={!sessionId || classes.length === 0}
         >
           <option value="">Choose class…</option>
           {classes.map((c) => (

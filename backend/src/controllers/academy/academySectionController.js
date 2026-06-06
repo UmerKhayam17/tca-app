@@ -6,6 +6,15 @@ const listByClass = catchAsync(async (req, res) => {
   res.json({ success: true, data });
 });
 
+const listBySession = catchAsync(async (req, res) => {
+  const sessionId = req.query.sessionId;
+  if (!sessionId) {
+    return res.status(400).json({ success: false, message: 'sessionId query parameter required' });
+  }
+  const data = await sectionService.listBySession(sessionId, { status: req.query.status });
+  res.json({ success: true, data });
+});
+
 const create = catchAsync(async (req, res) => {
   const data = await sectionService.createSection(req.body, req.user._id);
   res.status(201).json({ success: true, data });
@@ -21,4 +30,4 @@ const remove = catchAsync(async (req, res) => {
   res.json({ success: true, data: { deleted: true } });
 });
 
-module.exports = { listByClass, create, update, remove };
+module.exports = { listByClass, listBySession, create, update, remove };

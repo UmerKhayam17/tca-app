@@ -9,8 +9,8 @@ export const TEST_EXAMS_SECTIONS: {
   label: string;
   icon: ComponentType<{ className?: string }>;
 }[] = [
-  { key: "enter-tests", label: "Enter tests", icon: ClipboardList },
-  { key: "term-exams", label: "Term exams", icon: GraduationCap },
+  { key: "enter-tests", label: "Class tests", icon: ClipboardList },
+  { key: "term-exams", label: "Term results", icon: GraduationCap },
 ];
 
 export const DEFAULT_TEST_EXAMS_SECTION: TestExamsSection = "enter-tests";

@@ -4,6 +4,7 @@ const AcademyClass = require('../../models/academy/AcademyClass');
 const AcademySection = require('../../models/academy/AcademySection');
 const { syncSubjectCount } = require('./academyClassService');
 const { populateCreatedBy } = require('../../utils/createdBy');
+const choiceGroupService = require('./academySubjectChoiceGroupService');
 
 async function listByClass(classId, { status, sectionId } = {}) {
   const cls = await AcademyClass.findById(classId);
@@ -41,10 +42,15 @@ async function createSubject(payload, userId) {
     createdBy: userId,
   });
   await syncSubjectCount(payload.classId);
+
+  if (payload.enrollmentType === 'choice') {
+    await choiceGroupService.syncSubjectEnrollment(payload.classId, subject._id, payload, userId);
+  }
+
   return subject;
 }
 
-async function updateSubject(id, payload) {
+async function updateSubject(id, payload, userId) {
   const doc = await AcademySubject.findById(id);
   if (!doc) throw new ApiError(404, 'Subject not found');
   if (payload.subjectName) doc.subjectName = payload.subjectName.trim();
@@ -61,6 +67,11 @@ async function updateSubject(id, payload) {
   if (payload.status) doc.status = payload.status;
   await doc.save();
   await syncSubjectCount(doc.classId);
+
+  if (payload.enrollmentType !== undefined) {
+    await choiceGroupService.syncSubjectEnrollment(doc.classId, doc._id, payload, userId);
+  }
+
   return doc;
 }
 
@@ -68,6 +79,7 @@ async function deleteSubject(id) {
   const doc = await AcademySubject.findById(id);
   if (!doc) throw new ApiError(404, 'Subject not found');
   const classId = doc.classId;
+  await choiceGroupService.removeSubjectFromGroups(id);
   await doc.deleteOne();
   await syncSubjectCount(classId);
   return { deleted: true };

@@ -50,69 +50,83 @@ export interface ModuleDef {
   shortLabel?: string;
   icon: string;       // lucide icon name
   desc: string;
+  /** When false, hidden from sidebar and dashboard module tiles (route may still work). */
+  showInNav?: boolean;
 }
 
 export const MODULES: ModuleDef[] = [
   { key: "dashboard", label: "Dashboard", icon: "LayoutDashboard", desc: "Overview & key metrics" },
-  { key: "staff-management", label: "Staff management", icon: "UserCog", desc: "Teachers and accountants only" },
-  { key: "students", label: "Student Records", icon: "GraduationCap", desc: "Enrollment, profiles, attendance & results" },
+  {
+    key: "system-config",
+    label: "Sessions & timetable",
+    shortLabel: "Sessions",
+    icon: "SlidersHorizontal",
+    desc: "Academic sessions and timetable infrastructure",
+  },
   {
     key: "student-management",
-    label: "Academy setup",
-    shortLabel: "Academy setup",
+    label: "Classes & enrollment",
+    shortLabel: "Enrollment",
     icon: "School",
-    desc: "Classes, subjects, fee structure & tuition billing",
+    desc: "Classes, sections, subjects & student registration",
+  },
+  {
+    key: "students",
+    label: "Student records",
+    shortLabel: "Students",
+    icon: "GraduationCap",
+    desc: "Browse and manage enrolled students",
   },
   { key: "attendance", label: "Attendance", icon: "ClipboardList", desc: "Daily attendance" },
   { key: "timetable", label: "Timetable", icon: "Calendar", desc: "Build, publish & view class schedules" },
   {
     key: "exams",
     label: "Tests & exams",
-    shortLabel: "Tests & exams",
+    shortLabel: "Exams",
     icon: "Award",
     desc: "Ongoing tests and term exam results",
   },
-  { key: "fees", label: "Fee Management", icon: "Wallet", desc: "Collect and track fees" },
-  { key: "salary", label: "Teacher salary", icon: "DollarSign", desc: "Monthly teacher & staff payroll" },
+  { key: "fees", label: "Fee management", icon: "Wallet", desc: "Collect and track fees" },
+  { key: "salary", label: "Staff salary", icon: "DollarSign", desc: "Monthly teacher & staff payroll" },
   { key: "expenses", label: "Academy expenses", icon: "Receipt", desc: "Operating costs & expenses" },
   { key: "chat", label: "Chat", icon: "MessageSquare", desc: "Real-time messaging" },
   { key: "announcements", label: "Announcements", icon: "Bell", desc: "Publish notices" },
   { key: "reports", label: "Reports", icon: "BarChart3", desc: "Analytics & exports" },
   { key: "datasheets", label: "Datasheets", icon: "FileText", desc: "Create & manage spreadsheets" },
-  { key: "users", label: "Users management", icon: "UserCog", desc: "Manage all users, roles, and access" },
-  {
-    key: "system-config",
-    label: "System configuration",
-    shortLabel: "System config",
-    icon: "SlidersHorizontal",
-    desc: "Sessions, classes, timetable setup & rules",
-  },
-  { key: "permissions", label: "Permissions", icon: "KeyRound", desc: "Users, roles, API & module access" },
+  { key: "users", label: "Users management", shortLabel: "Users", icon: "Users", desc: "All accounts including parents" },
+  { key: "staff-management", label: "Staff management", shortLabel: "Staff", icon: "UserCog", desc: "Teachers and accountants only" },
+  { key: "permissions", label: "Permissions", icon: "KeyRound", desc: "Roles, API & module access" },
   {
     key: "permission-catalog",
     label: "API permissions",
     shortLabel: "API permissions",
     icon: "ListTree",
     desc: "Full table of permission definitions",
+    showInNav: false,
   },
-  { key: "settings", label: "Settings", icon: "Settings", desc: "Local permission matrix (browser)" },
+  { key: "settings", label: "Settings", icon: "Settings", desc: "Account summary", showInNav: false },
 ];
 
-/** Sidebar section order — modules appear under the first group that lists them. */
+/** Sidebar groups — top-level structure shown in the panel sidebar. */
 export const SIDEBAR_NAV_GROUPS: { id: string; label: string; modules: ModuleKey[] }[] = [
   { id: "overview", label: "Overview", modules: ["dashboard"] },
   {
+    id: "setup",
+    label: "School setup",
+    modules: ["system-config", "student-management"],
+  },
+  {
     id: "academics",
-    label: "Students & academics",
-    modules: ["students", "student-management", "attendance", "timetable", "exams"],
+    label: "Teaching & students",
+    modules: ["students", "attendance", "timetable", "exams"],
   },
   { id: "finance", label: "Finance", modules: ["fees", "salary", "expenses"] },
   { id: "communication", label: "Communication", modules: ["chat", "announcements"] },
-  { id: "resources", label: "Resources", modules: ["reports", "datasheets"] },
+  { id: "resources", label: "Reports & data", modules: ["reports", "datasheets"] },
   {
     id: "administration",
     label: "Administration",
-    modules: ["users", "staff-management", "system-config", "permissions", "permission-catalog", "settings"],
+    modules: ["users", "staff-management", "permissions"],
   },
 ];
 

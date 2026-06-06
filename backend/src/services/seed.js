@@ -344,6 +344,8 @@ async function syncBuiltInRolePermissions() {
 }
 
 async function seedPermissionsAndRoles() {
+  const { ensureAcademyClassIndexes } = require('./academy/academySessionImportService');
+  await ensureAcademyClassIndexes();
   await upsertAllPermissions();
   const rolesCreated = await ensureDefaultRoles();
   await syncBuiltInRolePermissions();

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
@@ -6,7 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -14,13 +18,41 @@ import { useAuth } from "@/hooks/useAuth";
 import type { ModuleActionCaps } from "@/lib/permissions";
 import { studentManagementHref } from "@/lib/studentManagementMenus";
 import {
-  createAcademySubject, deleteAcademySubject, fetchAcademyClasses,
-  fetchSubjectsByClass, updateAcademySubject, type AcademySubject,
+  createAcademySubject,
+  createSubjectChoiceGroupBulk,
+  deleteAcademySubject,
+  fetchAcademyClasses,
+  fetchSubjectChoiceGroups,
+  fetchSubjectsByClass,
+  updateAcademySubject,
+  type AcademySubject,
 } from "@/lib/studentManagementApi";
 import PanelSearchBar from "@/components/modules/PanelSearchBar";
 import { matchesPanelSearch } from "@/lib/panelSearch";
+import {
+  generateSubjectCode,
+  subjectCodePlaceholder,
+} from "@/components/modules/student-management/subjectCodeUtils";
+import {
+  emptyGroupSubjectRow,
+  groupSubjectRowsValid,
+  parseGroupSubjectCount,
+  resizeGroupSubjectRows,
+  type GroupSubjectRow,
+} from "@/components/modules/student-management/groupSubjectFormUtils";
+import SubjectEnrollmentFields, {
+  buildEnrollmentPayload,
+  choiceGroupValid,
+  defaultSubjectEnrollmentForm,
+  enrollmentFromGroup,
+  findGroupForSubject,
+  GroupSubjectRowsEditor,
+  isBulkGroupCreate,
+  SubjectEnrollmentConfig,
+  type SubjectEnrollmentForm,
+} from "@/components/modules/student-management/SubjectEnrollmentFields";
 
-export default function SubjectsTab({ caps }: { caps: ModuleActionCaps }) {
+export default function SubjectsTab({ caps, sessionId }: { caps: ModuleActionCaps; sessionId: string }) {
   const { toast } = useToast();
   const { user: session } = useAuth();
   const qc = useQueryClient();
@@ -28,11 +60,18 @@ export default function SubjectsTab({ caps }: { caps: ModuleActionCaps }) {
   const [open, setOpen] = useState(false);
   const [edit, setEdit] = useState<AcademySubject | null>(null);
   const [form, setForm] = useState({ subjectName: "", subjectCode: "", status: "active" as "active" | "inactive" });
+  const [enrollmentForm, setEnrollmentForm] = useState<SubjectEnrollmentForm>(defaultSubjectEnrollmentForm);
+  const [groupSubjectRows, setGroupSubjectRows] = useState<GroupSubjectRow[]>([
+    emptyGroupSubjectRow(),
+    emptyGroupSubjectRow(),
+  ]);
+  const [codeManuallyEdited, setCodeManuallyEdited] = useState(false);
   const [search, setSearch] = useState("");
 
   const { data: classes = [], isLoading: classesLoading } = useQuery({
-    queryKey: ["academy-classes"],
-    queryFn: () => fetchAcademyClasses(),
+    queryKey: ["academy-classes", sessionId],
+    queryFn: () => fetchAcademyClasses({ sessionId }),
+    enabled: Boolean(sessionId),
   });
 
   const selectedClass = classes.find((c) => c._id === classId);
@@ -43,10 +82,50 @@ export default function SubjectsTab({ caps }: { caps: ModuleActionCaps }) {
     enabled: Boolean(classId),
   });
 
+  const { data: choiceGroups = [] } = useQuery({
+    queryKey: ["subject-choice-groups", classId],
+    queryFn: () => fetchSubjectChoiceGroups(classId),
+    enabled: Boolean(classId),
+  });
+
+  const bulkGroupCreate = isBulkGroupCreate(enrollmentForm, Boolean(edit));
+
+  useEffect(() => {
+    if (!bulkGroupCreate) return;
+    const count = parseGroupSubjectCount(enrollmentForm.groupSubjectCount);
+    setGroupSubjectRows((prev) => resizeGroupSubjectRows(count, prev));
+  }, [bulkGroupCreate, enrollmentForm.groupSubjectCount]);
+
+  const subjectGroupMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const group of choiceGroups) {
+      for (const sub of group.subjectIds || []) {
+        const id = typeof sub === "string" ? sub : sub._id;
+        map.set(id, group.groupName);
+      }
+    }
+    return map;
+  }, [choiceGroups]);
+
   const subjectsFiltered = useMemo(() => {
     if (!search.trim()) return subjects;
-    return subjects.filter((s) => matchesPanelSearch(search, s.subjectName, s.subjectCode, s.status));
-  }, [subjects, search]);
+    return subjects.filter((s) =>
+      matchesPanelSearch(
+        search,
+        s.subjectName,
+        s.subjectCode,
+        s.status,
+        subjectGroupMap.get(s._id) ?? "standard",
+      ),
+    );
+  }, [subjects, search, subjectGroupMap]);
+
+  const resetDialog = () => {
+    setForm({ subjectName: "", subjectCode: "", status: "active" });
+    setEnrollmentForm(defaultSubjectEnrollmentForm());
+    setGroupSubjectRows([emptyGroupSubjectRow(), emptyGroupSubjectRow()]);
+    setCodeManuallyEdited(false);
+  };
 
   const openCreate = () => {
     if (!classId) {
@@ -54,26 +133,45 @@ export default function SubjectsTab({ caps }: { caps: ModuleActionCaps }) {
       return;
     }
     setEdit(null);
-    setForm({ subjectName: "", subjectCode: "", status: "active" });
+    resetDialog();
     setOpen(true);
   };
 
   const openEditSubject = (s: AcademySubject) => {
     setEdit(s);
+    setCodeManuallyEdited(true);
     setForm({ subjectName: s.subjectName, subjectCode: s.subjectCode, status: s.status });
+    const group = findGroupForSubject(choiceGroups, s._id);
+    setEnrollmentForm(group ? enrollmentFromGroup(group) : defaultSubjectEnrollmentForm());
     setOpen(true);
   };
 
   const saveMut = useMutation({
     mutationFn: async () => {
-      if (edit) return updateAcademySubject(edit._id, form);
-      return createAcademySubject({ ...form, classId });
+      if (bulkGroupCreate) {
+        return createSubjectChoiceGroupBulk(classId, {
+          groupName: enrollmentForm.choiceGroupName.trim(),
+          subjects: groupSubjectRows.map((r) => ({
+            subjectName: r.subjectName.trim(),
+            subjectCode: r.subjectCode.trim().toUpperCase(),
+          })),
+          pickCount: 1,
+        });
+      }
+      const enrollment = buildEnrollmentPayload(enrollmentForm);
+      const body = { ...form, ...enrollment };
+      if (edit) return updateAcademySubject(edit._id, body);
+      return createAcademySubject({ ...body, classId });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["academy-subjects", classId] });
+      qc.invalidateQueries({ queryKey: ["subject-choice-groups", classId] });
+      qc.invalidateQueries({ queryKey: ["enrollment-subjects"] });
       qc.invalidateQueries({ queryKey: ["academy-classes"] });
       setOpen(false);
-      toast({ title: edit ? "Subject updated" : "Subject added" });
+      toast({
+        title: bulkGroupCreate ? "Choice group created" : edit ? "Subject updated" : "Subject added",
+      });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -82,6 +180,7 @@ export default function SubjectsTab({ caps }: { caps: ModuleActionCaps }) {
     mutationFn: (id: string) => deleteAcademySubject(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["academy-subjects", classId] });
+      qc.invalidateQueries({ queryKey: ["subject-choice-groups", classId] });
       qc.invalidateQueries({ queryKey: ["academy-classes"] });
       toast({ title: "Subject deleted" });
     },
@@ -91,34 +190,38 @@ export default function SubjectsTab({ caps }: { caps: ModuleActionCaps }) {
   const classesHref = session?.role ? studentManagementHref(session.role, "classes") : "#";
   const hasActions = caps.canEdit || caps.canDelete;
 
+  const canSave = bulkGroupCreate
+    ? choiceGroupValid(enrollmentForm) && groupSubjectRowsValid(groupSubjectRows)
+    : form.subjectName.trim() && form.subjectCode.trim() && choiceGroupValid(enrollmentForm);
+
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-4">
       <div className="max-w-sm space-y-1">
-          <Label htmlFor="subject-class-select">Select class</Label>
-          <select
-            id="subject-class-select"
-            className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-            value={classId}
-            onChange={(e) => setClassId(e.target.value)}
-            disabled={classesLoading}
-          >
-            <option value="">Choose class…</option>
-            {classes.map((c) => (
-              <option key={c._id} value={c._id}>{c.className}</option>
-            ))}
-          </select>
-          {!classesLoading && classes.length === 0 && (
-            <p className="text-xs text-muted-foreground">
-              No classes yet.{" "}
-              {caps.canCreate ? (
-                <Link to={classesHref} className="text-primary underline-offset-2 hover:underline">
-                  Add a class first
-                </Link>
-              ) : (
-                "Ask an administrator to create classes."
-              )}
-            </p>
-          )}
+        <Label htmlFor="subject-class-select">Select class</Label>
+        <select
+          id="subject-class-select"
+          className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+          value={classId}
+          onChange={(e) => setClassId(e.target.value)}
+          disabled={classesLoading}
+        >
+          <option value="">Choose class…</option>
+          {classes.map((c) => (
+            <option key={c._id} value={c._id}>{c.className}</option>
+          ))}
+        </select>
+        {!classesLoading && classes.length === 0 && (
+          <p className="text-xs text-muted-foreground">
+            No classes yet.{" "}
+            {caps.canCreate ? (
+              <Link to={classesHref} className="text-primary underline-offset-2 hover:underline">
+                Add a class first
+              </Link>
+            ) : (
+              "Ask an administrator to create classes."
+            )}
+          </p>
+        )}
       </div>
 
       <Card className="overflow-hidden">
@@ -128,12 +231,7 @@ export default function SubjectsTab({ caps }: { caps: ModuleActionCaps }) {
               Subjects for <span className="font-semibold">{selectedClass.className}</span>
             </p>
             <div className="flex flex-wrap items-center gap-2">
-              <PanelSearchBar
-                value={search}
-                onChange={setSearch}
-                placeholder="Search subjects…"
-                className="max-w-xs"
-              />
+              <PanelSearchBar value={search} onChange={setSearch} placeholder="Search subjects…" className="max-w-xs" />
               {caps.canCreate && (
                 <Button className="gap-2 shrink-0" onClick={openCreate}>
                   <Plus className="h-4 w-4" /> Add Subject
@@ -144,9 +242,7 @@ export default function SubjectsTab({ caps }: { caps: ModuleActionCaps }) {
         )}
 
         {!classId ? (
-          <p className="p-8 text-center text-muted-foreground">
-            Select a class above to view and add subjects.
-          </p>
+          <p className="p-8 text-center text-muted-foreground">Select a class above to view and add subjects.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -154,54 +250,61 @@ export default function SubjectsTab({ caps }: { caps: ModuleActionCaps }) {
                 <tr>
                   <th className="text-left p-3">Subject</th>
                   <th className="text-left p-3">Code</th>
+                  <th className="text-left p-3">Enrollment</th>
                   <th className="text-left p-3">Status</th>
                   {hasActions && <th className="text-right p-3">Actions</th>}
                 </tr>
               </thead>
               <tbody>
                 {subjectsLoading && (
-                  <tr><td colSpan={hasActions ? 4 : 3} className="p-8 text-center text-muted-foreground">Loading…</td></tr>
+                  <tr><td colSpan={hasActions ? 5 : 4} className="p-8 text-center text-muted-foreground">Loading…</td></tr>
                 )}
                 {!subjectsLoading && subjects.length === 0 && (
                   <tr>
-                    <td colSpan={hasActions ? 4 : 3} className="p-8 text-center text-muted-foreground">
+                    <td colSpan={hasActions ? 5 : 4} className="p-8 text-center text-muted-foreground">
                       No subjects for this class yet.
                     </td>
                   </tr>
                 )}
-                {subjectsFiltered.length === 0 && !subjectsLoading && (
+                {subjectsFiltered.length === 0 && !subjectsLoading && subjects.length > 0 && (
                   <tr>
-                    <td colSpan={hasActions ? 4 : 3} className="p-8 text-center text-muted-foreground">
-                      {subjects.length === 0 ? "No subjects yet." : "No subjects match your search."}
+                    <td colSpan={hasActions ? 5 : 4} className="p-8 text-center text-muted-foreground">
+                      No subjects match your search.
                     </td>
                   </tr>
                 )}
-                {subjectsFiltered.map((s) => (
-                  <tr key={s._id} className="border-b hover:bg-muted/30">
-                    <td className="p-3 font-medium">{s.subjectName}</td>
-                    <td className="p-3">{s.subjectCode}</td>
-                    <td className="p-3">{s.status}</td>
-                    {hasActions && (
-                      <td className="p-3 text-right">
-                        {caps.canEdit && (
-                          <Button variant="ghost" size="icon" onClick={() => openEditSubject(s)} aria-label="Edit subject">
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                        )}
-                        {caps.canDelete && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => { if (confirm("Delete subject?")) delMut.mutate(s._id); }}
-                            aria-label="Delete subject"
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        )}
+                {subjectsFiltered.map((s) => {
+                  const groupName = subjectGroupMap.get(s._id);
+                  return (
+                    <tr key={s._id} className="border-b hover:bg-muted/30">
+                      <td className="p-3 font-medium">{s.subjectName}</td>
+                      <td className="p-3">{s.subjectCode}</td>
+                      <td className="p-3 text-muted-foreground">
+                        {groupName ? <span>Choice: {groupName}</span> : <span>Standard</span>}
                       </td>
-                    )}
-                  </tr>
-                ))}
+                      <td className="p-3">{s.status}</td>
+                      {hasActions && (
+                        <td className="p-3 text-right">
+                          {caps.canEdit && (
+                            <Button variant="ghost" size="icon" onClick={() => openEditSubject(s)} aria-label="Edit subject">
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {caps.canDelete && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => { if (confirm("Delete subject?")) delMut.mutate(s._id); }}
+                              aria-label="Delete subject"
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -209,42 +312,92 @@ export default function SubjectsTab({ caps }: { caps: ModuleActionCaps }) {
       </Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{edit ? "Edit Subject" : "New Subject"}</DialogTitle>
-            {selectedClass && !edit && (
+            <DialogTitle>{edit ? "Edit Subject" : bulkGroupCreate ? "New choice group" : "New Subject"}</DialogTitle>
+            {selectedClass && (
               <p className="text-sm text-muted-foreground">
-                Adding to class: <span className="font-medium text-foreground">{selectedClass.className}</span>
+                Class: <span className="font-medium text-foreground">{selectedClass.className}</span>
               </p>
             )}
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <div>
-              <Label htmlFor="subject-name">Subject name</Label>
-              <Input
-                id="subject-name"
-                value={form.subjectName}
-                onChange={(e) => setForm((f) => ({ ...f, subjectName: e.target.value }))}
-                placeholder="e.g. Mathematics"
+            {!edit && (
+              <SubjectEnrollmentConfig
+                value={enrollmentForm}
+                onChange={setEnrollmentForm}
+                choiceGroups={choiceGroups}
+                isEdit={Boolean(edit)}
               />
-            </div>
-            <div>
-              <Label htmlFor="subject-code">Subject code</Label>
-              <Input
-                id="subject-code"
-                value={form.subjectCode}
-                onChange={(e) => setForm((f) => ({ ...f, subjectCode: e.target.value.toUpperCase() }))}
-                placeholder="e.g. MATH-9"
+            )}
+
+            {bulkGroupCreate && selectedClass && (
+              <GroupSubjectRowsEditor
+                rows={groupSubjectRows}
+                onChange={setGroupSubjectRows}
+                className={selectedClass.className}
               />
-            </div>
+            )}
+
+            {!bulkGroupCreate && (
+              <>
+                {edit && (
+                  <SubjectEnrollmentConfig
+                    value={enrollmentForm}
+                    onChange={setEnrollmentForm}
+                    choiceGroups={choiceGroups}
+                    currentSubjectId={edit._id}
+                    isEdit
+                  />
+                )}
+                <div>
+                  <Label htmlFor="subject-name">Subject name</Label>
+                  <Input
+                    id="subject-name"
+                    value={form.subjectName}
+                    onChange={(e) => {
+                      const subjectName = e.target.value;
+                      setForm((f) => {
+                        const next = { ...f, subjectName };
+                        if (!edit && !codeManuallyEdited && selectedClass) {
+                          next.subjectCode = generateSubjectCode(subjectName, selectedClass.className);
+                        }
+                        return next;
+                      });
+                    }}
+                    placeholder="e.g. Mathematics"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="subject-code">Subject code</Label>
+                  <Input
+                    id="subject-code"
+                    value={form.subjectCode}
+                    onChange={(e) => {
+                      setCodeManuallyEdited(true);
+                      setForm((f) => ({ ...f, subjectCode: e.target.value.toUpperCase() }));
+                    }}
+                    placeholder={selectedClass ? subjectCodePlaceholder(selectedClass.className) : "e.g. MATH-09"}
+                  />
+                  {!edit && selectedClass && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Auto-filled from subject name and class; you can edit.
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button
-              disabled={saveMut.isPending || !form.subjectName.trim() || !form.subjectCode.trim()}
-              onClick={() => saveMut.mutate()}
-            >
-              {saveMut.isPending ? "Saving…" : edit ? "Save changes" : "Add subject"}
+            <Button disabled={saveMut.isPending || !canSave} onClick={() => saveMut.mutate()}>
+              {saveMut.isPending
+                ? "Saving…"
+                : bulkGroupCreate
+                  ? "Create group"
+                  : edit
+                    ? "Save changes"
+                    : "Add subject"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,4 +1,6 @@
-import { getApiRoot, parseJson } from "@/lib/api";
+import { getApiRoot, parseJson, resolveUploadUrl } from "@/lib/api";
+
+export { resolveUploadUrl };
 import { getAccessToken } from "@/lib/auth";
 import type { CreatedByUser } from "@/lib/createdBy";
 
@@ -214,17 +216,6 @@ export interface AcademyAssessmentRecord {
   obtainedMarks: number;
   remarks?: string;
   testPaperImage?: string;
-}
-
-/** Resolve /uploads/... paths for img src (dev proxy or API host). */
-export function resolveUploadUrl(path: string): string {
-  if (!path) return "";
-  if (path.startsWith("http://") || path.startsWith("https://") || path.startsWith("blob:")) {
-    return path;
-  }
-  const api = import.meta.env.VITE_API_URL?.trim();
-  if (api) return `${api.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
-  return path;
 }
 
 export interface AcademyStudentRecord {

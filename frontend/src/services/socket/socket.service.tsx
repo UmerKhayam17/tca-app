@@ -12,11 +12,7 @@
  */
 
 import { io } from "socket.io-client";
-
-const SOCKET_URL =
-  import.meta.env.VITE_SOCKET_URL?.trim() ||
-  import.meta.env.VITE_API_URL?.trim() ||
-  (typeof window !== "undefined" ? window.location.origin : "http://127.0.0.1:5000");
+import { getSocketUrl } from "@/lib/api";
 class SocketService {
   constructor() {
     this.chat          = null;
@@ -39,9 +35,9 @@ class SocketService {
       reconnectionAttempts: 10,
     };
 
-    this.chat = io(`${SOCKET_URL}/chat`, opts);
-    this.notifications = io(`${SOCKET_URL}/notifications`, opts);
-    this.presence      = io(`${SOCKET_URL}/presence`, opts);
+    this.chat = io(`${getSocketUrl()}/chat`, opts);
+    this.notifications = io(`${getSocketUrl()}/notifications`, opts);
+    this.presence      = io(`${getSocketUrl()}/presence`, opts);
 
     this.chat.on("connect", () => {
       // console.log("✅ Chat socket connected");

@@ -46,6 +46,7 @@ import ModuleAccessMatrix from "@/components/modules/ModuleAccessMatrix";
 import PanelToolbar from "@/components/modules/PanelToolbar";
 import { usePanelListSearch } from "@/hooks/usePanelListSearch";
 import { fetchAcademyStudents, type AcademyStudent } from "@/lib/studentManagementApi";
+import { resolveUploadUrl } from "@/lib/api";
 
 function setFormField(setter: React.Dispatch<React.SetStateAction<UserFormValues>>, key: UserFieldKey, value: string) {
   setter((prev) => ({ ...prev, [key]: value }));
@@ -419,9 +420,7 @@ const UsersModule = ({
     setPhotoFile(null);
     setPhotoPreview((prev) => {
       if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
-      if (!u.profileImage) return null;
-      if (u.profileImage.startsWith("http")) return u.profileImage;
-      return u.profileImage.startsWith("/") ? u.profileImage : `/${u.profileImage}`;
+      return u.profileImage ? resolveUploadUrl(u.profileImage) : null;
     });
     setOpen(true);
   };
@@ -622,13 +621,7 @@ const UsersModule = ({
               ) : (
                 staffFiltered.map((u) => {
                   const modCount = u.modulePermissions ? Object.keys(u.modulePermissions).length : 0;
-                  const imgSrc = u.profileImage?.startsWith("http")
-                    ? u.profileImage
-                    : u.profileImage
-                      ? u.profileImage.startsWith("/")
-                        ? u.profileImage
-                        : `/${u.profileImage}`
-                      : undefined;
+                  const imgSrc = u.profileImage ? resolveUploadUrl(u.profileImage) : undefined;
                   return (
                     <tr key={u._id} className="border-t border-border hover:bg-secondary/30">
                       <td className="px-4 py-2">

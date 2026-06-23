@@ -29,6 +29,7 @@ import {
   updateAssessment,
   deleteAssessment,
   ASSESSMENT_TYPE_LABELS,
+  resolveUploadUrl,
 } from "@/lib/studentManagementApi";
 import { fetchStudentExamResults, type ExamResult } from "@/lib/examApi";
 import AssessmentFormDialog from "@/components/modules/exams/AssessmentFormDialog";
@@ -162,9 +163,24 @@ function StatusBadge({ status }: { status: string }) {
 
 function ProfileTab({ student }: { student: AcademyStudent }) {
   const subtotal = student.monthlyFee + student.admissionFee;
+  const photoSrc = student.photoImage ? resolveUploadUrl(student.photoImage) : null;
 
   return (
     <div className="space-y-4">
+      {photoSrc ? (
+        <div className="flex items-center gap-4 rounded-lg border p-4">
+          <img
+            src={photoSrc}
+            alt={`${student.studentName} photo`}
+            className="h-24 w-24 rounded-full object-cover border"
+          />
+          <div>
+            <p className="font-medium">{student.studentName}</p>
+            <p className="text-sm text-muted-foreground">{student.studentId}</p>
+          </div>
+        </div>
+      ) : null}
+
       <section className="rounded-lg border p-4 space-y-3">
         <SectionTitle>Student information</SectionTitle>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3">
@@ -227,7 +243,14 @@ function ProfileTab({ student }: { student: AcademyStudent }) {
           <DetailRow label="Class" value={classLabel(student.classId)} />
           <DetailRow label="Monthly fee" value={formatPkr(student.monthlyFee)} />
           <DetailRow label="Admission fee" value={formatPkr(student.admissionFee)} />
-          <DetailRow label="Discount (PKR)" value={formatPkr(student.discountAmount)} />
+          <DetailRow label="Monthly fee discount" value={formatPkr(student.monthlyFeeDiscount)} />
+          <DetailRow label="Admission fee discount" value={formatPkr(student.admissionFeeDiscount)} />
+          {(student.discountAmount ?? 0) > 0 &&
+          !(student.monthlyFeeDiscount || student.admissionFeeDiscount) ? (
+            <DetailRow label="Combined discount (legacy)" value={formatPkr(student.discountAmount)} />
+          ) : (
+            <DetailRow label="Total discount" value={formatPkr(student.discountAmount)} />
+          )}
           <DetailRow label="Subtotal" value={formatPkr(subtotal)} />
           <DetailRow label="First payment (total)" value={formatPkr(student.totalFee)} />
         </div>

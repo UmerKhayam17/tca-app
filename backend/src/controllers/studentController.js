@@ -147,6 +147,14 @@ const activate = catchAsync(async (req, res) => {
       password: await bcrypt.hash(parentPassword || 'Parent@123456', 12),
       role: parentRole._id,
     });
+  } else {
+    // Keep parent profile current on admission activation and allow password reset.
+    parentUser.name = parentName || parentUser.name;
+    parentUser.phone = parentPhone || parentUser.phone;
+    if (parentPassword) {
+      parentUser.password = await bcrypt.hash(parentPassword, 12);
+    }
+    await parentUser.save();
   }
 
   const portalEmail = `${rollNumber.replace(/[^a-zA-Z0-9]/g, '')}@student.academy.local`.toLowerCase();

@@ -1,6 +1,8 @@
 const { Router } = require('express');
 const ctrl = require('../controllers/configController');
 const sessionHistoryCtrl = require('../controllers/sessionHistoryController');
+const academyImportCtrl = require('../controllers/academy/academySessionImportController');
+const academySchemas = require('../validators/academySchemas');
 const { protect } = require('../middleware/auth');
 const { requirePermission, requireAnyPermission } = require('../middleware/permissions');
 const { validate } = require('../middleware/validate');
@@ -27,6 +29,12 @@ router.post(
   requirePermission('manage_sessions'),
   validate(schemas.sessionCloneBody),
   sessionHistoryCtrl.cloneStructure
+);
+router.post(
+  '/sessions/:sessionId/import-enrollment',
+  requirePermission('manage_sessions'),
+  validate(academySchemas.academySessionImportBody),
+  academyImportCtrl.importEnrollment
 );
 
 router.get('/classes', requireAnyPermission('manage_classes', 'view_timetables', 'view_students', 'mark_attendance'), ctrl.listClasses);

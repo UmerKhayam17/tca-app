@@ -74,15 +74,35 @@ function calculateFeesFromStructure(feeStructure, { selectedSubjectIds, isFullPa
   return { monthlyFee, admissionFee, subtotal: monthlyFee + admissionFee };
 }
 
-/** Apply PKR discount to first payment; monthly/admission list prices stay unchanged for billing. */
-function applyDiscount(fees, discountAmount = 0) {
-  const discount = Math.max(0, Number(discountAmount) || 0);
+/** Apply PKR discounts to first payment; list prices stay unchanged for billing. */
+function applyDiscount(fees, discountOptions = {}) {
   const subtotal = fees.subtotal ?? fees.monthlyFee + fees.admissionFee;
-  const applied = Math.min(discount, subtotal);
+  const monthlyInput = Math.max(0, Number(discountOptions.monthlyFeeDiscount) || 0);
+  const admissionInput = Math.max(0, Number(discountOptions.admissionFeeDiscount) || 0);
+  const legacyInput = Math.max(0, Number(discountOptions.discountAmount) || 0);
+
+  if (monthlyInput > 0 || admissionInput > 0) {
+    const monthlyFeeDiscount = Math.min(monthlyInput, fees.monthlyFee);
+    const admissionFeeDiscount = Math.min(admissionInput, fees.admissionFee);
+    const discountAmount = monthlyFeeDiscount + admissionFeeDiscount;
+    return {
+      monthlyFee: fees.monthlyFee,
+      admissionFee: fees.admissionFee,
+      subtotal,
+      monthlyFeeDiscount,
+      admissionFeeDiscount,
+      discountAmount,
+      totalFee: Math.max(0, subtotal - discountAmount),
+    };
+  }
+
+  const applied = Math.min(legacyInput, subtotal);
   return {
     monthlyFee: fees.monthlyFee,
     admissionFee: fees.admissionFee,
     subtotal,
+    monthlyFeeDiscount: 0,
+    admissionFeeDiscount: 0,
     discountAmount: applied,
     totalFee: Math.max(0, subtotal - applied),
   };
@@ -90,16 +110,25 @@ function applyDiscount(fees, discountAmount = 0) {
 
 function calculateFeesWithDiscount(feeStructure, options) {
   const base = calculateFeesFromStructure(feeStructure, options);
-  return applyDiscount(base, options.discountAmount);
+  return applyDiscount(base, options);
 }
 
-async function previewFees({ classId, selectedSubjects, isFullPackage, discountAmount }) {
+async function previewFees({
+  classId,
+  selectedSubjects,
+  isFullPackage,
+  discountAmount,
+  monthlyFeeDiscount,
+  admissionFeeDiscount,
+}) {
   const feeStructure = await getByClass(classId);
   if (!feeStructure) throw new ApiError(400, 'No active fee structure for this class');
   const fees = calculateFeesWithDiscount(feeStructure, {
     selectedSubjectIds: selectedSubjects,
     isFullPackage,
     discountAmount,
+    monthlyFeeDiscount,
+    admissionFeeDiscount,
   });
   return {
     ...fees,

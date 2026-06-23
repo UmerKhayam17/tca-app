@@ -45,7 +45,7 @@ function resolveClassId(classId: AcademyFeeStructure["classId"]): string {
   return typeof classId === "string" ? classId : classId._id || "";
 }
 
-export default function FeeStructureTab({ caps }: { caps: ModuleActionCaps }) {
+export default function FeeStructureTab({ caps, sessionId }: { caps: ModuleActionCaps; sessionId: string }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -54,8 +54,9 @@ export default function FeeStructureTab({ caps }: { caps: ModuleActionCaps }) {
   const [search, setSearch] = useState("");
 
   const { data: classes = [] } = useQuery({
-    queryKey: ["academy-classes"],
-    queryFn: () => fetchAcademyClasses({ status: "active" }),
+    queryKey: ["academy-classes", sessionId],
+    queryFn: () => fetchAcademyClasses({ status: "active", sessionId }),
+    enabled: Boolean(sessionId),
   });
 
   const { data: allStructures = [], isLoading: listLoading } = useQuery({

@@ -2,8 +2,7 @@ import { useEffect } from "react";
 import { io, type Socket } from "socket.io-client";
 import { useQueryClient } from "@tanstack/react-query";
 import { getAccessToken } from "@/lib/auth";
-
-const socketUrl = import.meta.env.VITE_SOCKET_URL?.trim() || "http://127.0.0.1:5000";
+import { getSocketUrl } from "@/lib/api";
 
 /**
  * Listens for `staff:update` from the API and refreshes staff / registry queries without a full page reload.
@@ -16,7 +15,7 @@ export function useStaffRealtime(enabled: boolean) {
     const token = getAccessToken();
     if (!token) return;
 
-    const socket: Socket = io(socketUrl, {
+    const socket: Socket = io(getSocketUrl(), {
       auth: { token },
       transports: ["websocket", "polling"],
     });

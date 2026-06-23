@@ -20,7 +20,7 @@ import {
 } from "./permissions";
 
 export const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
-  LayoutDashboard, UserCog, GraduationCap, ClipboardList, Calendar,
+  LayoutDashboard, Users, UserCog, GraduationCap, ClipboardList, Calendar,
   BookOpen, Award, Wallet, DollarSign, MessageSquare, Bell, BarChart3,
   Settings: SettingsIcon, FileText, KeyRound, ListTree, School, SlidersHorizontal, Receipt,
 };
@@ -68,7 +68,7 @@ export const buildMenu = (
     if (item) items.push(item);
   }
   for (const m of MODULES) {
-    if (seen.has(m.key)) continue;
+    if (seen.has(m.key) || m.showInNav === false) continue;
     const item = moduleToMenuItem(m, rolePerms, backendModulePerms);
     if (item) items.push(item);
   }
@@ -87,7 +87,9 @@ export const buildGroupedMenu = (
     id: group.id,
     label: group.label,
     items: group.modules
-      .map((key) => moduleToMenuItem(byKey[key], rolePerms, backendModulePerms))
+      .map((key) => byKey[key])
+      .filter((def): def is ModuleDef => Boolean(def && def.showInNav !== false))
+      .map((def) => moduleToMenuItem(def, rolePerms, backendModulePerms))
       .filter((item): item is MenuItem => item != null),
   })).filter((g) => g.items.length > 0);
 };
@@ -110,4 +112,6 @@ export const moduleHref = (
           ? timetableHref(role, defaultTimetableSection({ caps: opts.caps, role }))
           : key === "exams"
             ? testExamsHref(role)
+        : key === "staff-management"
+          ? `/panel/${role}/staff-management`
             : `/panel/${role}/${key}`;

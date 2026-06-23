@@ -25,6 +25,7 @@ export const canCRUD  = (p: PermLevel) => PERM_RANK[p] >= PERM_RANK.crud;
 export type ModuleKey =
   | "dashboard"
   | "users"
+  | "staff-management"
   | "student-management"
   | "students"
   | "attendance"
@@ -49,102 +50,117 @@ export interface ModuleDef {
   shortLabel?: string;
   icon: string;       // lucide icon name
   desc: string;
+  /** When false, hidden from sidebar and dashboard module tiles (route may still work). */
+  showInNav?: boolean;
 }
 
 export const MODULES: ModuleDef[] = [
   { key: "dashboard", label: "Dashboard", icon: "LayoutDashboard", desc: "Overview & key metrics" },
-  { key: "students", label: "Student Records", icon: "GraduationCap", desc: "Enrollment, profiles, attendance & results" },
+  {
+    key: "system-config",
+    label: "Sessions & timetable",
+    shortLabel: "Sessions",
+    icon: "SlidersHorizontal",
+    desc: "Academic sessions and timetable infrastructure",
+  },
   {
     key: "student-management",
-    label: "Academy setup",
-    shortLabel: "Academy setup",
+    label: "Classes & enrollment",
+    shortLabel: "Enrollment",
     icon: "School",
-    desc: "Classes, subjects, fee structure & tuition billing",
+    desc: "Classes, sections, subjects & student registration",
+  },
+  {
+    key: "students",
+    label: "Student records",
+    shortLabel: "Students",
+    icon: "GraduationCap",
+    desc: "Browse and manage enrolled students",
   },
   { key: "attendance", label: "Attendance", icon: "ClipboardList", desc: "Daily attendance" },
   { key: "timetable", label: "Timetable", icon: "Calendar", desc: "Build, publish & view class schedules" },
   {
     key: "exams",
     label: "Tests & exams",
-    shortLabel: "Tests & exams",
+    shortLabel: "Exams",
     icon: "Award",
     desc: "Ongoing tests and term exam results",
   },
-  { key: "fees", label: "Fee Management", icon: "Wallet", desc: "Collect and track fees" },
-  { key: "salary", label: "Teacher salary", icon: "DollarSign", desc: "Monthly teacher & staff payroll" },
+  { key: "fees", label: "Fee management", icon: "Wallet", desc: "Collect and track fees" },
+  { key: "salary", label: "Staff salary", icon: "DollarSign", desc: "Monthly teacher & staff payroll" },
   { key: "expenses", label: "Academy expenses", icon: "Receipt", desc: "Operating costs & expenses" },
   { key: "chat", label: "Chat", icon: "MessageSquare", desc: "Real-time messaging" },
   { key: "announcements", label: "Announcements", icon: "Bell", desc: "Publish notices" },
   { key: "reports", label: "Reports", icon: "BarChart3", desc: "Analytics & exports" },
   { key: "datasheets", label: "Datasheets", icon: "FileText", desc: "Create & manage spreadsheets" },
-  { key: "users", label: "Staff management", icon: "UserCog", desc: "Teachers, accountants, access & salary" },
-  {
-    key: "system-config",
-    label: "System configuration",
-    shortLabel: "System config",
-    icon: "SlidersHorizontal",
-    desc: "Sessions, classes, timetable setup & rules",
-  },
-  { key: "permissions", label: "Permissions", icon: "KeyRound", desc: "Users, roles, API & module access" },
+  { key: "users", label: "Users management", shortLabel: "Users", icon: "Users", desc: "All accounts including parents" },
+  { key: "staff-management", label: "Staff management", shortLabel: "Staff", icon: "UserCog", desc: "Teachers and accountants only" },
+  { key: "permissions", label: "Permissions", icon: "KeyRound", desc: "Roles, API & module access" },
   {
     key: "permission-catalog",
     label: "API permissions",
     shortLabel: "API permissions",
     icon: "ListTree",
     desc: "Full table of permission definitions",
+    showInNav: false,
   },
-  { key: "settings", label: "Settings", icon: "Settings", desc: "Local permission matrix (browser)" },
+  { key: "settings", label: "Settings", icon: "Settings", desc: "Account summary", showInNav: false },
 ];
 
-/** Sidebar section order — modules appear under the first group that lists them. */
+/** Sidebar groups — top-level structure shown in the panel sidebar. */
 export const SIDEBAR_NAV_GROUPS: { id: string; label: string; modules: ModuleKey[] }[] = [
   { id: "overview", label: "Overview", modules: ["dashboard"] },
   {
+    id: "setup",
+    label: "School setup",
+    modules: ["system-config", "student-management"],
+  },
+  {
     id: "academics",
-    label: "Students & academics",
-    modules: ["students", "student-management", "attendance", "timetable", "exams"],
+    label: "Teaching & students",
+    modules: ["students", "attendance", "timetable", "exams"],
   },
   { id: "finance", label: "Finance", modules: ["fees", "salary", "expenses"] },
   { id: "communication", label: "Communication", modules: ["chat", "announcements"] },
-  { id: "resources", label: "Resources", modules: ["reports", "datasheets"] },
+  { id: "resources", label: "Reports & data", modules: ["reports", "datasheets"] },
   {
     id: "administration",
     label: "Administration",
-    modules: ["users", "system-config", "permissions", "permission-catalog", "settings"],
+    modules: ["users", "staff-management", "permissions"],
   },
 ];
 
 // Default matrix — mirrors the reference spec sheet
 export const DEFAULT_PERMISSIONS: Record<Role, Record<ModuleKey, PermLevel>> = {
   admin: {
-    dashboard: "full", users: "crud", "student-management": "crud", students: "crud", attendance: "crud",
+    dashboard: "full", users: "crud", "staff-management": "crud", "student-management": "crud", students: "crud", attendance: "crud",
     timetable: "crud", exams: "crud", fees: "crud",
     salary: "crud", expenses: "crud", chat: "full", announcements: "crud",
     reports: "full", datasheets: "full", "system-config": "crud", settings: "full", permissions: "full", "permission-catalog": "full",
   },
   accountant: {
-    dashboard: "view", users: "none", "student-management": "process", students: "view", attendance: "none",
+    dashboard: "view", users: "none", "staff-management": "none", "student-management": "process", students: "view", attendance: "none",
     timetable: "none", exams: "none", fees: "crud",
     salary: "process", expenses: "crud", chat: "view", announcements: "none",
     reports: "view", datasheets: "crud", "system-config": "none", settings: "none", permissions: "none", "permission-catalog": "none",
   },
   teacher: {
-    dashboard: "view", users: "none", "student-management": "view", students: "grade", attendance: "mark",
+    dashboard: "view", users: "none", "staff-management": "none", "student-management": "view", students: "grade", attendance: "mark",
     timetable: "view", exams: "grade", fees: "none",
     salary: "view", expenses: "none", chat: "view", announcements: "view",
     reports: "view", datasheets: "crud", "system-config": "none", settings: "none", permissions: "none", "permission-catalog": "none",
   },
   parent: {
-    dashboard: "view", users: "none", "student-management": "none", students: "view", attendance: "view",
+    dashboard: "view", users: "none", "staff-management": "none", "student-management": "none", students: "view", attendance: "view",
     timetable: "view", exams: "view", fees: "view",
-    salary: "none", expenses: "none", chat: "view", announcements: "view",
-    reports: "none", datasheets: "view", "system-config": "none", settings: "none", permissions: "none", "permission-catalog": "none",
+    salary: "none", expenses: "none", chat: "view", announcements: "none",
+    reports: "none", datasheets: "none", "system-config": "none", settings: "none", permissions: "none", "permission-catalog": "none",
   },
   student: {
-    dashboard: "view", users: "none", "student-management": "none", students: "view", attendance: "view",
+    dashboard: "view", users: "none", "staff-management": "none", "student-management": "none", students: "view", attendance: "view",
     timetable: "view", exams: "view", fees: "view",
     salary: "none", expenses: "none", chat: "view", announcements: "view",
-    reports: "none", datasheets: "view", "system-config": "none", settings: "none", permissions: "none", "permission-catalog": "none",
+    reports: "none", datasheets: "view", "system-config": "none", settings: "view", permissions: "none", "permission-catalog": "none",
   },
 };
 
@@ -314,6 +330,10 @@ export function resolveModuleCaps(
       }
       return emptyActionCaps();
     }
+    if (moduleKey === "staff-management") {
+      const arr = backendPerms.user;
+      return capsFromBackendActions(Array.isArray(arr) ? arr : []);
+    }
     return emptyActionCaps();
   }
   return capsFromPermLevel(rolePermLevel);
@@ -364,6 +384,10 @@ export function applyBackendModulePermissions(
     if (salaryLevel !== "none") next.salary = salaryLevel;
     const expenseLevel = permLevelFromActionCaps(capsForExpensesModule(backendPerms));
     if (expenseLevel !== "none") next.expenses = expenseLevel;
+  }
+  if (backendPerms.user) {
+    const userLevel = permLevelFromActionCaps(capsFromBackendActions(backendPerms.user));
+    if (userLevel !== "none") next["staff-management"] = userLevel;
   }
   if (backendPerms.salary) {
     const salaryLevel = permLevelFromActionCaps(capsForSalaryModule(backendPerms));

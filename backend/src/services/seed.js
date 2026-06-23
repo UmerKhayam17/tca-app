@@ -187,6 +187,26 @@ function buildDefaultRoleDefs(allPermissionIds) {
         ['datasheets', ['view']],
       ]),
     },
+    parent: {
+      name: 'parent',
+      permissionNames: [
+        'view_attendance',
+        'view_results',
+        'use_chat',
+        'view_timetables',
+        'view_academy_students',
+        'view_academy_fee_reports',
+      ],
+      description: 'Parent portal',
+      modulePermissions: new Map([
+        ['student', ['view']],
+        ['attendance', ['view']],
+        ['exam', ['view']],
+        ['timetable', ['view']],
+        ['chat', ['view', 'create', 'participate']],
+        ['fee', ['view']],
+      ]),
+    },
     accountant: {
       name: 'accountant',
       permissionNames: [
@@ -299,9 +319,33 @@ async function syncBuiltInRolePermissions() {
     accountantRole.modulePermissions = mp;
     await accountantRole.save();
   }
+
+  const parentRole = await Role.findOne({ name: 'parent' });
+  if (parentRole) {
+    const parentPerms = await permissionIdsByNames([
+      'view_attendance',
+      'view_results',
+      'use_chat',
+      'view_timetables',
+      'view_academy_students',
+      'view_academy_fee_reports',
+    ]);
+    parentRole.permissions = parentPerms;
+    parentRole.modulePermissions = new Map([
+      ['student', ['view']],
+      ['attendance', ['view']],
+      ['exam', ['view']],
+      ['timetable', ['view']],
+      ['chat', ['view', 'create', 'participate']],
+      ['fee', ['view']],
+    ]);
+    await parentRole.save();
+  }
 }
 
 async function seedPermissionsAndRoles() {
+  const { ensureAcademyClassIndexes } = require('./academy/academySessionImportService');
+  await ensureAcademyClassIndexes();
   await upsertAllPermissions();
   const rolesCreated = await ensureDefaultRoles();
   await syncBuiltInRolePermissions();

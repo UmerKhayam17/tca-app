@@ -10,6 +10,7 @@ import {
   fetchAcademyStudents,
 } from "@/lib/studentManagementApi";
 import PanelSearchBar from "@/components/modules/PanelSearchBar";
+import AcademyDiscountReport from "@/components/modules/student-management/AcademyDiscountReport";
 import { matchesPanelSearch } from "@/lib/panelSearch";
 
 const ReportsModule = () => {
@@ -92,6 +93,8 @@ const ReportsModule = () => {
           </Card>
         ))}
       </div>
+
+      <AcademyDiscountReport />
     </div>
   );
 };

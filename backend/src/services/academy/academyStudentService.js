@@ -1,12 +1,32 @@
+const fs = require('fs');
+const path = require('path');
 const ApiError = require('../../utils/ApiError');
 const AcademyStudent = require('../../models/academy/AcademyStudent');
 const AcademyClass = require('../../models/academy/AcademyClass');
 const AcademySubject = require('../../models/academy/AcademySubject');
 const AcademyFeeRecord = require('../../models/academy/AcademyFeeRecord');
+const AcademySection = require('../../models/academy/AcademySection');
+const User = require('../../models/User');
+const Role = require('../../models/Role');
+const bcrypt = require('bcryptjs');
 const {
   getByClass,
   calculateFeesWithDiscount,
 } = require('./academyFeeStructureService');
+const { validateEnrollmentSubjects } = require('./academyEnrollmentSubjectService');
+
+const STUDENT_PHOTO_DIR = path.join(__dirname, '../../../uploads/students');
+
+function saveStudentPhotoFile(studentMongoId, file) {
+  if (!file?.buffer?.length) throw new ApiError(400, 'Image file required');
+  fs.mkdirSync(STUDENT_PHOTO_DIR, { recursive: true });
+  const ext = path.extname(file.originalname || '') || '.jpg';
+  const safeExt = ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext.toLowerCase()) ? ext : '.jpg';
+  const filename = `${studentMongoId}-${Date.now()}${safeExt}`;
+  const dest = path.join(STUDENT_PHOTO_DIR, filename);
+  fs.writeFileSync(dest, file.buffer);
+  return `/uploads/students/${filename}`;
+}
 
 async function generateStudentId() {
   const year = new Date().getFullYear();
@@ -47,7 +67,7 @@ function pickStudentProfile(payload) {
     fatherGuardianCnic: payload.fatherGuardianCnic?.trim() || '',
     guardianOccupation: payload.guardianOccupation?.trim() || '',
     guardianWorkAddress: payload.guardianWorkAddress?.trim() || '',
-    guardianEmail: payload.guardianEmail?.trim() || '',
+    guardianEmail: payload.guardianEmail?.trim()?.toLowerCase() || '',
     studentEmail: payload.studentEmail?.trim() || '',
     postalAddress: postal,
     address: postal,
@@ -79,14 +99,8 @@ function applyProfileToStudent(student, payload) {
   if (payload.academicHistory !== undefined) student.academicHistory = profile.academicHistory;
 }
 
-async function validateSubjects(classId, subjectIds, isFullPackage) {
-  if (isFullPackage) return [];
-  if (!subjectIds?.length) throw new ApiError(400, 'Select at least one subject or full package');
-  const subjects = await AcademySubject.find({ _id: { $in: subjectIds }, classId, status: 'active' });
-  if (subjects.length !== subjectIds.length) {
-    throw new ApiError(400, 'One or more subjects are invalid for this class');
-  }
-  return subjects.map((s) => s._id);
+async function validateSubjects(classId, sectionId, subjectIds, isFullPackage) {
+  return validateEnrollmentSubjects(classId, sectionId, subjectIds, isFullPackage);
 }
 
 async function registerStudent(payload, userId) {
@@ -98,17 +112,56 @@ async function registerStudent(payload, userId) {
   if (!feeStructure) throw new ApiError(400, 'Configure fee structure for this class first');
 
   const isFullPackage = Boolean(payload.isFullPackage);
-  const subjectIds = await validateSubjects(payload.classId, payload.selectedSubjects, isFullPackage);
+  const section = await AcademySection.findById(payload.sectionId);
+  if (!section) throw new ApiError(404, 'Section not found');
+  if (section.status !== 'active') throw new ApiError(400, 'Section is not active');
+  if (String(section.classId) !== String(payload.classId)) {
+    throw new ApiError(400, 'Section does not belong to this class');
+  }
+  if (!cls.sessionId) {
+    throw new ApiError(400, 'Class must belong to an academic session before enrolling students');
+  }
+
+  const subjectIds = await validateSubjects(payload.classId, payload.sectionId, payload.selectedSubjects, isFullPackage);
 
   const fees = calculateFeesWithDiscount(feeStructure, {
     selectedSubjectIds: subjectIds,
     isFullPackage,
+    monthlyFeeDiscount: payload.monthlyFeeDiscount,
+    admissionFeeDiscount: payload.admissionFeeDiscount,
     discountAmount: payload.discountAmount,
   });
 
   const studentId = await generateStudentId();
   const phone = (payload.phone || payload.mobileNo || '').trim();
   const profile = pickStudentProfile(payload);
+
+  // Create (or update) the parent login account for the guardian email.
+  // This enables parents to login and view their child's progress pages.
+  const parentRole = await Role.findOne({ name: 'parent' });
+  if (!parentRole) throw new ApiError(500, 'Roles not initialized');
+
+  const parentEmail = (payload.guardianEmail || '').trim().toLowerCase();
+  const parentPassword = payload.parentPassword;
+  const parentName = payload.guardianName?.trim() || payload.fatherName?.trim() || 'Parent';
+
+  let parentUser = await User.findOne({ email: parentEmail });
+  if (!parentUser) {
+    parentUser = await User.create({
+      name: parentName,
+      email: parentEmail,
+      phone,
+      password: await bcrypt.hash(parentPassword, 12),
+      role: parentRole._id,
+    });
+  } else {
+    parentUser.name = parentName || parentUser.name;
+    parentUser.phone = phone || parentUser.phone;
+    if (parentPassword) {
+      parentUser.password = await bcrypt.hash(parentPassword, 12);
+    }
+    await parentUser.save();
+  }
 
   const student = await AcademyStudent.create({
     studentId,
@@ -118,7 +171,8 @@ async function registerStudent(payload, userId) {
     gender: payload.gender,
     ...profile,
     classId: payload.classId,
-    selectedSubjects: isFullPackage ? [] : subjectIds,
+    sectionId: payload.sectionId,
+    selectedSubjects: subjectIds,
     isFullPackage,
     ...fees,
     feeStructureId: feeStructure._id,
@@ -153,12 +207,16 @@ async function updateStudent(id, payload) {
   if (!student) throw new ApiError(404, 'Student not found');
 
   const classId = payload.classId || student.classId;
+  const sectionId = payload.sectionId || student.sectionId;
   const isFullPackage = payload.isFullPackage !== undefined ? payload.isFullPackage : student.isFullPackage;
   const needsFeeRecalc =
     payload.classId ||
+    payload.sectionId ||
     payload.selectedSubjects ||
     payload.isFullPackage !== undefined ||
-    payload.discountAmount !== undefined;
+    payload.discountAmount !== undefined ||
+    payload.monthlyFeeDiscount !== undefined ||
+    payload.admissionFeeDiscount !== undefined;
 
   if (payload.studentName) student.studentName = payload.studentName.trim();
   if (payload.fatherName) student.fatherName = payload.fatherName.trim();
@@ -168,23 +226,42 @@ async function updateStudent(id, payload) {
   applyProfileToStudent(student, payload);
   if (payload.status) student.status = payload.status;
   if (payload.classId) student.classId = payload.classId;
+  if (payload.sectionId) student.sectionId = payload.sectionId;
 
   if (needsFeeRecalc) {
     const feeStructure = await getByClass(classId);
     if (!feeStructure) throw new ApiError(400, 'No active fee structure for class');
     const subjectIds = await validateSubjects(
       classId,
+      sectionId,
       payload.selectedSubjects || student.selectedSubjects,
       isFullPackage
     );
     student.isFullPackage = isFullPackage;
-    student.selectedSubjects = isFullPackage ? [] : subjectIds;
-    const discountAmount =
-      payload.discountAmount !== undefined ? payload.discountAmount : student.discountAmount;
+    student.selectedSubjects = subjectIds;
+    const hasSeparateDiscounts =
+      (payload.monthlyFeeDiscount !== undefined && Number(payload.monthlyFeeDiscount) > 0) ||
+      (payload.admissionFeeDiscount !== undefined && Number(payload.admissionFeeDiscount) > 0) ||
+      (student.monthlyFeeDiscount > 0 || student.admissionFeeDiscount > 0);
+    const discountOptions = hasSeparateDiscounts
+      ? {
+          monthlyFeeDiscount:
+            payload.monthlyFeeDiscount !== undefined
+              ? payload.monthlyFeeDiscount
+              : student.monthlyFeeDiscount,
+          admissionFeeDiscount:
+            payload.admissionFeeDiscount !== undefined
+              ? payload.admissionFeeDiscount
+              : student.admissionFeeDiscount,
+        }
+      : {
+          discountAmount:
+            payload.discountAmount !== undefined ? payload.discountAmount : student.discountAmount,
+        };
     const fees = calculateFeesWithDiscount(feeStructure, {
       selectedSubjectIds: subjectIds,
       isFullPackage,
-      discountAmount,
+      ...discountOptions,
     });
     Object.assign(student, fees);
     student.feeStructureId = feeStructure._id;
@@ -201,6 +278,7 @@ async function updateStudent(id, payload) {
 async function getStudent(id) {
   const student = await AcademyStudent.findById(id)
     .populate('classId', 'className totalSubjects')
+    .populate('sectionId', 'sectionName useClassSubjects')
     .populate('selectedSubjects', 'subjectName subjectCode')
     .populate('feeStructureId');
   if (!student) throw new ApiError(404, 'Student not found');
@@ -213,11 +291,16 @@ async function listStudents({
   search,
   classId,
   status,
+  guardianEmail,
   sort = '-createdAt',
 }) {
   const q = {};
   if (classId) q.classId = classId;
   if (status) q.status = status;
+  if (guardianEmail) {
+    const escaped = String(guardianEmail).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    q.guardianEmail = { $regex: `^${escaped}$`, $options: 'i' };
+  }
   if (search?.trim()) {
     const s = search.trim();
     q.$or = [
@@ -234,6 +317,7 @@ async function listStudents({
   const [items, total] = await Promise.all([
     AcademyStudent.find(q)
       .populate('classId', 'className')
+      .populate('sectionId', 'sectionName')
       .populate('selectedSubjects', 'subjectName')
       .populate('createdBy', 'name email')
       .sort(sort)
@@ -285,6 +369,18 @@ function studentsToCsv(rows) {
   return lines.join('\n');
 }
 
+async function uploadStudentPhoto(id, file) {
+  const student = await AcademyStudent.findById(id);
+  if (!student) throw new ApiError(404, 'Student not found');
+  student.photoImage = saveStudentPhotoFile(id, file);
+  await student.save();
+  return student.populate([
+    { path: 'classId', select: 'className' },
+    { path: 'selectedSubjects', select: 'subjectName subjectCode' },
+    { path: 'createdBy', select: 'name email' },
+  ]);
+}
+
 async function deleteStudent(id) {
   const student = await AcademyStudent.findById(id);
   if (!student) throw new ApiError(404, 'Student not found');
@@ -302,6 +398,182 @@ async function deleteStudent(id) {
   return { deleted: true, studentId: student.studentId };
 }
 
+function classifyDiscountType(monthlyFeeDiscount, admissionFeeDiscount, discountAmount) {
+  const monthly = Number(monthlyFeeDiscount) || 0;
+  const admission = Number(admissionFeeDiscount) || 0;
+  const legacy = Number(discountAmount) || 0;
+
+  if (monthly > 0 && admission > 0) return 'both';
+  if (monthly > 0) return 'monthly_only';
+  if (admission > 0) return 'admission_only';
+  if (legacy > 0) return 'legacy_combined';
+  return 'none';
+}
+
+function buildDiscountReportQuery({ classId, search, from, to }) {
+  const and = [
+    {
+      $or: [
+        { monthlyFeeDiscount: { $gt: 0 } },
+        { admissionFeeDiscount: { $gt: 0 } },
+        { discountAmount: { $gt: 0 } },
+      ],
+    },
+  ];
+  if (classId) and.push({ classId });
+  if (from || to) {
+    const enrolledAt = {};
+    if (from) enrolledAt.$gte = new Date(from);
+    if (to) enrolledAt.$lte = new Date(to);
+    and.push({ enrolledAt });
+  }
+  if (search?.trim()) {
+    const s = search.trim();
+    and.push({
+      $or: [
+        { studentName: { $regex: s, $options: 'i' } },
+        { fatherName: { $regex: s, $options: 'i' } },
+        { phone: { $regex: s, $options: 'i' } },
+        { studentId: { $regex: s, $options: 'i' } },
+      ],
+    });
+  }
+  return { $and: and };
+}
+
+async function getDiscountReport({ page = 1, limit = 20, classId, search, from, to } = {}) {
+  const q = buildDiscountReportQuery({ classId, search, from, to });
+  const perPage = Math.min(100, Math.max(1, limit));
+  const skip = (Math.max(1, page) - 1) * perPage;
+
+  const [rows, total, allDiscountStudents] = await Promise.all([
+    AcademyStudent.find(q)
+      .populate('classId', 'className')
+      .populate('createdBy', 'name email')
+      .sort({ enrolledAt: -1, createdAt: -1 })
+      .skip(skip)
+      .limit(perPage)
+      .lean(),
+    AcademyStudent.countDocuments(q),
+    AcademyStudent.find(q)
+      .select('monthlyFeeDiscount admissionFeeDiscount discountAmount createdBy')
+      .lean(),
+  ]);
+
+  let totalMonthlyDiscount = 0;
+  let totalAdmissionDiscount = 0;
+  let totalLegacyDiscount = 0;
+  let monthlyOnlyCount = 0;
+  let admissionOnlyCount = 0;
+  let bothCount = 0;
+  let legacyCount = 0;
+  const byStaffMap = new Map();
+
+  allDiscountStudents.forEach((s) => {
+    const monthly = Number(s.monthlyFeeDiscount) || 0;
+    const admission = Number(s.admissionFeeDiscount) || 0;
+    const legacy = Number(s.discountAmount) || 0;
+    const type = classifyDiscountType(monthly, admission, legacy);
+
+    totalMonthlyDiscount += monthly;
+    totalAdmissionDiscount += admission;
+    if (type === 'legacy_combined') {
+      totalLegacyDiscount += legacy;
+      legacyCount += 1;
+    } else if (type === 'monthly_only') monthlyOnlyCount += 1;
+    else if (type === 'admission_only') admissionOnlyCount += 1;
+    else if (type === 'both') bothCount += 1;
+
+    const staffId = s.createdBy ? String(s.createdBy) : 'unknown';
+    const entry = byStaffMap.get(staffId) || {
+      staffId,
+      studentCount: 0,
+      monthlyDiscount: 0,
+      admissionDiscount: 0,
+      legacyDiscount: 0,
+    };
+    entry.studentCount += 1;
+    entry.monthlyDiscount += monthly;
+    entry.admissionDiscount += admission;
+    if (type === 'legacy_combined') entry.legacyDiscount += legacy;
+    byStaffMap.set(staffId, entry);
+  });
+
+  const staffIds = [...byStaffMap.keys()].filter((id) => id !== 'unknown');
+  const staffUsers = staffIds.length
+    ? await User.find({ _id: { $in: staffIds } })
+        .select('name email')
+        .lean()
+    : [];
+  const staffNameById = new Map(staffUsers.map((u) => [String(u._id), u]));
+
+  const byStaff = [...byStaffMap.values()]
+    .map((entry) => {
+      const user = entry.staffId === 'unknown' ? null : staffNameById.get(entry.staffId);
+      return {
+        staffId: entry.staffId === 'unknown' ? null : entry.staffId,
+        staffName: user?.name || 'Unknown',
+        staffEmail: user?.email || '',
+        studentCount: entry.studentCount,
+        monthlyDiscount: entry.monthlyDiscount,
+        admissionDiscount: entry.admissionDiscount,
+        legacyDiscount: entry.legacyDiscount,
+        totalDiscount: entry.monthlyDiscount + entry.admissionDiscount + entry.legacyDiscount,
+      };
+    })
+    .sort((a, b) => b.totalDiscount - a.totalDiscount);
+
+  const items = rows.map((s) => {
+    const monthlyFeeDiscount = Number(s.monthlyFeeDiscount) || 0;
+    const admissionFeeDiscount = Number(s.admissionFeeDiscount) || 0;
+    const discountAmount = Number(s.discountAmount) || 0;
+    const discountType = classifyDiscountType(monthlyFeeDiscount, admissionFeeDiscount, discountAmount);
+    const createdBy = s.createdBy;
+    return {
+      _id: s._id,
+      studentId: s.studentId,
+      studentName: s.studentName,
+      fatherName: s.fatherName,
+      className: s.classId?.className || '',
+      classId: s.classId?._id || s.classId,
+      monthlyFeeDiscount,
+      admissionFeeDiscount,
+      discountAmount,
+      totalDiscount:
+        discountType === 'legacy_combined'
+          ? discountAmount
+          : monthlyFeeDiscount + admissionFeeDiscount,
+      discountType,
+      enrolledAt: s.enrolledAt,
+      grantedBy: createdBy
+        ? { _id: createdBy._id, name: createdBy.name, email: createdBy.email }
+        : null,
+    };
+  });
+
+  return {
+    summary: {
+      studentCount: allDiscountStudents.length,
+      totalMonthlyDiscount,
+      totalAdmissionDiscount,
+      totalLegacyDiscount,
+      totalDiscount: totalMonthlyDiscount + totalAdmissionDiscount + totalLegacyDiscount,
+      monthlyOnlyCount,
+      admissionOnlyCount,
+      bothCount,
+      legacyCount,
+      byStaff,
+    },
+    items,
+    pagination: {
+      page: Math.max(1, page),
+      limit: perPage,
+      total,
+      pages: Math.ceil(total / perPage) || 1,
+    },
+  };
+}
+
 module.exports = {
   generateStudentId,
   registerStudent,
@@ -310,4 +582,6 @@ module.exports = {
   listStudents,
   studentsToCsv,
   deleteStudent,
+  uploadStudentPhoto,
+  getDiscountReport,
 };

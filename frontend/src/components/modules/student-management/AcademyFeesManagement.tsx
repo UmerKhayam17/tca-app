@@ -19,6 +19,7 @@ import {
   fetchAcademyClasses,
   fetchAcademyFeeSummary,
   fetchAcademyFees,
+  fetchAcademyStudents,
   generateMonthlyFees,
   payAcademyFee,
   type AcademyFeeRecord,
@@ -95,6 +96,7 @@ export default function AcademyFeesManagement({
   const { toast } = useToast();
   const qc = useQueryClient();
   const { user } = useAuth();
+  const isParent = user?.role === "parent";
   const routes =
     routesProp ?? (user?.role ? academyStudentRoutes(user.role, "records") : null);
 
@@ -103,6 +105,13 @@ export default function AcademyFeesManagement({
   const [year, setYear] = useState(String(now.getFullYear()));
   const [statusFilter, setStatusFilter] = useState("");
   const [classFilter, setClassFilter] = useState("");
+  const [selectedParentStudentId, setSelectedParentStudentId] = useState<string>(() => {
+    try {
+      return localStorage.getItem("parent_selected_student_id") || "";
+    } catch {
+      return "";
+    }
+  });
   const [feeTypeFilter, setFeeTypeFilter] = useState("");
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -110,19 +119,51 @@ export default function AcademyFeesManagement({
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [paymentNotes, setPaymentNotes] = useState("");
 
+  const effectiveStudentId = studentId || (isParent ? selectedParentStudentId || undefined : undefined);
+
   const filterParams = useMemo(
     () => ({
-      month: studentId ? undefined : Number(month),
-      year: studentId ? undefined : Number(year),
-      classId: studentId ? undefined : classFilter || undefined,
-      studentId,
+      month: effectiveStudentId ? undefined : Number(month),
+      year: effectiveStudentId ? undefined : Number(year),
+      classId: effectiveStudentId || isParent ? undefined : classFilter || undefined,
+      studentId: effectiveStudentId,
     }),
-    [month, year, classFilter, studentId]
+    [month, year, classFilter, effectiveStudentId, isParent]
   );
 
   useEffect(() => {
     setPage(1);
-  }, [month, year, statusFilter, classFilter, feeTypeFilter, studentId]);
+  }, [month, year, statusFilter, classFilter, feeTypeFilter, effectiveStudentId]);
+
+  useEffect(() => {
+    if (!isParent) return;
+    try {
+      localStorage.setItem("parent_selected_student_id", selectedParentStudentId || "");
+    } catch {
+      // ignore storage failures
+    }
+  }, [isParent, selectedParentStudentId]);
+
+  const { data: parentStudents = [] } = useQuery({
+    queryKey: ["parent-students-fees"],
+    queryFn: async () => {
+      const r = await fetchAcademyStudents({ page: 1, limit: 200, status: "active" });
+      return r.students;
+    },
+    enabled: isParent && !studentId,
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (!isParent || studentId) return;
+    if (!parentStudents.length) {
+      if (selectedParentStudentId) setSelectedParentStudentId("");
+      return;
+    }
+    if (!selectedParentStudentId || !parentStudents.some((s) => s._id === selectedParentStudentId)) {
+      setSelectedParentStudentId(parentStudents[0]._id);
+    }
+  }, [isParent, studentId, parentStudents, selectedParentStudentId]);
 
   const { data: classes = [] } = useQuery({
     queryKey: ["academy-classes"],
@@ -243,6 +284,23 @@ export default function AcademyFeesManagement({
       {showFilters && !studentId && (
         <Card className="p-3">
           <div className="flex flex-wrap gap-3 items-end">
+            {isParent && (
+              <div>
+                <Label className="text-xs">Child</Label>
+                <select
+                  className="h-9 rounded-md border border-input bg-background px-2 text-sm min-w-[14rem]"
+                  value={selectedParentStudentId}
+                  onChange={(e) => setSelectedParentStudentId(e.target.value)}
+                >
+                  <option value="">Select child…</option>
+                  {parentStudents.map((s) => (
+                    <option key={s._id} value={s._id}>
+                      {s.studentName} ({s.studentId})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div>
               <Label className="text-xs">Month</Label>
               <Input
@@ -263,21 +321,23 @@ export default function AcademyFeesManagement({
                 onChange={(e) => setYear(e.target.value)}
               />
             </div>
-            <div>
-              <Label className="text-xs">Class</Label>
-              <select
-                className="h-9 rounded-md border border-input bg-background px-2 text-sm min-w-[8rem]"
-                value={classFilter}
-                onChange={(e) => setClassFilter(e.target.value)}
-              >
-                <option value="">All classes</option>
-                {classes.map((c) => (
-                  <option key={c._id} value={c._id}>
-                    {c.className}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {!isParent && (
+              <div>
+                <Label className="text-xs">Class</Label>
+                <select
+                  className="h-9 rounded-md border border-input bg-background px-2 text-sm min-w-[8rem]"
+                  value={classFilter}
+                  onChange={(e) => setClassFilter(e.target.value)}
+                >
+                  <option value="">All classes</option>
+                  {classes.map((c) => (
+                    <option key={c._id} value={c._id}>
+                      {c.className}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div>
               <Label className="text-xs">Status</Label>
               <select
@@ -304,7 +364,7 @@ export default function AcademyFeesManagement({
                 <option value="admission">Admission</option>
               </select>
             </div>
-            {canGenerate && (
+            {canGenerate && !isParent && (
               <Button
                 size="sm"
                 variant="secondary"

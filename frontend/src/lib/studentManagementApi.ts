@@ -1,4 +1,6 @@
-import { getApiRoot, parseJson } from "@/lib/api";
+import { getApiRoot, parseJson, resolveUploadUrl } from "@/lib/api";
+
+export { resolveUploadUrl };
 import { getAccessToken } from "@/lib/auth";
 import type { CreatedByUser } from "@/lib/createdBy";
 
@@ -22,6 +24,7 @@ export interface Pagination {
 
 export interface AcademyClass {
   _id: string;
+  sessionId?: string;
   className: string;
   totalSubjects: number;
   status: "active" | "inactive";
@@ -34,6 +37,37 @@ export interface AcademySubject {
   subjectName: string;
   subjectCode: string;
   classId: string;
+  status: "active" | "inactive";
+  createdBy?: CreatedByUser | string;
+}
+
+export interface AcademySubjectChoiceGroup {
+  _id: string;
+  classId: string;
+  groupName: string;
+  subjectIds: AcademySubject[] | string[];
+  pickCount: number;
+  status: "active" | "inactive";
+  createdBy?: CreatedByUser | string;
+}
+
+export interface EnrollmentSubjectLayout {
+  hasChoiceGroups: boolean;
+  coreSubjects: AcademySubject[];
+  choiceGroups: {
+    _id: string;
+    groupName: string;
+    pickCount: number;
+    subjects: AcademySubject[];
+  }[];
+}
+
+export interface AcademySection {
+  _id: string;
+  sectionName: string;
+  classId: string | AcademyClass;
+  useClassSubjects: boolean;
+  subjectIds: AcademySubject[] | string[];
   status: "active" | "inactive";
   createdBy?: CreatedByUser | string;
 }
@@ -69,6 +103,7 @@ export interface AcademyStudentRegisterBody {
   guardianOccupation?: string;
   guardianWorkAddress?: string;
   guardianEmail?: string;
+  parentPassword?: string;
   studentEmail?: string;
   postalAddress?: string;
   contactPhoneRes?: string;
@@ -79,15 +114,19 @@ export interface AcademyStudentRegisterBody {
   academicHistory?: AcademicRecord[];
   gender: string;
   classId: string;
+  sectionId: string;
   selectedSubjects: string[];
   isFullPackage: boolean;
   discountAmount?: number;
+  monthlyFeeDiscount?: number;
+  admissionFeeDiscount?: number;
 }
 
 export interface AcademyStudent {
   _id: string;
   studentId: string;
   studentName: string;
+  photoImage?: string;
   fatherName: string;
   dateOfBirth?: string;
   nationality?: string;
@@ -107,10 +146,13 @@ export interface AcademyStudent {
   gender: "male" | "female" | "other";
   address?: string;
   classId: string | AcademyClass;
+  sectionId?: string | AcademySection;
   selectedSubjects: AcademySubject[] | string[];
   isFullPackage: boolean;
   monthlyFee: number;
   admissionFee: number;
+  monthlyFeeDiscount?: number;
+  admissionFeeDiscount?: number;
   discountAmount?: number;
   totalFee: number;
   status: string;
@@ -121,6 +163,8 @@ export interface FeePreview {
   monthlyFee: number;
   admissionFee: number;
   subtotal?: number;
+  monthlyFeeDiscount?: number;
+  admissionFeeDiscount?: number;
   discountAmount?: number;
   totalFee: number;
   perSubjectFee?: number;
@@ -174,17 +218,6 @@ export interface AcademyAssessmentRecord {
   testPaperImage?: string;
 }
 
-/** Resolve /uploads/... paths for img src (dev proxy or API host). */
-export function resolveUploadUrl(path: string): string {
-  if (!path) return "";
-  if (path.startsWith("http://") || path.startsWith("https://") || path.startsWith("blob:")) {
-    return path;
-  }
-  const api = import.meta.env.VITE_API_URL?.trim();
-  if (api) return `${api.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
-  return path;
-}
-
 export interface AcademyStudentRecord {
   student: AcademyStudent;
   enrollment: {
@@ -233,15 +266,21 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 // Classes
-export const fetchAcademyClasses = (params?: { search?: string; status?: string }) => {
+export const fetchAcademyClasses = (params?: { search?: string; status?: string; sessionId?: string }) => {
   const q = new URLSearchParams();
   if (params?.search) q.set("search", params.search);
   if (params?.status) q.set("status", params.status);
+  if (params?.sessionId) q.set("sessionId", params.sessionId);
   const qs = q.toString();
   return api<AcademyClass[]>(`/classes${qs ? `?${qs}` : ""}`);
 };
 
-export const createAcademyClass = (body: { className: string; totalSubjects?: number; status?: string }) =>
+export const createAcademyClass = (body: {
+  sessionId: string;
+  className: string;
+  totalSubjects?: number;
+  status?: string;
+}) =>
   api<AcademyClass>("/classes", { method: "POST", body: JSON.stringify(body) });
 
 export const updateAcademyClass = (id: string, body: Partial<AcademyClass>) =>
@@ -284,20 +323,109 @@ export const getAcademyClassRecord = (classId: string) =>
   api<AcademyClassRecord>(`/classes/${classId}/record`);
 
 // Subjects
-export const fetchSubjectsByClass = (classId: string, params?: { status?: string }) => {
-  const q = params?.status ? `?status=${params.status}` : "";
-  return api<AcademySubject[]>(`/classes/${classId}/subjects${q}`);
+export const fetchSubjectsByClass = (classId: string, params?: { status?: string; sectionId?: string }) => {
+  const qp = new URLSearchParams();
+  if (params?.status) qp.set("status", params.status);
+  if (params?.sectionId) qp.set("sectionId", params.sectionId);
+  const q = qp.toString();
+  return api<AcademySubject[]>(`/classes/${classId}/subjects${q ? `?${q}` : ""}`);
 };
+
+export const fetchEnrollmentSubjects = (classId: string, sectionId?: string) => {
+  const q = sectionId ? `?sectionId=${sectionId}` : "";
+  return api<EnrollmentSubjectLayout>(`/classes/${classId}/enrollment-subjects${q}`);
+};
+
+export const fetchSubjectChoiceGroups = (classId: string) =>
+  api<AcademySubjectChoiceGroup[]>(`/classes/${classId}/subject-choice-groups`);
+
+export const createSubjectChoiceGroup = (classId: string, body: {
+  groupName: string;
+  subjectIds: string[];
+  pickCount?: number;
+  status?: string;
+}) =>
+  api<AcademySubjectChoiceGroup>(`/classes/${classId}/subject-choice-groups`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+export const updateSubjectChoiceGroup = (id: string, body: Partial<{
+  groupName: string;
+  subjectIds: string[];
+  pickCount: number;
+  status: string;
+}>) =>
+  api<AcademySubjectChoiceGroup>(`/subject-choice-groups/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+
+export const deleteSubjectChoiceGroup = (id: string) =>
+  api<{ deleted: boolean }>(`/subject-choice-groups/${id}`, { method: "DELETE" });
+
+export const createSubjectChoiceGroupBulk = (
+  classId: string,
+  body: {
+    groupName: string;
+    subjects: { subjectName: string; subjectCode: string }[];
+    pickCount?: number;
+  },
+) =>
+  api<AcademySubjectChoiceGroup>(`/classes/${classId}/subject-choice-groups/bulk`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+export const fetchSectionsByClass = (classId: string, params?: { status?: string }) => {
+  const q = params?.status ? `?status=${params.status}` : "";
+  return api<AcademySection[]>(`/classes/${classId}/sections${q}`);
+};
+
+export interface AcademySectionWithClass extends AcademySection {
+  className?: string | null;
+}
+
+export const fetchAcademySectionsBySession = (sessionId: string, params?: { status?: string }) => {
+  const q = new URLSearchParams({ sessionId });
+  if (params?.status) q.set("status", params.status);
+  return api<AcademySectionWithClass[]>(`/sections?${q.toString()}`);
+};
+
+export const createAcademySection = (body: {
+  sectionName: string;
+  classId: string;
+  useClassSubjects?: boolean;
+  subjectIds?: string[];
+  status?: string;
+}) => api<AcademySection>("/sections", { method: "POST", body: JSON.stringify(body) });
+
+export const updateAcademySection = (id: string, body: Partial<AcademySection> & { subjectIds?: string[] }) =>
+  api<AcademySection>(`/sections/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+
+export const deleteAcademySection = (id: string) =>
+  api<{ deleted: boolean }>(`/sections/${id}`, { method: "DELETE" });
 
 export const createAcademySubject = (body: {
   subjectName: string;
   classId: string;
   subjectCode: string;
   status?: string;
+  enrollmentType?: "required" | "choice";
+  choiceGroupId?: string;
+  choiceGroupName?: string;
+  pickCount?: number;
 }) => api<AcademySubject>("/subjects", { method: "POST", body: JSON.stringify(body) });
 
-export const updateAcademySubject = (id: string, body: Partial<AcademySubject>) =>
-  api<AcademySubject>(`/subjects/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+export const updateAcademySubject = (
+  id: string,
+  body: Partial<AcademySubject> & {
+    enrollmentType?: "required" | "choice";
+    choiceGroupId?: string;
+    choiceGroupName?: string;
+    pickCount?: number;
+  },
+) => api<AcademySubject>(`/subjects/${id}`, { method: "PATCH", body: JSON.stringify(body) });
 
 export const deleteAcademySubject = (id: string) =>
   api<{ deleted: boolean }>(`/subjects/${id}`, { method: "DELETE" });
@@ -370,6 +498,8 @@ export const previewFees = (body: {
   selectedSubjects: string[];
   isFullPackage: boolean;
   discountAmount?: number;
+  monthlyFeeDiscount?: number;
+  admissionFeeDiscount?: number;
 }) =>
   api<FeePreview>("/fee-structures/preview", { method: "POST", body: JSON.stringify(body) });
 
@@ -403,6 +533,19 @@ export const registerAcademyStudent = (body: AcademyStudentRegisterBody) =>
 
 export const updateAcademyStudent = (id: string, body: Record<string, unknown>) =>
   api<AcademyStudent>(`/students/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+
+export async function uploadAcademyStudentPhoto(studentId: string, file: File): Promise<AcademyStudent> {
+  const fd = new FormData();
+  fd.append("photo", file);
+  const res = await authedFetch(`/student-management/students/${studentId}/photo`, {
+    method: "POST",
+    body: fd,
+  });
+  const body = await parseJson<{ success?: boolean; data?: AcademyStudent; message?: string }>(res);
+  if (!res.ok) throw new Error(body.message || "Photo upload failed");
+  if (!body.data) throw new Error("Invalid photo upload response");
+  return body.data;
+}
 
 export const getAcademyStudent = (id: string) => api<AcademyStudent>(`/students/${id}`);
 
@@ -479,6 +622,77 @@ export const fetchAcademyFeeSummary = (params?: {
   if (params?.studentId) q.set("studentId", params.studentId);
   const qs = q.toString();
   return api<AcademyFeeSummary>(`/fees/summary${qs ? `?${qs}` : ""}`);
+};
+
+export interface DiscountReportStaffSummary {
+  staffId: string | null;
+  staffName: string;
+  staffEmail: string;
+  studentCount: number;
+  monthlyDiscount: number;
+  admissionDiscount: number;
+  legacyDiscount: number;
+  totalDiscount: number;
+}
+
+export interface DiscountReportSummary {
+  studentCount: number;
+  totalMonthlyDiscount: number;
+  totalAdmissionDiscount: number;
+  totalLegacyDiscount: number;
+  totalDiscount: number;
+  monthlyOnlyCount: number;
+  admissionOnlyCount: number;
+  bothCount: number;
+  legacyCount: number;
+  byStaff: DiscountReportStaffSummary[];
+}
+
+export interface DiscountReportRow {
+  _id: string;
+  studentId: string;
+  studentName: string;
+  fatherName: string;
+  className: string;
+  classId?: string;
+  monthlyFeeDiscount: number;
+  admissionFeeDiscount: number;
+  discountAmount: number;
+  totalDiscount: number;
+  discountType: "monthly_only" | "admission_only" | "both" | "legacy_combined" | "none";
+  enrolledAt?: string;
+  grantedBy?: { _id: string; name: string; email: string } | null;
+}
+
+export const fetchDiscountReport = async (params?: {
+  page?: number;
+  limit?: number;
+  classId?: string;
+  search?: string;
+  from?: string;
+  to?: string;
+}) => {
+  const q = new URLSearchParams();
+  if (params?.page) q.set("page", String(params.page));
+  if (params?.limit) q.set("limit", String(params.limit));
+  if (params?.classId) q.set("classId", params.classId);
+  if (params?.search) q.set("search", params.search);
+  if (params?.from) q.set("from", params.from);
+  if (params?.to) q.set("to", params.to);
+  const res = await authedFetch(`/student-management/students/discount-report?${q}`);
+  const body = await parseJson<{
+    success?: boolean;
+    data?: DiscountReportRow[];
+    summary?: DiscountReportSummary;
+    pagination?: Pagination;
+    message?: string;
+  }>(res);
+  if (!res.ok) throw new Error(body.message || "Failed to load discount report");
+  return {
+    items: body.data || [],
+    summary: body.summary,
+    pagination: body.pagination,
+  };
 };
 
 export const generateMonthlyFees = (body: { month: number; year: number; classId?: string }) =>

@@ -25,6 +25,10 @@ import {
   Smartphone,
   Tag,
   Trash2,
+  KeyRound,
+  Eye,
+  EyeOff,
+  ImageIcon,
   User,
   Users,
 } from "lucide-react";
@@ -38,11 +42,15 @@ import {
 } from "@/lib/studentManagementMenus";
 import {
   fetchAcademyClasses,
-  fetchSubjectsByClass,
+  fetchEnrollmentSubjects,
+  fetchSectionsByClass,
   getAcademyStudent,
   previewFees,
   registerAcademyStudent,
+  resolveUploadUrl,
   updateAcademyStudent,
+  uploadAcademyStudentPhoto,
+  type EnrollmentSubjectLayout,
   type FeePreview,
 } from "@/lib/studentManagementApi";
 import {
@@ -52,6 +60,18 @@ import {
   mapStudentToForm,
   type AcademicRow,
 } from "./registerStudentForm";
+
+function deriveChoiceSelections(
+  layout: EnrollmentSubjectLayout,
+  selectedSubjects: string[],
+): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const group of layout.choiceGroups) {
+    const pick = group.subjects.find((s) => selectedSubjects.includes(s._id));
+    if (pick) map[group._id] = pick._id;
+  }
+  return map;
+}
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return <h3 className="text-sm font-semibold text-primary border-b pb-1">{children}</h3>;
@@ -131,10 +151,12 @@ export default function RegisterStudentPage({
   caps,
   studentId,
   routes: routesProp,
+  sessionId = "",
 }: {
   caps: ModuleActionCaps;
   studentId?: string;
   routes?: AcademyStudentRoutes;
+  sessionId?: string;
 }) {
   const isEdit = Boolean(studentId);
   const { toast } = useToast();
@@ -144,6 +166,10 @@ export default function RegisterStudentPage({
   const [form, setForm] = useState(defaultRegisterForm);
   const [feePreview, setFeePreview] = useState<FeePreview | null>(null);
   const [formReady, setFormReady] = useState(!isEdit);
+  const [showParentPassword, setShowParentPassword] = useState(false);
+  const [choiceSelections, setChoiceSelections] = useState<Record<string, string>>({});
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
   const routes =
     routesProp ?? (user?.role ? academyStudentRoutes(user.role, "registration") : null);
@@ -162,18 +188,76 @@ export default function RegisterStudentPage({
   useEffect(() => {
     if (existingStudent) {
       setForm(mapStudentToForm(existingStudent));
+      setPhotoFile(null);
+      setPhotoPreview(
+        existingStudent.photoImage ? resolveUploadUrl(existingStudent.photoImage) : null,
+      );
       setFormReady(true);
     }
   }, [existingStudent]);
 
+  useEffect(() => {
+    return () => {
+      if (photoPreview?.startsWith("blob:")) URL.revokeObjectURL(photoPreview);
+    };
+  }, [photoPreview]);
+
+  const onPickPhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (photoPreview?.startsWith("blob:")) URL.revokeObjectURL(photoPreview);
+    setPhotoFile(file);
+    setPhotoPreview(URL.createObjectURL(file));
+    e.target.value = "";
+  };
+
+  const clearPhoto = () => {
+    if (photoPreview?.startsWith("blob:")) URL.revokeObjectURL(photoPreview);
+    setPhotoFile(null);
+    setPhotoPreview(
+      existingStudent?.photoImage ? resolveUploadUrl(existingStudent.photoImage) : null,
+    );
+  };
+
   const { data: classes = [] } = useQuery({
-    queryKey: ["academy-classes"],
-    queryFn: () => fetchAcademyClasses({ status: "active" }),
+    queryKey: ["academy-classes", sessionId],
+    queryFn: () => fetchAcademyClasses({ status: "active", sessionId: sessionId || undefined }),
+    enabled: isEdit || Boolean(sessionId),
   });
 
-  const { data: subjects = [], isLoading: subjectsLoading } = useQuery({
-    queryKey: ["academy-subjects", form.classId],
-    queryFn: () => fetchSubjectsByClass(form.classId, { status: "active" }),
+  const { data: enrollmentLayout, isLoading: enrollmentLoading } = useQuery({
+    queryKey: ["enrollment-subjects", form.classId, form.sectionId],
+    queryFn: () => fetchEnrollmentSubjects(form.classId, form.sectionId),
+    enabled: Boolean(form.classId) && Boolean(form.sectionId),
+  });
+
+  const hasChoiceGroups = Boolean(enrollmentLayout?.hasChoiceGroups);
+
+  useEffect(() => {
+    if (!enrollmentLayout?.hasChoiceGroups || !formReady) return;
+    if (Object.keys(choiceSelections).length > 0) return;
+    const derived = deriveChoiceSelections(enrollmentLayout, form.selectedSubjects);
+    if (Object.keys(derived).length > 0) setChoiceSelections(derived);
+  }, [enrollmentLayout, formReady, form.selectedSubjects, choiceSelections]);
+
+  useEffect(() => {
+    if (!enrollmentLayout?.hasChoiceGroups || !form.isFullPackage) return;
+    const coreIds = enrollmentLayout.coreSubjects.map((s) => s._id);
+    const groupIds = enrollmentLayout.choiceGroups
+      .map((g) => choiceSelections[g._id])
+      .filter(Boolean);
+    const next = [...coreIds, ...groupIds];
+    setForm((f) => {
+      const same =
+        f.selectedSubjects.length === next.length &&
+        next.every((id) => f.selectedSubjects.includes(id));
+      return same ? f : { ...f, selectedSubjects: next };
+    });
+  }, [enrollmentLayout, form.isFullPackage, choiceSelections]);
+
+  const { data: sections = [], isLoading: sectionsLoading } = useQuery({
+    queryKey: ["academy-sections", form.classId],
+    queryFn: () => fetchSectionsByClass(form.classId, { status: "active" }),
     enabled: Boolean(form.classId),
   });
 
@@ -186,24 +270,50 @@ export default function RegisterStudentPage({
       setFeePreview(null);
       return;
     }
+    if (form.isFullPackage && hasChoiceGroups && enrollmentLayout) {
+      const groupsReady = enrollmentLayout.choiceGroups.every((g) => {
+        const groupIds = g.subjects.map((s) => s._id);
+        return form.selectedSubjects.filter((id) => groupIds.includes(id)).length === g.pickCount;
+      });
+      if (!groupsReady) {
+        setFeePreview(null);
+        return;
+      }
+    }
     const t = setTimeout(() => {
       previewFees({
         classId: form.classId,
         selectedSubjects: form.selectedSubjects,
         isFullPackage: form.isFullPackage,
-        discountAmount: Number(form.discountAmount) || 0,
+        monthlyFeeDiscount: Number(form.monthlyFeeDiscount) || 0,
+        admissionFeeDiscount: Number(form.admissionFeeDiscount) || 0,
       })
         .then(setFeePreview)
         .catch(() => setFeePreview(null));
     }, 300);
     return () => clearTimeout(t);
-  }, [form.classId, form.selectedSubjects, form.isFullPackage, form.discountAmount]);
+  }, [
+    form.classId,
+    form.selectedSubjects,
+    form.isFullPackage,
+    form.monthlyFeeDiscount,
+    form.admissionFeeDiscount,
+    hasChoiceGroups,
+    enrollmentLayout,
+    choiceSelections,
+  ]);
 
   const saveMut = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const body = buildStudentPayload(form);
-      if (isEdit && studentId) return updateAcademyStudent(studentId, body);
-      return registerAcademyStudent(body);
+      const student =
+        isEdit && studentId
+          ? await updateAcademyStudent(studentId, body)
+          : await registerAcademyStudent(body);
+      if (photoFile) {
+        await uploadAcademyStudentPhoto(student._id, photoFile);
+      }
+      return student;
     },
     onSuccess: (student) => {
       qc.invalidateQueries({ queryKey: ["academy-students"] });
@@ -229,12 +339,37 @@ export default function RegisterStudentPage({
     }));
   };
 
+  const toggleGroupChoice = (groupId: string, subjectId: string, checked: boolean) => {
+    setChoiceSelections((prev) => {
+      if (!checked) {
+        if (prev[groupId] !== subjectId) return prev;
+        const next = { ...prev };
+        delete next[groupId];
+        return next;
+      }
+      return { ...prev, [groupId]: subjectId };
+    });
+
+    setForm((f) => {
+      const group = enrollmentLayout?.choiceGroups.find((g) => g._id === groupId);
+      const groupSubjectIds = group?.subjects.map((s) => s._id) ?? [];
+      let nextSubjects = f.selectedSubjects.filter((id) => !groupSubjectIds.includes(id));
+      if (checked) nextSubjects = [...nextSubjects, subjectId];
+      return { ...f, selectedSubjects: nextSubjects };
+    });
+  };
+
   const selectFullPackage = (checked: boolean) => {
     setForm((f) => ({
       ...f,
       isFullPackage: checked,
-      selectedSubjects: checked ? [] : f.selectedSubjects,
+      selectedSubjects: checked && enrollmentLayout
+        ? enrollmentLayout.coreSubjects.map((s) => s._id)
+        : checked
+          ? []
+          : f.selectedSubjects,
     }));
+    if (!checked) setChoiceSelections({});
   };
 
   const updateAcademic = (index: number, patch: Partial<AcademicRow>) => {
@@ -244,14 +379,40 @@ export default function RegisterStudentPage({
     }));
   };
 
-  const subjectSelectionValid = form.isFullPackage || form.selectedSubjects.length > 0;
+  const subjectSelectionValid = (() => {
+    if (form.isFullPackage) {
+      if (!hasChoiceGroups) return true;
+      return (
+        enrollmentLayout?.choiceGroups.every((g) => {
+          const groupIds = g.subjects.map((s) => s._id);
+          const picks = form.selectedSubjects.filter((id) => groupIds.includes(id));
+          return picks.length === g.pickCount;
+        }) ?? false
+      );
+    }
+    if (hasChoiceGroups) {
+      return (
+        form.selectedSubjects.length > 0 &&
+        (enrollmentLayout?.choiceGroups.every((g) => {
+          const groupIds = g.subjects.map((s) => s._id);
+          const picks = form.selectedSubjects.filter((id) => groupIds.includes(id));
+          return picks.length === 0 || picks.length === g.pickCount;
+        }) ?? false)
+      );
+    }
+    return form.selectedSubjects.length > 0;
+  })();
   const canSubmit =
     form.studentName.trim()
     && form.fatherName.trim()
     && form.dateOfBirth
     && form.mobileNo.trim()
     && form.classId
-    && subjectSelectionValid;
+    && form.sectionId
+    && subjectSelectionValid
+    && (!isEdit
+      ? Boolean(form.guardianEmail.trim()) && form.parentPassword.trim().length >= 8
+      : true);
 
   const selectedClassName = classes.find((c) => c._id === form.classId)?.className;
 
@@ -259,6 +420,17 @@ export default function RegisterStudentPage({
     return (
       <div className="w-full px-4 sm:px-6 lg:px-8 py-12 text-center text-muted-foreground">
         Loading student…
+      </div>
+    );
+  }
+
+  if (!isEdit && !sessionId) {
+    return (
+      <div className="w-full px-4 sm:px-6 lg:px-8 py-12 space-y-3 text-center">
+        <p className="text-muted-foreground">Select an active academic session before registering a student.</p>
+        <Button variant="outline" asChild>
+          <Link to={listHref}>{listBackLabel}</Link>
+        </Button>
       </div>
     );
   }
@@ -286,6 +458,40 @@ export default function RegisterStudentPage({
       <div className="space-y-10">
         <section className="space-y-4 pb-10 border-b">
           <SectionTitle>1. Student information</SectionTitle>
+          <div className="flex flex-col sm:flex-row gap-6 items-start pb-2">
+            <div className="flex flex-col items-center gap-2 shrink-0">
+              <div className="h-28 w-28 rounded-full border-2 border-dashed border-border bg-muted flex items-center justify-center overflow-hidden">
+                {photoPreview ? (
+                  <img src={photoPreview} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <ImageIcon className="h-10 w-10 text-muted-foreground" />
+                )}
+              </div>
+              <input
+                id="student-photo-input"
+                type="file"
+                accept="image/jpeg,image/png,image/gif,image/webp"
+                className="sr-only"
+                onChange={onPickPhoto}
+              />
+              <Label htmlFor="student-photo-input" className="cursor-pointer text-xs text-accent hover:underline">
+                {photoPreview ? "Change photo" : "Upload photo"}
+              </Label>
+              {photoFile ? (
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground hover:text-destructive"
+                  onClick={clearPhoto}
+                >
+                  Remove selection
+                </button>
+              ) : null}
+            </div>
+            <p className="text-xs text-muted-foreground flex-1 pt-2">
+              Student photo is optional. JPEG, PNG, GIF, or WebP up to 5 MB. The image is stored on the server when
+              you save the registration.
+            </p>
+          </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <FormField label="Student name" required>
               <IconInput
@@ -398,7 +604,7 @@ export default function RegisterStudentPage({
                 onChange={(e) => setForm((f) => ({ ...f, guardianWorkAddress: e.target.value }))}
               />
             </FormField>
-            <FormField label="Guardian email">
+            <FormField label="Guardian email" required>
               <IconInput
                 icon={Mail}
                 type="email"
@@ -406,6 +612,27 @@ export default function RegisterStudentPage({
                 value={form.guardianEmail}
                 onChange={(e) => setForm((f) => ({ ...f, guardianEmail: e.target.value }))}
               />
+            </FormField>
+            <FormField label="Parent login password" required={!isEdit}>
+              <div className="relative">
+                <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  type={showParentPassword ? "text" : "password"}
+                  className="pl-9 pr-10"
+                  placeholder="Minimum 8 characters"
+                  value={form.parentPassword}
+                  disabled={isEdit}
+                  onChange={(e) => setForm((f) => ({ ...f, parentPassword: e.target.value }))}
+                />
+                <button
+                  type="button"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary"
+                  onClick={() => setShowParentPassword((p) => !p)}
+                  aria-label={showParentPassword ? "Hide password" : "Show password"}
+                >
+                  {showParentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </FormField>
           </div>
         </section>
@@ -541,12 +768,16 @@ export default function RegisterStudentPage({
               id="enroll-class"
               icon={GraduationCap}
               value={form.classId}
-              onChange={(e) => setForm((f) => ({
-                ...f,
-                classId: e.target.value,
-                selectedSubjects: [],
-                isFullPackage: false,
-              }))}
+              onChange={(e) => {
+                setForm((f) => ({
+                  ...f,
+                  classId: e.target.value,
+                  sectionId: "",
+                  selectedSubjects: [],
+                  isFullPackage: false,
+                }));
+                setChoiceSelections({});
+              }}
             >
               <option value="">Choose class to enroll…</option>
               {classes.map((c) => (
@@ -555,7 +786,30 @@ export default function RegisterStudentPage({
             </IconSelect>
           </FormField>
 
-          {form.classId && (
+          <FormField label="Section" required>
+            <IconSelect
+              id="enroll-section"
+              icon={GraduationCap}
+              value={form.sectionId}
+              onChange={(e) => {
+                setForm((f) => ({
+                  ...f,
+                  sectionId: e.target.value,
+                  selectedSubjects: [],
+                  isFullPackage: false,
+                }));
+                setChoiceSelections({});
+              }}
+              disabled={!form.classId || sectionsLoading}
+            >
+              <option value="">{form.classId ? "Choose section…" : "Select class first…"}</option>
+              {sections.map((s) => (
+                <option key={s._id} value={s._id}>{s.sectionName}</option>
+              ))}
+            </IconSelect>
+          </FormField>
+
+          {form.classId && form.sectionId && (
             <div className="space-y-4 rounded-lg border bg-muted/20 p-4">
               <p className="text-sm font-medium">
                 Subjects for {selectedClassName}
@@ -570,78 +824,196 @@ export default function RegisterStudentPage({
                 <div>
                   <span className="font-medium text-sm">Full package</span>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Enroll in all subjects for this class at the full package fee.
+                    {hasChoiceGroups
+                      ? "Standard subjects included at full package fee. Still pick one subject from each group below."
+                      : "Enroll in all subjects for this class at the full package fee."}
                   </p>
                 </div>
               </label>
 
-              {!form.isFullPackage && (
-                <div className="space-y-3">
-                  <p className="text-sm text-muted-foreground">
-                    Or select one or more subjects (checkboxes):
-                  </p>
-                  {subjectsLoading && (
-                    <p className="text-sm text-muted-foreground">Loading subjects…</p>
-                  )}
-                  {!subjectsLoading && subjects.length === 0 && (
-                    <p className="text-sm text-amber-700 dark:text-amber-400">
-                      No subjects found for this class. Add subjects in the Subjects tab first.
-                    </p>
-                  )}
-                  {!subjectsLoading && subjects.length > 0 && (
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                      {subjects.map((s) => {
-                        const selected = form.selectedSubjects.includes(s._id);
-                        return (
-                          <label
+              {enrollmentLoading && (
+                <p className="text-sm text-muted-foreground">Loading subjects…</p>
+              )}
+
+              {!enrollmentLoading && hasChoiceGroups && enrollmentLayout && (
+                <>
+                  {form.isFullPackage && enrollmentLayout.coreSubjects.length > 0 && (
+                    <div className="space-y-2 rounded-md border bg-background p-3">
+                      <p className="text-sm font-medium">Included in full package</p>
+                      <div className="flex flex-wrap gap-2">
+                        {enrollmentLayout.coreSubjects.map((s) => (
+                          <span
                             key={s._id}
-                            className={`flex items-center gap-3 rounded-md border p-3 cursor-pointer transition-colors ${
-                              selected ? "border-primary bg-primary/5" : "bg-background hover:bg-muted/40"
-                            }`}
+                            className="inline-flex items-center rounded-full border bg-muted/30 px-3 py-1 text-sm"
                           >
-                            <Checkbox
-                              checked={selected}
-                              onCheckedChange={() => toggleSubject(s._id)}
-                            />
-                            <div className="min-w-0">
-                              <p className="font-medium text-sm truncate">{s.subjectName}</p>
-                              <p className="text-xs text-muted-foreground">{s.subjectCode}</p>
-                            </div>
-                          </label>
-                        );
-                      })}
+                            {s.subjectName}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   )}
-                  {form.selectedSubjects.length > 0 && (
-                    <p className="text-sm font-medium text-primary">
-                      {form.selectedSubjects.length} subject{form.selectedSubjects.length > 1 ? "s" : ""} selected
+
+                  {enrollmentLayout.choiceGroups.map((group) => (
+                    <div key={group._id} className="space-y-2 rounded-md border bg-background p-3">
+                      <p className="text-sm font-medium">{group.groupName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Select only one subject from this group.
+                      </p>
+                      <div className="grid sm:grid-cols-2 gap-2">
+                        {group.subjects.map((s) => {
+                          const selected = choiceSelections[group._id] === s._id;
+                          return (
+                            <label
+                              key={s._id}
+                              className={`flex items-center gap-3 rounded-md border p-3 cursor-pointer transition-colors ${
+                                selected ? "border-primary bg-primary/5" : "hover:bg-muted/40"
+                              }`}
+                            >
+                              <Checkbox
+                                checked={selected}
+                                onCheckedChange={(checked) =>
+                                  toggleGroupChoice(group._id, s._id, checked === true)
+                                }
+                              />
+                              <div>
+                                <p className="font-medium text-sm">{s.subjectName}</p>
+                                <p className="text-xs text-muted-foreground">{s.subjectCode}</p>
+                              </div>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+
+                  {!subjectSelectionValid && (
+                    <p className="text-sm text-destructive">
+                      {form.isFullPackage
+                        ? "Pick one subject from each group above."
+                        : "Select at least one subject. From each group, you may enroll in only one subject."}
                     </p>
                   )}
-                  {!subjectSelectionValid && subjects.length > 0 && (
-                    <p className="text-sm text-destructive">Select at least one subject or choose full package.</p>
+                </>
+              )}
+
+              {!form.isFullPackage && (
+                <div className="space-y-4">
+                  {!enrollmentLoading && hasChoiceGroups && enrollmentLayout && (
+                    <>
+                      {enrollmentLayout.coreSubjects.length > 0 && (
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium">Subjects to enroll</p>
+                          <p className="text-xs text-muted-foreground">
+                            Select the subjects this student will take (outside of choice groups above).
+                          </p>
+                          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                            {enrollmentLayout.coreSubjects.map((s) => {
+                              const selected = form.selectedSubjects.includes(s._id);
+                              return (
+                                <label
+                                  key={s._id}
+                                  className={`flex items-center gap-3 rounded-md border p-3 cursor-pointer transition-colors ${
+                                    selected ? "border-primary bg-primary/5" : "hover:bg-muted/40"
+                                  }`}
+                                >
+                                  <Checkbox
+                                    checked={selected}
+                                    onCheckedChange={() => toggleSubject(s._id)}
+                                  />
+                                  <div>
+                                    <p className="font-medium text-sm">{s.subjectName}</p>
+                                    <p className="text-xs text-muted-foreground">{s.subjectCode}</p>
+                                  </div>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {!enrollmentLoading && !hasChoiceGroups && (
+                    <>
+                      <p className="text-sm text-muted-foreground">
+                        Or select one or more subjects (checkboxes):
+                      </p>
+                      {(enrollmentLayout?.coreSubjects.length ?? 0) === 0 ? (
+                        <p className="text-sm text-amber-700 dark:text-amber-400">
+                          No subjects found for this class. Add subjects in the Subjects tab first.
+                        </p>
+                      ) : (
+                        <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                          {(enrollmentLayout?.coreSubjects ?? []).map((s) => {
+                            const selected = form.selectedSubjects.includes(s._id);
+                            return (
+                              <label
+                                key={s._id}
+                                className={`flex items-center gap-3 rounded-md border p-3 cursor-pointer transition-colors ${
+                                  selected ? "border-primary bg-primary/5" : "bg-background hover:bg-muted/40"
+                                }`}
+                              >
+                                <Checkbox
+                                  checked={selected}
+                                  onCheckedChange={() => toggleSubject(s._id)}
+                                />
+                                <div className="min-w-0">
+                                  <p className="font-medium text-sm truncate">{s.subjectName}</p>
+                                  <p className="text-xs text-muted-foreground">{s.subjectCode}</p>
+                                </div>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {form.selectedSubjects.length > 0 && (
+                        <p className="text-sm font-medium text-primary">
+                          {form.selectedSubjects.length} subject{form.selectedSubjects.length > 1 ? "s" : ""} selected
+                        </p>
+                      )}
+                      {!subjectSelectionValid && (enrollmentLayout?.coreSubjects.length ?? 0) > 0 && (
+                        <p className="text-sm text-destructive">Select at least one subject or choose full package.</p>
+                      )}
+                    </>
                   )}
                 </div>
               )}
             </div>
           )}
 
-          <FormField label="Discount (PKR)">
-            <IconInput
-              icon={Tag}
-              type="number"
-              min={0}
-              step={1}
-              placeholder="0"
-              value={form.discountAmount}
-              onChange={(e) => setForm((f) => ({ ...f, discountAmount: e.target.value }))}
-            />
-            <p className="text-xs text-muted-foreground">
-              One-time discount in rupees applied to the first payment (monthly + admission).
-            </p>
-          </FormField>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <FormField label="Monthly fee discount (PKR)">
+              <IconInput
+                icon={Tag}
+                type="number"
+                min={0}
+                step={1}
+                placeholder="0"
+                value={form.monthlyFeeDiscount}
+                onChange={(e) => setForm((f) => ({ ...f, monthlyFeeDiscount: e.target.value }))}
+              />
+              <p className="text-xs text-muted-foreground">
+                One-time discount on subject/monthly fee for the first payment.
+              </p>
+            </FormField>
+            <FormField label="Admission fee discount (PKR)">
+              <IconInput
+                icon={Tag}
+                type="number"
+                min={0}
+                step={1}
+                placeholder="0"
+                value={form.admissionFeeDiscount}
+                onChange={(e) => setForm((f) => ({ ...f, admissionFeeDiscount: e.target.value }))}
+              />
+              <p className="text-xs text-muted-foreground">
+                One-time discount on admission fee for the first payment.
+              </p>
+            </FormField>
+          </div>
 
           {feePreview && (
-            <div className="rounded-lg border border-accent/30 bg-accent/5 p-4 grid sm:grid-cols-2 lg:grid-cols-5 gap-3 text-sm">
+            <div className="rounded-lg border border-accent/30 bg-accent/5 p-4 grid sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-3 text-sm">
               <div>
                 <span className="text-muted-foreground">Monthly fee</span>
                 <p className="font-bold text-lg">₨ {feePreview.monthlyFee.toLocaleString()}</p>
@@ -657,7 +1029,19 @@ export default function RegisterStudentPage({
                 </p>
               </div>
               <div>
-                <span className="text-muted-foreground">Discount</span>
+                <span className="text-muted-foreground">Monthly discount</span>
+                <p className="font-bold text-lg text-destructive">
+                  − ₨ {(feePreview.monthlyFeeDiscount ?? 0).toLocaleString()}
+                </p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Admission discount</span>
+                <p className="font-bold text-lg text-destructive">
+                  − ₨ {(feePreview.admissionFeeDiscount ?? 0).toLocaleString()}
+                </p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Total discount</span>
                 <p className="font-bold text-lg text-destructive">
                   − ₨ {(feePreview.discountAmount ?? 0).toLocaleString()}
                 </p>

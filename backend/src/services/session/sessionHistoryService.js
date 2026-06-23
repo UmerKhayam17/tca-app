@@ -12,13 +12,48 @@ const TimetableSettings = require('../../models/timetable/TimetableSettings');
 const TimetableVersion = require('../../models/timetable/TimetableVersion');
 const ScheduleSlot = require('../../models/timetable/ScheduleSlot');
 const Student = require('../../models/Student');
+const AcademyClass = require('../../models/academy/AcademyClass');
+const AcademySection = require('../../models/academy/AcademySection');
+const AcademyStudent = require('../../models/academy/AcademyStudent');
 const { logAudit, listAuditLogs } = require('./auditService');
 const { getSessionOrThrow, syncSessionFlags } = require('./sessionGuard');
+
+async function getAcademySessionSummary(sessionId) {
+  const classes = await AcademyClass.find({ sessionId }).sort({ className: 1 }).lean();
+  const classIds = classes.map((c) => c._id);
+  const sections = classIds.length
+    ? await AcademySection.find({ classId: { $in: classIds } })
+        .sort({ sectionName: 1 })
+        .lean()
+    : [];
+  const studentCount = classIds.length
+    ? await AcademyStudent.countDocuments({ classId: { $in: classIds }, status: 'active' })
+    : 0;
+
+  const sectionsByClass = sections.reduce((acc, sec) => {
+    const key = String(sec.classId);
+    if (!acc[key]) acc[key] = [];
+    acc[key].push({ _id: sec._id, sectionName: sec.sectionName, status: sec.status });
+    return acc;
+  }, {});
+
+  return {
+    classCount: classes.length,
+    sectionCount: sections.length,
+    studentCount,
+    classes: classes.map((c) => ({
+      _id: c._id,
+      className: c.className,
+      status: c.status,
+      sections: sectionsByClass[String(c._id)] || [],
+    })),
+  };
+}
 
 async function getSessionHistory(sessionId) {
   const session = await getSessionOrThrow(sessionId);
 
-  const [classes, versions, auditLogs, studentCount] = await Promise.all([
+  const [classes, versions, auditLogs, studentCount, academy] = await Promise.all([
     Class.find({ session: sessionId }).populate('sections').populate('subjects'),
     TimetableVersion.find({ session: sessionId })
       .populate('class', 'name')
@@ -26,6 +61,7 @@ async function getSessionHistory(sessionId) {
       .sort({ section: 1, version: -1 }),
     listAuditLogs(sessionId, { limit: 200 }),
     Student.countDocuments({ session: sessionId }),
+    getAcademySessionSummary(sessionId),
   ]);
 
   const sectionCount = classes.reduce((n, c) => n + (c.sections?.length || 0), 0);
@@ -48,6 +84,7 @@ async function getSessionHistory(sessionId) {
       scheduleSlots: slotCount,
       versionsByStatus,
     },
+    academy,
     classes: classes.map((c) => ({
       _id: c._id,
       name: c.name,

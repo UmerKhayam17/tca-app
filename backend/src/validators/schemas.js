@@ -1,5 +1,7 @@
 const Joi = require('joi');
 
+const objectId = Joi.string().hex().length(24);
+
 const login = Joi.object({
   email: Joi.string().email({ tlds: { allow: false } }).required(),
   password: Joi.string().required(),
@@ -43,6 +45,10 @@ const updateUser = Joi.object({
   salary: Joi.number().min(0),
   modulePermissions: Joi.object().pattern(Joi.string(), Joi.array().items(Joi.string())),
 }).min(1);
+
+const parentStudentAccess = Joi.object({
+  studentIds: Joi.array().items(objectId).required(),
+});
 
 const userPermissions = Joi.object({
   permissionIds: Joi.array().items(Joi.string().hex().length(24)).required(),
@@ -292,6 +298,7 @@ module.exports = {
   otpVerify,
   createUser,
   updateUser,
+  parentStudentAccess,
   userPermissions,
   sessionBody,
   sessionCloneBody,

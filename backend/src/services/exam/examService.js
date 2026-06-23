@@ -13,10 +13,12 @@ function resolveClassId(student) {
 }
 
 function enrolledSubjectIds(student, allClassSubjects) {
+  const ids = selectedSubjectIds(student);
+  if (ids.length > 0) return ids;
   if (student.isFullPackage) {
     return allClassSubjects.map((s) => String(s._id));
   }
-  return selectedSubjectIds(student);
+  return [];
 }
 
 async function createExam(body, userId) {

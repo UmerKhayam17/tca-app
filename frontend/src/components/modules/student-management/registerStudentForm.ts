@@ -30,6 +30,7 @@ export const defaultRegisterForm = () => ({
   guardianOccupation: "",
   guardianWorkAddress: "",
   guardianEmail: "",
+  parentPassword: "",
   studentEmail: "",
   postalAddress: "",
   contactPhoneRes: "",
@@ -39,9 +40,12 @@ export const defaultRegisterForm = () => ({
   academicHistory: [emptyAcademicRow()],
   gender: "male",
   classId: "",
+  sectionId: "",
   isFullPackage: false,
   selectedSubjects: [] as string[],
   discountAmount: "",
+  monthlyFeeDiscount: "",
+  admissionFeeDiscount: "",
   status: "active" as "active" | "inactive" | "suspended",
 });
 
@@ -69,6 +73,7 @@ export function mapStudentToForm(student: AcademyStudent) {
     guardianOccupation: student.guardianOccupation || "",
     guardianWorkAddress: student.guardianWorkAddress || "",
     guardianEmail: student.guardianEmail || "",
+    parentPassword: "",
     studentEmail: student.studentEmail || "",
     postalAddress: student.postalAddress || student.address || "",
     contactPhoneRes: student.contactPhoneRes || "",
@@ -78,9 +83,12 @@ export function mapStudentToForm(student: AcademyStudent) {
     academicHistory: history,
     gender: student.gender || "male",
     classId: resolveClassId(student.classId),
+    sectionId: typeof student.sectionId === "object" && student.sectionId ? student.sectionId._id : String(student.sectionId || ""),
     isFullPackage: student.isFullPackage ?? false,
     selectedSubjects: resolveSubjectIds(student.selectedSubjects),
     discountAmount: String(student.discountAmount ?? 0),
+    monthlyFeeDiscount: String(student.monthlyFeeDiscount ?? 0),
+    admissionFeeDiscount: String(student.admissionFeeDiscount ?? 0),
     status: (student.status as "active" | "inactive" | "suspended") || "active",
   };
 }
@@ -97,6 +105,7 @@ export function buildStudentPayload(form: ReturnType<typeof defaultRegisterForm>
     guardianOccupation: form.guardianOccupation.trim(),
     guardianWorkAddress: form.guardianWorkAddress.trim(),
     guardianEmail: form.guardianEmail.trim(),
+    ...(form.parentPassword.trim() ? { parentPassword: form.parentPassword.trim() } : {}),
     studentEmail: form.studentEmail.trim(),
     postalAddress: form.postalAddress.trim(),
     contactPhoneRes: form.contactPhoneRes.trim(),
@@ -106,9 +115,11 @@ export function buildStudentPayload(form: ReturnType<typeof defaultRegisterForm>
     academicHistory: toAcademicPayload(form.academicHistory),
     gender: form.gender,
     classId: form.classId,
+    sectionId: form.sectionId,
     selectedSubjects: form.selectedSubjects,
     isFullPackage: form.isFullPackage,
-    discountAmount: Number(form.discountAmount) || 0,
+    monthlyFeeDiscount: Number(form.monthlyFeeDiscount) || 0,
+    admissionFeeDiscount: Number(form.admissionFeeDiscount) || 0,
     status: form.status,
   };
 }

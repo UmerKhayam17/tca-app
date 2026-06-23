@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus, Pencil, UserX, ImageIcon } from "lucide-react";
+import { Plus, Pencil, UserX, ImageIcon, Eye, EyeOff } from "lucide-react";
 import { ModuleActionCaps, PermLevel } from "@/lib/permissions";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -26,21 +26,27 @@ import {
 } from "@/lib/userSchemaFields";
 import {
   createStaffUser,
+  fetchAllUsers,
   fetchAllRoles,
+  fetchParentStudents,
   fetchModuleRegistry,
   fetchStaffUsers,
   staffRolesOnly,
+  assignParentStudents,
   updateStaffUser,
   uploadStaffProfilePhoto,
   normalizeModulePermissions,
   type ModuleRegistryEntry,
   type RoleOption,
+  type LinkedStudentSummary,
   type StaffUser,
 } from "@/lib/staffApi";
 import { useStaffRealtime } from "@/hooks/useStaffSocket";
 import ModuleAccessMatrix from "@/components/modules/ModuleAccessMatrix";
 import PanelToolbar from "@/components/modules/PanelToolbar";
 import { usePanelListSearch } from "@/hooks/usePanelListSearch";
+import { fetchAcademyStudents, type AcademyStudent } from "@/lib/studentManagementApi";
+import { resolveUploadUrl } from "@/lib/api";
 
 function setFormField(setter: React.Dispatch<React.SetStateAction<UserFormValues>>, key: UserFieldKey, value: string) {
   setter((prev) => ({ ...prev, [key]: value }));
@@ -59,6 +65,7 @@ function SchemaFieldControl({
   onChange: (v: string) => void;
   roleOptions: RoleOption[];
 }) {
+  const [showPassword, setShowPassword] = useState(false);
   const selectOptions =
     field.optionsFrom === "roles"
       ? roleOptions.map((r) => ({ value: r._id, label: r.name }))
@@ -104,16 +111,39 @@ function SchemaFieldControl({
     field.inputType === "email" ? "email" : field.inputType === "tel" ? "tel" : "text";
 
   return (
-    <Input
-      type={field.inputType === "password" ? "password" : inputType}
-      autoComplete={field.key === "password" ? "new-password" : undefined}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      required={
-        field.required && !(mode === "edit" && field.key === "password" && field.optionalOnEdit)
-      }
-    />
+    field.inputType === "password" ? (
+      <div className="relative">
+        <Input
+          type={showPassword ? "text" : "password"}
+          autoComplete="new-password"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="pr-10"
+          required={
+            field.required && !(mode === "edit" && field.key === "password" && field.optionalOnEdit)
+          }
+        />
+        <button
+          type="button"
+          onClick={() => setShowPassword((p) => !p)}
+          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary"
+          aria-label={showPassword ? "Hide password" : "Show password"}
+        >
+          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        </button>
+      </div>
+    ) : (
+      <Input
+        type={inputType}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        required={
+          field.required && !(mode === "edit" && field.key === "password" && field.optionalOnEdit)
+        }
+      />
+    )
   );
 }
 
@@ -143,19 +173,67 @@ function formatTableCell(user: StaffUser, key: UserFieldKey): React.ReactNode {
   return String(v);
 }
 
-const STAFF_QUERY = ["staff"] as const;
+function isParentUser(user: StaffUser): boolean {
+  const r = user.role;
+  const name =
+    r && typeof r === "object" && "name" in r
+      ? String((r as RoleOption).name)
+      : typeof r === "string"
+        ? r
+        : "";
+  return name.toLowerCase() === "parent";
+}
+
+function LinkedStudentsCell({ user }: { user: StaffUser }) {
+  if (!isParentUser(user)) return <span className="text-muted-foreground">—</span>;
+  const students = user.linkedStudents ?? [];
+  if (students.length === 0) {
+    return <span className="text-xs text-muted-foreground">No children linked</span>;
+  }
+  return (
+    <div className="flex flex-col gap-1.5 max-w-xs">
+      {students.map((s: LinkedStudentSummary) => {
+        const classSection = [s.className, s.sectionName].filter(Boolean).join(" · ");
+        return (
+          <div key={s._id} className="text-xs leading-snug">
+            <span className="font-medium text-foreground">{s.studentName}</span>
+            {s.studentId ? (
+              <span className="text-muted-foreground"> ({s.studentId})</span>
+            ) : null}
+            {classSection ? (
+              <div className="text-muted-foreground">{classSection}</div>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+const STAFF_QUERY = ["users-module-list"] as const;
 const ROLES_QUERY = ["staffRoles"] as const;
 const REGISTRY_QUERY = ["moduleRegistry"] as const;
 
-const UsersModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActionCaps }) => {
+const UsersModule = ({
+  perm: _perm,
+  caps,
+  scope = "all",
+}: {
+  perm: PermLevel;
+  caps: ModuleActionCaps;
+  scope?: "all" | "staff";
+}) => {
   const anyWrite = caps.canCreate || caps.canEdit || caps.canDelete;
   const { toast } = useToast();
   const qc = useQueryClient();
   useStaffRealtime(anyWrite);
 
-  const { data: staff = [], isLoading: staffLoading } = useQuery({
-    queryKey: STAFF_QUERY,
-    queryFn: fetchStaffUsers,
+  const { data: staff = [], isLoading: staffLoading } = useQuery<StaffUser[]>({
+    queryKey: [...STAFF_QUERY, scope],
+    queryFn: async () =>
+      scope === "staff"
+        ? await fetchStaffUsers()
+        : (await fetchAllUsers()) as StaffUser[],
   });
 
   const { data: rolesRaw = [] } = useQuery({
@@ -163,27 +241,68 @@ const UsersModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActio
     queryFn: fetchAllRoles,
   });
 
-  const roleOptions = useMemo(() => staffRolesOnly(rolesRaw), [rolesRaw]);
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<UserFormMode>("create");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<UserFormValues>(() => emptyUserForm());
+  const [modulePerms, setModulePerms] = useState<Record<string, string[]>>({});
+  const [parentStudentIds, setParentStudentIds] = useState<string[]>([]);
+  const [editingWasParent, setEditingWasParent] = useState(false);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+
+  const roleOptions = useMemo(() => {
+    const base = staffRolesOnly(rolesRaw);
+    if (scope === "staff") {
+      return base.filter((r) => String(r.name).toLowerCase() !== "parent");
+    }
+    return base;
+  }, [rolesRaw, scope]);
+  const selectedRole = roleOptions.find((r) => r._id === form.role);
+  const isParentRole = (selectedRole?.name || "").toLowerCase() === "parent";
+
+  const { data: parentStudentChoices = [], isLoading: parentStudentChoicesLoading } = useQuery({
+    queryKey: ["academy-student-choices", isParentRole],
+    queryFn: async () => {
+      const r = await fetchAcademyStudents({ page: 1, limit: 200, status: "active" });
+      return r.students;
+    },
+    enabled: open && isParentRole,
+    retry: false,
+  });
+
+  const { data: currentParentStudents = [] } = useQuery({
+    queryKey: ["parent-students", editingId],
+    queryFn: async () => {
+      if (!editingId) return [];
+      return await fetchParentStudents(editingId);
+    },
+    enabled: open && mode === "edit" && Boolean(editingId) && isParentRole,
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (!(open && mode === "edit" && isParentRole)) return;
+    setParentStudentIds(currentParentStudents.map((r: any) => r._id));
+  }, [open, mode, isParentRole, currentParentStudents]);
 
   const { data: modules = [] } = useQuery({
     queryKey: REGISTRY_QUERY,
     queryFn: fetchModuleRegistry,
   });
 
-  const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<UserFormMode>("create");
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState<UserFormValues>(() => emptyUserForm());
-  const [modulePerms, setModulePerms] = useState<Record<string, string[]>>({});
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-
   const { search, setSearch, filtered: staffFiltered } = usePanelListSearch(staff, (u) => [
     u.name,
     u.email,
     u.phone,
-    typeof u.role === "object" && u.role ? (u.role as RoleOption).name : u.role,
+    typeof u.role === "object" && u.role ? (u.role as RoleOption).name : typeof u.role === "string" ? u.role : "",
     u.isActive ? "active" : "inactive",
+    ...(u.linkedStudents ?? []).flatMap((s) => [
+      s.studentName,
+      s.studentId,
+      s.className ?? "",
+      s.sectionName ?? "",
+    ]),
   ]);
 
   const saveMutation = useMutation({
@@ -205,7 +324,10 @@ const UsersModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActio
       }
 
       const salaryNum = Math.max(0, Number(form.salary) || 0);
-      const permsPayload = { ...modulePerms };
+      const permsPayload = isParentRole ? {} : { ...modulePerms };
+      if (isParentRole && parentStudentIds.length === 0) {
+        throw new Error("Select at least one student for this parent.");
+      }
 
       if (mode === "create") {
         if (!form.password || form.password.length < 8) throw new Error("Password must be at least 8 characters.");
@@ -220,6 +342,7 @@ const UsersModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActio
           modulePermissions: permsPayload,
         });
         if (photoFile) await uploadStaffProfilePhoto(u._id, photoFile);
+        if (isParentRole) await assignParentStudents(u._id, parentStudentIds);
         return u;
       }
       if (!editingId) throw new Error("Missing user");
@@ -235,6 +358,8 @@ const UsersModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActio
       if (form.password.trim()) payload.password = form.password;
       const u = await updateStaffUser(editingId, payload);
       if (photoFile) await uploadStaffProfilePhoto(editingId, photoFile);
+      if (isParentRole) await assignParentStudents(editingId, parentStudentIds);
+      if (!isParentRole && editingWasParent) await assignParentStudents(editingId, []);
       return u;
     },
     onSuccess: () => {
@@ -266,6 +391,8 @@ const UsersModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActio
     setForm(emptyUserForm());
     setEditingId(null);
     setModulePerms({});
+    setParentStudentIds([]);
+    setEditingWasParent(false);
     setPhotoFile(null);
     setPhotoPreview((prev) => {
       if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
@@ -286,12 +413,14 @@ const UsersModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActio
     setEditingId(u._id);
     setForm(userToFormValues(u));
     setModulePerms(normalizeModulePermissions(u.modulePermissions));
+    const uRoleName =
+      typeof u.role === "object" && u.role?.name ? String(u.role.name).toLowerCase() : String(u.role || "").toLowerCase();
+    setEditingWasParent(uRoleName === "parent");
+    setParentStudentIds([]);
     setPhotoFile(null);
     setPhotoPreview((prev) => {
       if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
-      if (!u.profileImage) return null;
-      if (u.profileImage.startsWith("http")) return u.profileImage;
-      return u.profileImage.startsWith("/") ? u.profileImage : `/${u.profileImage}`;
+      return u.profileImage ? resolveUploadUrl(u.profileImage) : null;
     });
     setOpen(true);
   };
@@ -309,15 +438,20 @@ const UsersModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActio
   };
 
   const cols = tableColumns();
+  const showLinkedStudents = scope === "all";
+  const tableColSpan = cols.length + 3 + (showLinkedStudents ? 1 : 0);
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-6">
       <Card className="p-4 border-dashed">
-        <div className="text-sm font-semibold text-primary mb-1">Staff management</div>
+        <div className="text-sm font-semibold text-primary mb-1">
+          {scope === "staff" ? "Staff management" : "Users management"}
+        </div>
         <p className="text-xs text-muted-foreground">
-          Manage <strong>teachers</strong> and <strong>accountants</strong>: contact details, login, salary, profile
-          photo (upload), status, and per-module actions. Data loads via React Query and refreshes live when anyone
-          updates staff (no manual page reload).
+          {scope === "staff"
+            ? "Manage only teachers and accountants: contact details, login, salary, profile photo (upload), status, and per-module actions."
+            : "Manage all users (including staff and parents): contact details, login, status, and per-module actions."}
+          {" "}Data loads via React Query and refreshes live when anyone updates users.
         </p>
       </Card>
 
@@ -328,7 +462,7 @@ const UsersModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActio
       >
         {caps.canCreate && (
           <Button variant="hero" onClick={openCreate}>
-            <Plus className="h-4 w-4" /> Add staff
+            <Plus className="h-4 w-4" /> {scope === "staff" ? "Add staff" : "Add user"}
           </Button>
         )}
       </PanelToolbar>
@@ -342,7 +476,11 @@ const UsersModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActio
             >
               <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle>{mode === "create" ? "Add staff member" : "Edit staff member"}</DialogTitle>
+                  <DialogTitle>
+                    {mode === "create"
+                      ? scope === "staff" ? "Add staff member" : "Add user"
+                      : scope === "staff" ? "Edit staff member" : "Edit user"}
+                  </DialogTitle>
                 </DialogHeader>
                 <div className="grid grid-cols-2 gap-3 py-2">
                   <div className="col-span-2 flex flex-col sm:flex-row gap-4 items-start">
@@ -389,7 +527,42 @@ const UsersModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActio
                     </div>
                   ))}
 
-                  {modules.length > 0 && (
+                  {isParentRole && (
+                    <div className="col-span-2 space-y-2">
+                      <Label className="mb-1.5 block">
+                        Parent students
+                        <span className="text-destructive"> *</span>
+                      </Label>
+                      <div className="rounded-lg border p-3 bg-secondary/10">
+                        {parentStudentChoicesLoading ? (
+                          <p className="text-sm text-muted-foreground">Loading students…</p>
+                        ) : parentStudentChoices.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">No active students found.</p>
+                        ) : (
+                          <select
+                            multiple
+                            value={parentStudentIds}
+                            onChange={(e) => {
+                              const opts = Array.from(e.target.selectedOptions);
+                              setParentStudentIds(opts.map((o) => o.value));
+                            }}
+                            className="w-full h-40 rounded-md border border-input bg-background px-3 text-sm"
+                          >
+                            {parentStudentChoices.map((s: AcademyStudent) => (
+                              <option key={s._id} value={s._id}>
+                                {s.studentName} ({s.studentId})
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                        <p className="text-xs text-muted-foreground mt-2">
+                          Only selected children&apos;s progress will be visible to this parent.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {modules.length > 0 && !isParentRole && (
                     <ModuleAccessMatrix modules={modules} value={modulePerms} onChange={setModulePerms} />
                   )}
                 </div>
@@ -417,6 +590,9 @@ const UsersModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActio
                     {c.label}
                   </th>
                 ))}
+                {showLinkedStudents && (
+                  <th className="text-left font-medium px-4 py-3 min-w-[10rem]">Linked students</th>
+                )}
                 <th className="text-left font-medium px-4 py-3">Modules</th>
                 {(caps.canEdit || caps.canDelete) && <th className="px-4 py-3 w-24" />}
               </tr>
@@ -424,32 +600,28 @@ const UsersModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActio
             <tbody>
               {staffLoading ? (
                 <tr>
-                  <td colSpan={cols.length + 3} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={tableColSpan} className="px-4 py-8 text-center text-muted-foreground">
                     Loading…
                   </td>
                 </tr>
               ) : staff.length === 0 ? (
                 <tr>
-                  <td colSpan={cols.length + 3} className="px-4 py-8 text-center text-muted-foreground">
-                    No teachers or accountants yet.
+                  <td colSpan={tableColSpan} className="px-4 py-8 text-center text-muted-foreground">
+                    {scope === "staff"
+                      ? "No teachers or accountants yet."
+                      : "No users found yet."}
                   </td>
                 </tr>
               ) : staffFiltered.length === 0 ? (
                 <tr>
-                  <td colSpan={cols.length + 3} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={tableColSpan} className="px-4 py-8 text-center text-muted-foreground">
                     No staff match your search.
                   </td>
                 </tr>
               ) : (
                 staffFiltered.map((u) => {
                   const modCount = u.modulePermissions ? Object.keys(u.modulePermissions).length : 0;
-                  const imgSrc = u.profileImage?.startsWith("http")
-                    ? u.profileImage
-                    : u.profileImage
-                      ? u.profileImage.startsWith("/")
-                        ? u.profileImage
-                        : `/${u.profileImage}`
-                      : undefined;
+                  const imgSrc = u.profileImage ? resolveUploadUrl(u.profileImage) : undefined;
                   return (
                     <tr key={u._id} className="border-t border-border hover:bg-secondary/30">
                       <td className="px-4 py-2">
@@ -464,7 +636,32 @@ const UsersModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActio
                           {formatTableCell(u, c.key)}
                         </td>
                       ))}
-                      <td className="px-4 py-3 text-muted-foreground">{modCount ? `${modCount} module(s)` : "—"}</td>
+                      {showLinkedStudents && (
+                        <td className="px-4 py-3 align-top">
+                          <LinkedStudentsCell user={u} />
+                        </td>
+                      )}
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {(() => {
+                          const mods = u.modulePermissions && typeof u.modulePermissions === "object"
+                            ? Object.keys(u.modulePermissions)
+                            : [];
+                          if (!mods || mods.length === 0) return "—";
+                          const show = mods.slice(0, 3);
+                          return (
+                            <div className="flex flex-wrap items-center gap-2">
+                              {show.map((m) => (
+                                <span key={m} className="text-xs bg-muted/20 rounded-full px-2 py-0.5 capitalize">
+                                  {m}
+                                </span>
+                              ))}
+                              {mods.length > 3 ? (
+                                <span className="text-xs text-muted-foreground">+{mods.length - 3}</span>
+                              ) : null}
+                            </div>
+                          );
+                        })()}
+                      </td>
                       {(caps.canEdit || caps.canDelete) && (
                         <td className="px-4 py-3 text-right whitespace-nowrap">
                           {caps.canEdit && (

@@ -3,6 +3,7 @@ const Joi = require('joi');
 const objectId = Joi.string().hex().length(24);
 
 const academyClassBody = Joi.object({
+  sessionId: objectId.required(),
   className: Joi.string().trim().required(),
   totalSubjects: Joi.number().integer().min(0).optional(),
   status: Joi.string().valid('active', 'inactive').optional(),
@@ -15,11 +16,63 @@ const academySubjectBody = Joi.object({
   classId: objectId.required(),
   subjectCode: Joi.string().trim().required(),
   status: Joi.string().valid('active', 'inactive').optional(),
+  enrollmentType: Joi.string().valid('required', 'choice').default('required'),
+  choiceGroupId: objectId.optional(),
+  choiceGroupName: Joi.string().trim().optional(),
+  pickCount: Joi.number().integer().min(1).default(1),
 });
 
 const academySubjectPatch = Joi.object({
   subjectName: Joi.string().trim(),
   subjectCode: Joi.string().trim(),
+  status: Joi.string().valid('active', 'inactive'),
+  enrollmentType: Joi.string().valid('required', 'choice'),
+  choiceGroupId: objectId.optional(),
+  choiceGroupName: Joi.string().trim().optional(),
+  pickCount: Joi.number().integer().min(1),
+}).min(1);
+
+const academySubjectChoiceGroupBody = Joi.object({
+  groupName: Joi.string().trim().required(),
+  subjectIds: Joi.array().items(objectId).min(2).required(),
+  pickCount: Joi.number().integer().min(1).default(1),
+  status: Joi.string().valid('active', 'inactive').optional(),
+});
+
+const academySubjectChoiceGroupPatch = Joi.object({
+  groupName: Joi.string().trim(),
+  subjectIds: Joi.array().items(objectId).min(2),
+  pickCount: Joi.number().integer().min(1),
+  status: Joi.string().valid('active', 'inactive'),
+}).min(1);
+
+const academySubjectChoiceGroupBulkBody = Joi.object({
+  groupName: Joi.string().trim().required(),
+  subjects: Joi.array()
+    .items(
+      Joi.object({
+        subjectName: Joi.string().trim().required(),
+        subjectCode: Joi.string().trim().required(),
+      })
+    )
+    .min(2)
+    .max(10)
+    .required(),
+  pickCount: Joi.number().integer().min(1).default(1),
+});
+
+const academySectionBody = Joi.object({
+  sectionName: Joi.string().trim().required(),
+  classId: objectId.required(),
+  useClassSubjects: Joi.boolean().default(true),
+  subjectIds: Joi.array().items(objectId).default([]),
+  status: Joi.string().valid('active', 'inactive').optional(),
+});
+
+const academySectionPatch = Joi.object({
+  sectionName: Joi.string().trim(),
+  useClassSubjects: Joi.boolean(),
+  subjectIds: Joi.array().items(objectId),
   status: Joi.string().valid('active', 'inactive'),
 }).min(1);
 
@@ -91,11 +144,17 @@ const academyStudentRegister = Joi.object({
   phone: Joi.string().trim(),
   gender: Joi.string().valid('male', 'female', 'other').required(),
   classId: objectId.required(),
+  sectionId: objectId.required(),
   selectedSubjects: Joi.array().items(objectId).default([]),
   isFullPackage: Joi.boolean().default(false),
   discountAmount: Joi.number().min(0).default(0),
+  monthlyFeeDiscount: Joi.number().min(0).default(0),
+  admissionFeeDiscount: Joi.number().min(0).default(0),
   status: Joi.string().valid('active', 'inactive', 'suspended').optional(),
   ...studentProfileFields,
+  // Parent login (required for creating a parent account).
+  guardianEmail: Joi.string().trim().email({ tlds: { allow: false } }).required(),
+  parentPassword: Joi.string().min(8).required(),
 }).or('phone', 'mobileNo');
 
 const academyStudentPatch = Joi.object({
@@ -104,9 +163,12 @@ const academyStudentPatch = Joi.object({
   phone: Joi.string().trim(),
   gender: Joi.string().valid('male', 'female', 'other'),
   classId: objectId,
+  sectionId: objectId,
   selectedSubjects: Joi.array().items(objectId),
   isFullPackage: Joi.boolean(),
   discountAmount: Joi.number().min(0),
+  monthlyFeeDiscount: Joi.number().min(0),
+  admissionFeeDiscount: Joi.number().min(0),
   status: Joi.string().valid('active', 'inactive', 'suspended'),
   dateOfBirth: Joi.date(),
   nationality: Joi.string().trim(),
@@ -197,6 +259,17 @@ const feePreview = Joi.object({
   selectedSubjects: Joi.array().items(objectId).default([]),
   isFullPackage: Joi.boolean().default(false),
   discountAmount: Joi.number().min(0).default(0),
+  monthlyFeeDiscount: Joi.number().min(0).default(0),
+  admissionFeeDiscount: Joi.number().min(0).default(0),
+});
+
+const discountReportQuery = Joi.object({
+  page: Joi.number().integer().min(1),
+  limit: Joi.number().integer().min(1).max(100),
+  classId: objectId,
+  search: Joi.string().trim().max(200).allow(''),
+  from: Joi.date(),
+  to: Joi.date(),
 });
 
 const assessmentTypes = ['quiz', 'weekly', 'monthly', 'midterm', 'final', 'assignment', 'practice', 'other'];
@@ -299,11 +372,22 @@ const academyAttendanceMark = Joi.object({
     .required(),
 });
 
+const academySessionImportBody = Joi.object({
+  sourceSessionId: objectId.required(),
+  classIds: Joi.array().items(objectId).optional(),
+  includeFeeStructure: Joi.boolean().default(true),
+});
+
 module.exports = {
   academyClassBody,
   academyClassPatch,
   academySubjectBody,
   academySubjectPatch,
+  academySubjectChoiceGroupBody,
+  academySubjectChoiceGroupPatch,
+  academySubjectChoiceGroupBulkBody,
+  academySectionBody,
+  academySectionPatch,
   academyFeeStructureBody,
   academyFeeStructurePatch,
   academyStudentRegister,
@@ -316,6 +400,7 @@ module.exports = {
   academyExpenseBody,
   academyExpensePatch,
   feePreview,
+  discountReportQuery,
   academyAssessmentBody,
   academyAssessmentPatch,
   academyAssessmentSessionQuery,
@@ -325,4 +410,5 @@ module.exports = {
   academyTimetableSlotBody,
   academyTimetableSlotPatch,
   academyAttendanceMark,
+  academySessionImportBody,
 };

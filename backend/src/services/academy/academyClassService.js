@@ -2,10 +2,12 @@ const ApiError = require('../../utils/ApiError');
 const AcademyClass = require('../../models/academy/AcademyClass');
 const AcademySubject = require('../../models/academy/AcademySubject');
 const AcademyStudent = require('../../models/academy/AcademyStudent');
+const { assertSessionWritable } = require('../session/sessionGuard');
 
-async function listClasses({ status, search }) {
+async function listClasses({ status, search, sessionId }) {
   const q = {};
   if (status) q.status = status;
+  if (sessionId) q.sessionId = sessionId;
   if (search) {
     q.className = { $regex: search.trim(), $options: 'i' };
   }
@@ -13,11 +15,16 @@ async function listClasses({ status, search }) {
 }
 
 async function createClass(payload, userId) {
-  const exists = await AcademyClass.findOne({ className: payload.className.trim() });
-  if (exists) throw new ApiError(409, 'Class name already exists');
+  await assertSessionWritable(payload.sessionId);
+
+  const sessionId = payload.sessionId;
+  const className = payload.className.trim();
+  const exists = await AcademyClass.findOne({ sessionId, className });
+  if (exists) throw new ApiError(409, 'Class name already exists for this session');
   return AcademyClass.create({
     ...payload,
-    className: payload.className.trim(),
+    sessionId,
+    className,
     createdBy: userId,
   });
 }
@@ -26,8 +33,12 @@ async function updateClass(id, payload) {
   const doc = await AcademyClass.findById(id);
   if (!doc) throw new ApiError(404, 'Class not found');
   if (payload.className && payload.className.trim() !== doc.className) {
-    const dup = await AcademyClass.findOne({ className: payload.className.trim(), _id: { $ne: id } });
-    if (dup) throw new ApiError(409, 'Class name already exists');
+    const dup = await AcademyClass.findOne({
+      className: payload.className.trim(),
+      sessionId: doc.sessionId,
+      _id: { $ne: id },
+    });
+    if (dup) throw new ApiError(409, 'Class name already exists for this session');
     doc.className = payload.className.trim();
   }
   if (payload.totalSubjects !== undefined) doc.totalSubjects = payload.totalSubjects;

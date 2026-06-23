@@ -20,7 +20,7 @@ import {
 
 const QK = ["academy-classes"] as const;
 
-export default function ClassesTab({ caps }: { caps: ModuleActionCaps }) {
+export default function ClassesTab({ caps, sessionId }: { caps: ModuleActionCaps; sessionId: string }) {
   const { toast } = useToast();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -32,14 +32,16 @@ export default function ClassesTab({ caps }: { caps: ModuleActionCaps }) {
   const [form, setForm] = useState({ className: "", status: "active" as "active" | "inactive" });
 
   const { data: classes = [], isLoading } = useQuery({
-    queryKey: [...QK, search],
-    queryFn: () => fetchAcademyClasses({ search: search || undefined }),
+    queryKey: [...QK, sessionId, search],
+    queryFn: () => fetchAcademyClasses({ sessionId, search: search || undefined }),
+    enabled: Boolean(sessionId),
   });
 
   const saveMut = useMutation({
     mutationFn: async () => {
+      if (!sessionId) throw new Error("Select an active academic session first.");
       if (edit) return updateAcademyClass(edit._id, form);
-      return createAcademyClass(form);
+      return createAcademyClass({ ...form, sessionId });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QK });
@@ -60,6 +62,10 @@ export default function ClassesTab({ caps }: { caps: ModuleActionCaps }) {
   });
 
   const openCreate = () => {
+    if (!sessionId) {
+      toast({ title: "Select a session", description: "Create or choose an active academic session first.", variant: "destructive" });
+      return;
+    }
     setEdit(null);
     setForm({ className: "", status: "active" });
     setOpen(true);
@@ -73,6 +79,11 @@ export default function ClassesTab({ caps }: { caps: ModuleActionCaps }) {
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-4">
+      {!sessionId && (
+        <p className="text-sm text-muted-foreground rounded-lg border border-dashed p-4">
+          Choose an academic session above, or create one under System configuration → Academic.
+        </p>
+      )}
       <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
         <PanelSearchBar
           value={search}
@@ -81,7 +92,7 @@ export default function ClassesTab({ caps }: { caps: ModuleActionCaps }) {
           className="max-w-md"
         />
         {caps.canCreate && (
-          <Button onClick={openCreate} className="gap-2 shrink-0">
+          <Button onClick={openCreate} className="gap-2 shrink-0" disabled={!sessionId}>
             <Plus className="h-4 w-4" /> Add Class
           </Button>
         )}
@@ -102,8 +113,11 @@ export default function ClassesTab({ caps }: { caps: ModuleActionCaps }) {
               {isLoading && (
                 <tr><td colSpan={4} className="p-8 text-center text-muted-foreground">Loading…</td></tr>
               )}
-              {!isLoading && classes.length === 0 && (
-                <tr><td colSpan={4} className="p-8 text-center text-muted-foreground">No classes yet</td></tr>
+              {!isLoading && !sessionId && (
+                <tr><td colSpan={4} className="p-8 text-center text-muted-foreground">Select an academic session to view classes</td></tr>
+              )}
+              {!isLoading && sessionId && classes.length === 0 && (
+                <tr><td colSpan={4} className="p-8 text-center text-muted-foreground">No classes for this session yet</td></tr>
               )}
               {classes.map((c) => (
                 <tr

@@ -1,27 +1,34 @@
 import type { ComponentType } from "react";
-import { AlertTriangle, BookOpen, GraduationCap, Receipt, Wallet } from "lucide-react";
+import { BookOpen, GraduationCap, Layers, UserPlus, Wallet } from "lucide-react";
 import type { Role } from "./auth";
+import { buildSidebarSubmenuGroups } from "./sidebarSubmenu";
 
 export type StudentManagementSection =
   | "classes"
+  | "sections"
   | "subjects"
   | "fees-structure"
   | "registration"
   | "fees"
   | "fee-defaulters";
 
-/** Setup & billing — student enrollment lives under Student Records in the main sidebar. */
+/** Academy setup — follow order: session → class → section → student. */
 export const STUDENT_MANAGEMENT_SECTIONS: {
   key: StudentManagementSection;
   label: string;
   icon: ComponentType<{ className?: string }>;
 }[] = [
   { key: "classes", label: "Classes", icon: GraduationCap },
+  { key: "sections", label: "Sections", icon: Layers },
   { key: "subjects", label: "Subjects", icon: BookOpen },
   { key: "fees-structure", label: "Fee structure", icon: Wallet },
-  { key: "fees", label: "Fee management", icon: Receipt },
-  { key: "fee-defaulters", label: "Fee defaulters", icon: AlertTriangle },
+  { key: "registration", label: "Register students", icon: UserPlus },
 ];
+
+export const STUDENT_MANAGEMENT_SIDEBAR_GROUPS = buildSidebarSubmenuGroups(STUDENT_MANAGEMENT_SECTIONS, [
+  { label: "1. Structure", keys: ["classes", "sections", "subjects", "fees-structure"] },
+  { label: "2. Enrollment", keys: ["registration"] },
+]);
 
 export const DEFAULT_STUDENT_MANAGEMENT_SECTION: StudentManagementSection = "classes";
 

@@ -17,5 +17,7 @@ router.patch('/:id', requirePermission('manage_users'), validate(schemas.updateU
 router.patch('/:id/permissions', requirePermission('manage_roles'), validate(schemas.userPermissions), ctrl.patchPermissions);
 router.patch('/:id/module-permissions', requirePermission('manage_roles'), ctrl.patchModulePermissions);
 router.delete('/:id/module-permissions', requirePermission('manage_roles'), ctrl.revokeModulePermissions);
+router.get('/:id/parent-students', requirePermission('manage_users'), ctrl.getParentStudents);
+router.patch('/:id/parent-students', requirePermission('manage_users'), validate(schemas.parentStudentAccess), ctrl.patchParentStudents);
 
 module.exports = router;

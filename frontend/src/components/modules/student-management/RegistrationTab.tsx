@@ -18,6 +18,7 @@ import {
   exportStudentsCsv,
   fetchAcademyClasses,
   fetchAcademyStudents,
+  fetchSectionsByClass,
   type AcademyStudent,
 } from "@/lib/studentManagementApi";
 import { classLabel, formatPkr } from "./studentDisplayUtils";
@@ -25,6 +26,7 @@ import { classLabel, formatPkr } from "./studentDisplayUtils";
 export default function RegistrationTab({
   caps,
   routes: routesProp,
+  sessionId = "",
   heading = "Enrolled students",
   registerLabel = "Register student",
   emptyHint = "No students enrolled yet.",
@@ -32,6 +34,7 @@ export default function RegistrationTab({
 }: {
   caps: ModuleActionCaps;
   routes?: AcademyStudentRoutes;
+  sessionId?: string;
   heading?: string;
   registerLabel?: string;
   emptyHint?: string;
@@ -52,9 +55,21 @@ export default function RegistrationTab({
   const colSpan = hasActions ? 7 : 6;
 
   const { data: classes = [] } = useQuery({
-    queryKey: ["academy-classes"],
-    queryFn: () => fetchAcademyClasses({ status: "active" }),
+    queryKey: ["academy-classes", sessionId],
+    queryFn: () => fetchAcademyClasses({ status: "active", sessionId: sessionId || undefined }),
+    enabled: Boolean(sessionId),
   });
+
+  const { data: sections = [] } = useQuery({
+    queryKey: ["academy-registration-sections", sessionId, classes.map((c) => c._id).join(",")],
+    queryFn: async () => {
+      const lists = await Promise.all(classes.map((c) => fetchSectionsByClass(c._id, { status: "active" })));
+      return lists.flat();
+    },
+    enabled: classes.length > 0,
+  });
+
+  const canRegister = Boolean(sessionId) && classes.length > 0 && sections.length > 0;
 
   const { data: listData, isLoading } = useQuery({
     queryKey: ["academy-students", page, search, classFilter],
@@ -94,6 +109,11 @@ export default function RegistrationTab({
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-4 space-y-3">
+      {!canRegister && caps.canCreate && (
+        <p className="text-sm text-muted-foreground rounded-lg border border-dashed p-3">
+          Complete setup first: active session → class → section. Then you can register students into a section.
+        </p>
+      )}
       <div
         className={
           showHeading
@@ -106,11 +126,17 @@ export default function RegistrationTab({
         )}
         <div className="flex flex-wrap gap-2 items-center sm:ml-auto">
           {caps.canCreate && (
-            <Button className="gap-2" asChild>
-              <Link to={registerHref}>
+            canRegister ? (
+              <Button className="gap-2" asChild>
+                <Link to={registerHref}>
+                  <Plus className="h-4 w-4" /> {registerLabel}
+                </Link>
+              </Button>
+            ) : (
+              <Button className="gap-2" disabled title="Create session, class, and section first">
                 <Plus className="h-4 w-4" /> {registerLabel}
-              </Link>
-            </Button>
+              </Button>
+            )
           )}
           <PanelSearchBar
             value={search}

@@ -102,7 +102,7 @@ export const USER_SCHEMA_FIELDS: UserSchemaField[] = [
     modes: ["create", "edit"],
     required: false,
     colSpan: 2,
-    showInTable: true,
+    showInTable: false,
     placeholder: "0",
   },
 ];

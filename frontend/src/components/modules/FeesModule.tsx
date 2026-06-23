@@ -3,11 +3,14 @@ import type { ModuleActionCaps, PermLevel } from "@/lib/permissions";
 import AcademyFeesManagement from "@/components/modules/student-management/AcademyFeesManagement";
 import FeeDefaultersTab from "@/components/modules/student-management/FeeDefaultersTab";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
 
 type FeesView = "records" | "defaulters";
 
 /** Panel Fee Management — live academy tuition fees from the API */
 const FeesModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleActionCaps }) => {
+  const { user } = useAuth();
+  const isParent = user?.role === "parent";
   const [view, setView] = useState<FeesView>("records");
 
   return (
@@ -25,20 +28,22 @@ const FeesModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: ModuleAction
         >
           Fee records
         </button>
-        <button
-          type="button"
-          onClick={() => setView("defaulters")}
-          className={cn(
-            "px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
-            view === "defaulters"
-              ? "bg-background text-primary shadow-sm"
-              : "text-muted-foreground hover:text-primary"
-          )}
-        >
-          Defaulters
-        </button>
+        {!isParent && (
+          <button
+            type="button"
+            onClick={() => setView("defaulters")}
+            className={cn(
+              "px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+              view === "defaulters"
+                ? "bg-background text-primary shadow-sm"
+                : "text-muted-foreground hover:text-primary"
+            )}
+          >
+            Defaulters
+          </button>
+        )}
       </div>
-      {view === "records" ? <AcademyFeesManagement caps={caps} /> : <FeeDefaultersTab caps={caps} />}
+      {view === "records" || isParent ? <AcademyFeesManagement caps={caps} /> : <FeeDefaultersTab caps={caps} />}
     </div>
   );
 };

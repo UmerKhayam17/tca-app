@@ -38,6 +38,7 @@ import {
   deleteClassTimetableSlot,
   deleteClassTest,
   deleteFeeStructure,
+  fetchSubjectChoiceGroups,
   formatClassTestSchedule,
   getAcademyClassRecord,
   updateAcademyClass,
@@ -58,6 +59,19 @@ import {
   classTestSeriesHref,
 } from "@/lib/testExamsMenus";
 import { formatDate, formatPkr, WEEKDAY_NAMES } from "./studentDisplayUtils";
+import {
+  generateSubjectCode,
+  subjectCodePlaceholder,
+} from "@/components/modules/student-management/subjectCodeUtils";
+import {
+  buildEnrollmentPayload,
+  choiceGroupValid,
+  defaultSubjectEnrollmentForm,
+  enrollmentFromGroup,
+  findGroupForSubject,
+  SubjectEnrollmentConfig,
+  type SubjectEnrollmentForm,
+} from "@/components/modules/student-management/SubjectEnrollmentFields";
 import CreatedByLine from "@/components/modules/CreatedByLine";
 
 const RECORD_KEY = (classId: string) => ["academy-class-record", classId] as const;
@@ -135,6 +149,15 @@ export default function ClassDetailPage({
     subjectCode: "",
     status: "active" as "active" | "inactive",
   });
+  const [subjectCodeManuallyEdited, setSubjectCodeManuallyEdited] = useState(false);
+  const [subjectEnrollmentForm, setSubjectEnrollmentForm] = useState<SubjectEnrollmentForm>(
+    defaultSubjectEnrollmentForm,
+  );
+
+  const { data: choiceGroups = [] } = useQuery({
+    queryKey: ["subject-choice-groups", classId],
+    queryFn: () => fetchSubjectChoiceGroups(classId),
+  });
 
   // Fee dialog
   const [feeOpen, setFeeOpen] = useState(false);
@@ -182,12 +205,16 @@ export default function ClassDetailPage({
 
   const subjectMut = useMutation({
     mutationFn: async () => {
-      if (editSubject) return updateAcademySubject(editSubject._id, subjectForm);
-      return createAcademySubject({ ...subjectForm, classId });
+      const enrollment = buildEnrollmentPayload(subjectEnrollmentForm);
+      const body = { ...subjectForm, ...enrollment };
+      if (editSubject) return updateAcademySubject(editSubject._id, body);
+      return createAcademySubject({ ...body, classId });
     },
     onSuccess: () => {
       invalidate();
       qc.invalidateQueries({ queryKey: ["academy-classes"] });
+      qc.invalidateQueries({ queryKey: ["subject-choice-groups", classId] });
+      qc.invalidateQueries({ queryKey: ["enrollment-subjects"] });
       setSubjectOpen(false);
       toast({ title: editSubject ? "Subject updated" : "Subject added" });
     },
@@ -309,17 +336,22 @@ export default function ClassDetailPage({
 
   const openSubjectCreate = () => {
     setEditSubject(null);
+    setSubjectCodeManuallyEdited(false);
     setSubjectForm({ subjectName: "", subjectCode: "", status: "active" });
+    setSubjectEnrollmentForm(defaultSubjectEnrollmentForm());
     setSubjectOpen(true);
   };
 
   const openSubjectEdit = (s: AcademySubject) => {
     setEditSubject(s);
+    setSubjectCodeManuallyEdited(true);
     setSubjectForm({
       subjectName: s.subjectName,
       subjectCode: s.subjectCode,
       status: s.status,
     });
+    const group = findGroupForSubject(choiceGroups, s._id);
+    setSubjectEnrollmentForm(group ? enrollmentFromGroup(group) : defaultSubjectEnrollmentForm());
     setSubjectOpen(true);
   };
 
@@ -881,19 +913,45 @@ export default function ClassDetailPage({
             <DialogTitle>{editSubject ? "Edit subject" : "Add subject"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
+            <SubjectEnrollmentConfig
+              value={subjectEnrollmentForm}
+              onChange={setSubjectEnrollmentForm}
+              choiceGroups={choiceGroups}
+              currentSubjectId={editSubject?._id}
+              isEdit={Boolean(editSubject)}
+            />
             <div>
               <Label>Subject name</Label>
               <Input
                 value={subjectForm.subjectName}
-                onChange={(e) => setSubjectForm((f) => ({ ...f, subjectName: e.target.value }))}
+                onChange={(e) => {
+                  const subjectName = e.target.value;
+                  setSubjectForm((f) => {
+                    const next = { ...f, subjectName };
+                    if (!editSubject && !subjectCodeManuallyEdited) {
+                      next.subjectCode = generateSubjectCode(subjectName, cls.className);
+                    }
+                    return next;
+                  });
+                }}
+                placeholder="e.g. Mathematics"
               />
             </div>
             <div>
               <Label>Code</Label>
               <Input
                 value={subjectForm.subjectCode}
-                onChange={(e) => setSubjectForm((f) => ({ ...f, subjectCode: e.target.value }))}
+                onChange={(e) => {
+                  setSubjectCodeManuallyEdited(true);
+                  setSubjectForm((f) => ({ ...f, subjectCode: e.target.value.toUpperCase() }));
+                }}
+                placeholder={subjectCodePlaceholder(cls.className)}
               />
+              {!editSubject && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Auto-filled from subject name and class ({cls.className}); you can edit.
+                </p>
+              )}
             </div>
             <div>
               <Label>Status</Label>
@@ -920,6 +978,7 @@ export default function ClassDetailPage({
               disabled={
                 !subjectForm.subjectName.trim() ||
                 !subjectForm.subjectCode.trim() ||
+                !choiceGroupValid(subjectEnrollmentForm) ||
                 subjectMut.isPending
               }
               onClick={() => subjectMut.mutate()}

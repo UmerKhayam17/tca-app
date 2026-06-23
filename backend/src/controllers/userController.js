@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const catchAsync = require('../utils/catchAsync');
 const ApiError = require('../utils/ApiError');
 const User = require('../models/User');
+const AcademyStudent = require('../models/academy/AcademyStudent');
 const { MODULES } = require('../modules');
 const { getSystemModulesForApi } = require('../config/systemModules');
 
@@ -38,6 +39,54 @@ function serializeUser(user) {
   return o;
 }
 
+function serializeLinkedStudent(student) {
+  return {
+    _id: student._id,
+    studentId: student.studentId,
+    studentName: student.studentName,
+    className: student.classId?.className || null,
+    sectionName: student.sectionId?.sectionName || null,
+    status: student.status,
+  };
+}
+
+async function fetchLinkedStudentsByParentEmails(emails) {
+  const normalized = [
+    ...new Set(
+      emails.map((e) => String(e || '').trim().toLowerCase()).filter(Boolean)
+    ),
+  ];
+  if (!normalized.length) return new Map();
+
+  const students = await AcademyStudent.find({ guardianEmail: { $in: normalized } })
+    .select('_id studentId studentName guardianEmail classId sectionId status')
+    .populate('classId', 'className')
+    .populate('sectionId', 'sectionName')
+    .sort({ studentName: 1 })
+    .lean();
+
+  const byEmail = new Map();
+  students.forEach((s) => {
+    const email = String(s.guardianEmail || '').trim().toLowerCase();
+    if (!email) return;
+    if (!byEmail.has(email)) byEmail.set(email, []);
+    byEmail.get(email).push(serializeLinkedStudent(s));
+  });
+  return byEmail;
+}
+
+async function attachLinkedStudentsToUsers(users) {
+  const parentEmails = users
+    .filter((u) => u.role?.name?.toLowerCase?.() === 'parent')
+    .map((u) => u.email);
+  const linksByEmail = await fetchLinkedStudentsByParentEmails(parentEmails);
+  return users.map((u) => {
+    if (u.role?.name?.toLowerCase?.() !== 'parent') return u;
+    const email = String(u.email || '').trim().toLowerCase();
+    return { ...u, linkedStudents: linksByEmail.get(email) || [] };
+  });
+}
+
 const listModuleRegistry = catchAsync(async (req, res) => {
   const modules = getSystemModulesForApi().map((m) => ({
     key: m.key,
@@ -58,7 +107,63 @@ const listUsers = catchAsync(async (req, res) => {
       return n === 'teacher' || n === 'accountant';
     });
   }
-  res.json({ success: true, data: list.map(serializeUser) });
+  const serialized = list.map(serializeUser);
+  const data = staffOnly ? serialized : await attachLinkedStudentsToUsers(serialized);
+  res.json({ success: true, data });
+});
+
+const getParentStudents = catchAsync(async (req, res) => {
+  const user = await User.findById(req.params.id).populate('role');
+  if (!user) throw new ApiError(404, 'User not found');
+  if (!user.role || user.role.name !== 'parent') throw new ApiError(400, 'User is not a parent');
+
+  const students = await AcademyStudent.find({
+    guardianEmail: String(user.email || '').trim().toLowerCase(),
+  })
+    .select('_id studentId studentName fatherName classId sectionId status')
+    .populate('classId', 'className')
+    .populate('sectionId', 'sectionName')
+    .sort({ createdAt: -1 });
+
+  res.json({
+    success: true,
+    data: students.map((s) => serializeLinkedStudent(s.toObject ? s.toObject() : s)),
+  });
+});
+
+const patchParentStudents = catchAsync(async (req, res) => {
+  const { studentIds } = req.body;
+
+  const user = await User.findById(req.params.id).populate('role');
+  if (!user) throw new ApiError(404, 'User not found');
+  if (!user.role || user.role.name !== 'parent') throw new ApiError(400, 'User is not a parent');
+
+  const email = String(user.email || '').trim().toLowerCase();
+  if (!email) throw new ApiError(400, 'Parent email missing');
+
+  // Clear existing mapping for this parent email, then set the new selection.
+  await AcademyStudent.updateMany(
+    { guardianEmail: email },
+    { $unset: { guardianEmail: '' } }
+  );
+
+  if (Array.isArray(studentIds) && studentIds.length > 0) {
+    await AcademyStudent.updateMany(
+      { _id: { $in: studentIds } },
+      { guardianEmail: email, guardianName: user.name }
+    );
+  }
+
+  const students = await AcademyStudent.find({ guardianEmail: email })
+    .select('_id studentId studentName fatherName classId sectionId status')
+    .populate('classId', 'className')
+    .populate('sectionId', 'sectionName')
+    .sort({ createdAt: -1 });
+
+  res.json({
+    success: true,
+    data: students.map((s) => serializeLinkedStudent(s.toObject ? s.toObject() : s)),
+  });
 });
 
 const createUser = catchAsync(async (req, res) => {
@@ -230,4 +335,6 @@ module.exports = {
   patchPermissions,
   patchModulePermissions,
   revokeModulePermissions,
+  getParentStudents,
+  patchParentStudents,
 };

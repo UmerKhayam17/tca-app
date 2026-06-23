@@ -16,6 +16,8 @@ const academyStudentSchema = new mongoose.Schema(
   {
     studentId: { type: String, unique: true, trim: true },
     studentName: { type: String, required: true, trim: true },
+    /** URL path to student photo (e.g. /uploads/students/...). */
+    photoImage: { type: String, trim: true },
     fatherName: { type: String, required: true, trim: true },
     dateOfBirth: { type: Date },
     nationality: { type: String, trim: true, default: 'Pakistan' },
@@ -36,11 +38,16 @@ const academyStudentSchema = new mongoose.Schema(
     /** @deprecated use postalAddress */
     address: { type: String, trim: true },
     classId: { type: mongoose.Schema.Types.ObjectId, ref: 'AcademyClass', required: true, index: true },
+    sectionId: { type: mongoose.Schema.Types.ObjectId, ref: 'AcademySection', index: true },
     selectedSubjects: [{ type: mongoose.Schema.Types.ObjectId, ref: 'AcademySubject' }],
     isFullPackage: { type: Boolean, default: false },
     monthlyFee: { type: Number, required: true, min: 0 },
     admissionFee: { type: Number, required: true, min: 0 },
-    /** One-time discount in PKR applied to first payment (monthly + admission). */
+    /** One-time discount on monthly/subject fee (first payment). */
+    monthlyFeeDiscount: { type: Number, default: 0, min: 0 },
+    /** One-time discount on admission fee (first payment). */
+    admissionFeeDiscount: { type: Number, default: 0, min: 0 },
+    /** Total discount applied (monthly + admission); kept for legacy records and summaries. */
     discountAmount: { type: Number, default: 0, min: 0 },
     totalFee: { type: Number, required: true, min: 0 },
     feeStructureId: { type: mongoose.Schema.Types.ObjectId, ref: 'AcademyFeeStructure' },

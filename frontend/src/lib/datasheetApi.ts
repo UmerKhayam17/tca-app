@@ -1,5 +1,5 @@
-import { getApiRoot, parseJson } from "@/lib/api";
-import { getAccessToken } from "@/lib/auth";
+import { parseJson } from "@/lib/api";
+import { authedFetch } from "@/lib/auth";
 import type { CreatedByUser } from "@/lib/createdBy";
 
 export interface Datasheet {
@@ -20,16 +20,7 @@ export interface DatasheetPagination {
 }
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = getAccessToken();
-  const res = await fetch(`${getApiRoot()}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(init?.headers as Record<string, string>),
-    },
-    credentials: "include",
-  });
+  const res = await authedFetch(path, init);
   const body = await parseJson<{ success?: boolean; data?: T; message?: string }>(res);
   if (!res.ok) throw new Error(body.message || `Request failed (${res.status})`);
   return body.data as T;
@@ -40,11 +31,7 @@ export const fetchDatasheets = async (params?: { search?: string; page?: number;
   if (params?.search) q.set("search", params.search);
   if (params?.page) q.set("page", String(params.page));
   if (params?.limit) q.set("limit", String(params.limit));
-  const token = getAccessToken();
-  const res = await fetch(`${getApiRoot()}/datasheets?${q}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    credentials: "include",
-  });
+  const res = await authedFetch(`/datasheets?${q}`);
   const body = await parseJson<{
     success?: boolean;
     data?: Datasheet[];

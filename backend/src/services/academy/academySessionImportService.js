@@ -52,30 +52,33 @@ async function importEnrollmentFromSession(targetSessionId, opts, userId) {
       sessionId: targetSessionId,
       className: srcClass.className,
     });
-    if (existing) {
-      skipped.push({ className: srcClass.className, reason: 'Already exists in target session' });
-      classMap.set(String(srcClass._id), existing._id);
-      continue;
+
+    const newClass = existing
+      ? existing
+      : await AcademyClass.create({
+          sessionId: targetSessionId,
+          className: srcClass.className,
+          status: srcClass.status,
+          totalSubjects: 0,
+          createdBy: userId,
+        });
+
+    if (!existing) {
+      classesCreated += 1;
+    } else {
+      skipped.push({ className: srcClass.className, reason: 'Class already exists — subjects kept editable, sections/fees merged' });
     }
 
-    const newClass = await AcademyClass.create({
-      sessionId: targetSessionId,
-      className: srcClass.className,
-      status: srcClass.status,
-      totalSubjects: 0,
-      createdBy: userId,
-    });
     classMap.set(String(srcClass._id), newClass._id);
-    classesCreated += 1;
 
     const sourceSubjects = await AcademySubject.find({ classId: srcClass._id }).sort({ subjectName: 1 });
     for (const sub of sourceSubjects) {
-      const dupCode = await AcademySubject.findOne({
+      const targetSub = await AcademySubject.findOne({
         classId: newClass._id,
         subjectCode: sub.subjectCode,
       });
-      if (dupCode) {
-        subjectMap.set(String(sub._id), dupCode._id);
+      if (targetSub) {
+        subjectMap.set(String(sub._id), targetSub._id);
         continue;
       }
       const createdSub = await AcademySubject.create({

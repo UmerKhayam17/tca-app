@@ -13,7 +13,7 @@ import {
   activateSession,
   completeSession,
   fetchSessionHistory,
-  importSessionEnrollment,
+  shiftSessionConfiguration,
   sessionStatus,
   type SessionStatus,
 } from "@/lib/configApi";
@@ -96,17 +96,18 @@ export default function SessionDetailPage({
     mutationFn: async () => {
       const importError = validateSessionImportForm(importForm);
       if (importError) throw new Error(importError);
-      return importSessionEnrollment(sessionId, buildSessionImportPayload(importForm));
+      return shiftSessionConfiguration(sessionId, buildSessionImportPayload(importForm));
     },
     onSuccess: (result) => {
       invalidate();
       qc.invalidateQueries({ queryKey: ["academy-classes"] });
       setImportOpen(false);
       setImportForm({ ...defaultSessionImportForm(), enabled: true });
-      const skipped = result.skipped?.length ?? 0;
+      const e = result.enrollment;
+      const skipped = e.skipped?.length ?? 0;
       toast({
-        title: "Enrollment imported",
-        description: `${result.classes} classes, ${result.sections} sections, ${result.subjects} subjects copied.${skipped ? ` ${skipped} skipped.` : ""}`,
+        title: "Configuration shifted",
+        description: `${e.sections} sections, ${e.feeStructures} fee structures, timetable setup copied.${skipped ? ` ${skipped} class(es) skipped.` : ""}`,
       });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -233,9 +234,22 @@ export default function SessionDetailPage({
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-4 py-3 border-b bg-muted/30">
           <h3 className="font-semibold text-primary">Enrollment structure</h3>
           {caps.canEdit && status === "active" && (
-            <Button size="sm" variant="outline" asChild>
-              <Link to={studentManagementHref(role, "classes")}>Manage in Enrollment</Link>
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1"
+                onClick={() => {
+                  setImportForm({ ...defaultSessionImportForm(), enabled: true });
+                  setImportOpen(true);
+                }}
+              >
+                <Download className="h-4 w-4" /> Shift configuration
+              </Button>
+              <Button size="sm" variant="outline" asChild>
+                <Link to={studentManagementHref(role, "classes")}>Manage in Enrollment</Link>
+              </Button>
+            </div>
           )}
         </div>
         {academy.classes.length === 0 ? (
@@ -244,22 +258,17 @@ export default function SessionDetailPage({
               No classes linked to this session yet.
             </p>
             {caps.canEdit && status === "active" && (
-              <div className="flex flex-wrap justify-center gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="gap-1"
-                  onClick={() => {
-                    setImportForm({ ...defaultSessionImportForm(), enabled: true });
-                    setImportOpen(true);
-                  }}
-                >
-                  <Download className="h-4 w-4" /> Import from previous session
-                </Button>
-                <Button size="sm" variant="outline" asChild>
-                  <Link to={studentManagementHref(role, "classes")}>Add classes manually</Link>
-                </Button>
-              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1"
+                onClick={() => {
+                  setImportForm({ ...defaultSessionImportForm(), enabled: true });
+                  setImportOpen(true);
+                }}
+              >
+                <Download className="h-4 w-4" /> Shift configuration from session
+              </Button>
             )}
           </div>
         ) : (
@@ -329,7 +338,7 @@ export default function SessionDetailPage({
       <Dialog open={importOpen} onOpenChange={setImportOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Import enrollment structure</DialogTitle>
+            <DialogTitle>Shift configuration from session</DialogTitle>
           </DialogHeader>
           <SessionEnrollmentImportFields
             excludeSessionId={sessionId}
@@ -341,7 +350,7 @@ export default function SessionDetailPage({
               Cancel
             </Button>
             <Button onClick={() => importMut.mutate()} disabled={importMut.isPending}>
-              Import
+              Shift configuration
             </Button>
           </DialogFooter>
         </DialogContent>

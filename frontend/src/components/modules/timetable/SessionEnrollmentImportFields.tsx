@@ -31,7 +31,7 @@ export function defaultSessionImportForm(): SessionImportFormState {
 
 export function validateSessionImportForm(form: SessionImportFormState): string | null {
   if (!form.enabled) return null;
-  if (!form.sourceSessionId) return "Choose a source session to import from.";
+  if (!form.sourceSessionId) return "Choose a source session to shift from.";
   if (form.mode === "selected" && form.classIds.length === 0) {
     return "Select at least one class to import.";
   }
@@ -86,7 +86,7 @@ export default function SessionEnrollmentImportFields({
         />
         <div>
           <Label htmlFor="import-enrollment" className="cursor-pointer font-medium">
-            Import classes, sections & subjects from a previous session
+            Shift full configuration from a previous session
           </Label>
         </div>
       </div>

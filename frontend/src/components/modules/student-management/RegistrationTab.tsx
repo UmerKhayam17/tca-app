@@ -70,6 +70,13 @@ export default function RegistrationTab({
   });
 
   const canRegister = Boolean(sessionId) && classes.length > 0 && sections.length > 0;
+  const registerBlockedReason = !sessionId
+    ? "Select an academic session first"
+    : classes.length === 0
+      ? "Add at least one active class for this session"
+      : sections.length === 0
+        ? "Add at least one section (Student Management → Sections)"
+        : null;
 
   const { data: listData, isLoading } = useQuery({
     queryKey: ["academy-students", page, search, classFilter],
@@ -128,7 +135,7 @@ export default function RegistrationTab({
                 </Link>
               </Button>
             ) : (
-              <Button className="gap-2" disabled title="Create session, class, and section first">
+              <Button className="gap-2" disabled title={registerBlockedReason ?? undefined}>
                 <Plus className="h-4 w-4" /> {registerLabel}
               </Button>
             )

@@ -1,17 +1,6 @@
-import { getApiRoot, parseJson } from "@/lib/api";
-import { getAccessToken } from "@/lib/auth";
+import { parseJson } from "@/lib/api";
+import { authedFetch } from "@/lib/auth";
 import type { Weekday } from "@/lib/configApi";
-
-async function authedFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  const token = getAccessToken();
-  const url = `${getApiRoot()}${path.startsWith("/") ? path : `/${path}`}`;
-  const headers: Record<string, string> = { ...(init.headers as Record<string, string>) };
-  if (token) headers.Authorization = `Bearer ${token}`;
-  if (!(init.body instanceof FormData) && init.method !== "GET" && init.method !== "HEAD") {
-    headers["Content-Type"] = headers["Content-Type"] || "application/json";
-  }
-  return fetch(url, { ...init, credentials: "include", headers });
-}
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await authedFetch(`/timetable${path}`, init);

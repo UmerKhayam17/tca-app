@@ -4,6 +4,7 @@ const { getSystemModulesForApi } = require('../config/systemModules');
 const { logAudit } = require('../services/session/auditService');
 const { assertSessionWritable, syncSessionFlags, resolveSessionStatus, healSessionFlags } = require('../services/session/sessionGuard');
 const Session = require('../models/Session');
+const { ensureDefaultAcademyStructure } = require('../services/academy/academyDefaultStructureService');
 const Class = require('../models/Class');
 const Section = require('../models/Section');
 const Subject = require('../models/Subject');
@@ -25,6 +26,14 @@ const listSessions = catchAsync(async (req, res) => {
 
 const createSession = catchAsync(async (req, res) => {
   const body = { ...req.body };
+  const name = body.name?.trim();
+  if (!name) throw new ApiError(400, 'Session name is required');
+
+  const duplicate = await Session.findOne({ name });
+  if (duplicate) {
+    throw new ApiError(409, `A session named "${name}" already exists`);
+  }
+
   const existingCount = await Session.countDocuments();
   const shouldActivate =
     existingCount === 0 ||
@@ -38,7 +47,7 @@ const createSession = catchAsync(async (req, res) => {
   }
 
   const session = await Session.create({
-    name: body.name,
+    name,
     startDate: body.startDate,
     endDate: body.endDate,
     workingDays: body.workingDays,
@@ -52,13 +61,16 @@ const createSession = catchAsync(async (req, res) => {
     syncSessionFlags(session, body.status || 'completed');
   }
   await session.save();
+
+  const defaultStructure = await ensureDefaultAcademyStructure(session._id, req.user._id);
+
   await logAudit({
     sessionId: session._id,
     action: 'SESSION_CREATED',
     userId: req.user._id,
-    details: { name: session.name },
+    details: { name: session.name, defaultStructure },
   });
-  res.status(201).json({ success: true, data: session });
+  res.status(201).json({ success: true, data: session, defaultStructure });
 });
 
 const patchSession = catchAsync(async (req, res) => {

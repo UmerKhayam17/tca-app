@@ -100,8 +100,8 @@ export default function SessionHistoryTab({ caps }: { caps: ModuleActionCaps }) 
       setCloneOpen(false);
       setSelectedId(data.session._id);
       toast({
-        title: "Structure cloned",
-        description: `New session "${data.session.name}" — timetables were not copied.`,
+        title: "Next session created",
+        description: `Configuration shifted to "${data.session.name}".`,
       });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -223,7 +223,7 @@ export default function SessionHistoryTab({ caps }: { caps: ModuleActionCaps }) 
                         setCloneOpen(true);
                       }}
                     >
-                      <Copy className="h-4 w-4" /> Clone structure
+                      <Copy className="h-4 w-4" /> Shift to next session
                     </Button>
                   </div>
                 )}
@@ -299,7 +299,7 @@ export default function SessionHistoryTab({ caps }: { caps: ModuleActionCaps }) 
       <Dialog open={cloneOpen} onOpenChange={setCloneOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Clone structure to new session</DialogTitle>
+            <DialogTitle>Shift configuration to new session</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <div>
@@ -331,7 +331,7 @@ export default function SessionHistoryTab({ caps }: { caps: ModuleActionCaps }) 
               disabled={!cloneForm.name || !cloneForm.startDate || !cloneForm.endDate || cloneMut.isPending}
               onClick={() => cloneMut.mutate()}
             >
-              Clone
+              Shift configuration
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -368,6 +368,20 @@ export default function SubjectsTab({ caps, sessionId }: { caps: ModuleActionCap
                     placeholder={selectedClass ? subjectCodePlaceholder(selectedClass.className) : "e.g. MATH-09"}
                   />
                 </div>
+                <div>
+                  <Label htmlFor="subject-status">Status</Label>
+                  <select
+                    id="subject-status"
+                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                    value={form.status}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, status: e.target.value as "active" | "inactive" }))
+                    }
+                  >
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </div>
               </>
             )}
           </div>

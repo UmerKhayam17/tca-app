@@ -4,7 +4,7 @@
 import { createContext, createElement, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getApiRoot, parseJson } from "@/lib/api";
-import { getAccessToken } from "@/lib/auth";
+import { authedFetch, ensureAccessToken } from "@/lib/auth";
 import { useAuth } from "@/hooks/useAuth";
 import socketService from "@/services/socket/socket.service";
 
@@ -19,13 +19,7 @@ export function userIdStr(id) {
 }
 
 async function chatFetch(path, options = {}) {
-  const token = getAccessToken();
-  const headers = {
-    ...(options.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...(options.headers || {}),
-  };
-  const res = await fetch(`${getApiRoot()}${path}`, { ...options, headers });
+  const res = await authedFetch(path, options);
   const data = await parseJson(res);
   if (!res.ok) {
     const err = new Error(data?.error || data?.message || "Request failed");
@@ -91,7 +85,7 @@ const api = {
     const form = new FormData();
     form.append("chat_file", file);
     form.append("conversationId", conversationId);
-    const token = getAccessToken();
+    const token = await ensureAccessToken();
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open("POST", `${getApiRoot()}/chat/upload`);
@@ -348,12 +342,21 @@ export function useChatSocket() {
   const { myId, setTyping, setPresence } = useChatUi();
 
   useEffect(() => {
-    const token = getAccessToken();
-    if (!token) return undefined;
+    let cancelled = false;
+    let chat: ReturnType<typeof socketService.chat> | null = null;
 
-    socketService.connect(token);
-    const chat = socketService.chat;
-    if (!chat) return undefined;
+    const cleanup = () => {
+      if (!chat) return;
+      chat.off("conversation:new", onConvNew);
+      chat.off("message:new", onNew);
+      chat.off("message:edited", onEdit);
+      chat.off("message:deleted", onDeleted);
+      chat.off("message:seen", onSeen);
+      chat.off("conversation:updated", onConvUpdated);
+      chat.off("typing:update", onTyping);
+      chat.off("presence:update", onPresence);
+      chat.off("reaction:updated", onReaction);
+    };
 
     const onConvNew = (conv) => {
       if (conv?._id) {
@@ -427,26 +430,28 @@ export function useChatSocket() {
       updateMessageInCache(qc, conversationId, messageId, { reactions });
     };
 
-    chat.on("conversation:new", onConvNew);
-    chat.on("message:new", onNew);
-    chat.on("message:edited", onEdit);
-    chat.on("message:deleted", onDeleted);
-    chat.on("message:seen", onSeen);
-    chat.on("conversation:updated", onConvUpdated);
-    chat.on("typing:update", onTyping);
-    chat.on("presence:update", onPresence);
-    chat.on("reaction:updated", onReaction);
+    void (async () => {
+      const token = await ensureAccessToken();
+      if (!token || cancelled) return;
+
+      socketService.connect(token);
+      chat = socketService.chat;
+      if (!chat || cancelled) return;
+
+      chat.on("conversation:new", onConvNew);
+      chat.on("message:new", onNew);
+      chat.on("message:edited", onEdit);
+      chat.on("message:deleted", onDeleted);
+      chat.on("message:seen", onSeen);
+      chat.on("conversation:updated", onConvUpdated);
+      chat.on("typing:update", onTyping);
+      chat.on("presence:update", onPresence);
+      chat.on("reaction:updated", onReaction);
+    })();
 
     return () => {
-      chat.off("conversation:new", onConvNew);
-      chat.off("message:new", onNew);
-      chat.off("message:edited", onEdit);
-      chat.off("message:deleted", onDeleted);
-      chat.off("message:seen", onSeen);
-      chat.off("conversation:updated", onConvUpdated);
-      chat.off("typing:update", onTyping);
-      chat.off("presence:update", onPresence);
-      chat.off("reaction:updated", onReaction);
+      cancelled = true;
+      cleanup();
     };
   }, [qc, setTyping, setPresence]);
 }

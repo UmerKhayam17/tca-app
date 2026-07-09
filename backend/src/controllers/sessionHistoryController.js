@@ -30,10 +30,20 @@ const cloneStructure = catchAsync(async (req, res) => {
   res.status(201).json({ success: true, data });
 });
 
+const shiftConfiguration = catchAsync(async (req, res) => {
+  const data = await sessionHistoryService.shiftFullSessionConfiguration(
+    req.params.sessionId,
+    req.body,
+    req.user._id
+  );
+  res.status(200).json({ success: true, data });
+});
+
 module.exports = {
   getHistory,
   complete,
   archive,
   activate,
   cloneStructure,
+  shiftConfiguration,
 };

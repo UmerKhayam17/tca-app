@@ -37,6 +37,13 @@ router.post(
   academyImportCtrl.importEnrollment
 );
 
+router.post(
+  '/sessions/:sessionId/shift-configuration',
+  requirePermission('manage_sessions'),
+  validate(academySchemas.academySessionImportBody),
+  sessionHistoryCtrl.shiftConfiguration
+);
+
 router.get('/classes', requireAnyPermission('manage_classes', 'view_timetables', 'view_students', 'mark_attendance'), ctrl.listClasses);
 router.post('/classes', requirePermission('manage_classes'), validate(schemas.classBody), ctrl.createClass);
 router.patch('/classes/:id', requirePermission('manage_classes'), ctrl.patchClass);

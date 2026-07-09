@@ -15,7 +15,7 @@ import {
   completeSession,
   createSession,
   fetchSessions,
-  importSessionEnrollment,
+  shiftSessionConfiguration,
   sessionStatus,
   type AcademicSession,
 } from "@/lib/configApi";
@@ -91,32 +91,47 @@ export default function AcademicSetupTab({
       });
 
       if (importForm.enabled && importForm.sourceSessionId && session._id) {
-        const importResult = await importSessionEnrollment(
-          session._id,
-          buildSessionImportPayload(importForm),
-        );
-        return { session, importResult };
+        try {
+          const shiftResult = await shiftSessionConfiguration(
+            session._id,
+            buildSessionImportPayload(importForm),
+          );
+          return { session, shiftResult };
+        } catch (shiftErr) {
+          const shiftMessage = shiftErr instanceof Error ? shiftErr.message : "Shift failed";
+          const err = new Error(
+            `Session "${form.name}" was created, but shifting configuration failed: ${shiftMessage}. Open the session and use Shift configuration to retry.`,
+          ) as Error & { sessionId?: string };
+          err.sessionId = session._id;
+          throw err;
+        }
       }
-      return { session, importResult: null };
+      return { session, shiftResult: null };
     },
-    onSuccess: ({ session, importResult }) => {
+    onSuccess: ({ session, shiftResult }) => {
       invalidate();
       qc.invalidateQueries({ queryKey: ["academy-classes"] });
       if (session?._id) onSessionCreated?.(session._id);
       setOpen(false);
       setForm({ name: "", startDate: "", endDate: "" });
       setImportForm(defaultSessionImportForm());
-      if (importResult) {
-        const skipped = importResult.skipped?.length ?? 0;
+      if (shiftResult) {
+        const e = shiftResult.enrollment;
+        const skipped = e.skipped?.length ?? 0;
         toast({
-          title: "Session created & enrollment imported",
-          description: `${importResult.classes} classes, ${importResult.sections} sections, ${importResult.subjects} subjects copied.${skipped ? ` ${skipped} skipped (already exist).` : ""}`,
+          title: "Session created & configuration shifted",
+          description: `${e.sections} sections, ${e.feeStructures} fee structures, timetable setup copied.${skipped ? ` ${skipped} class(es) skipped.` : ""}`,
         });
       } else {
-        toast({ title: "Session created" });
+        toast({ title: "Session created", description: "Default classes and subjects are ready." });
       }
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error & { sessionId?: string }) => {
+      invalidate();
+      qc.invalidateQueries({ queryKey: ["academy-classes"] });
+      if (e.sessionId) onSessionCreated?.(e.sessionId);
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    },
   });
 
   const closeMut = useMutation({

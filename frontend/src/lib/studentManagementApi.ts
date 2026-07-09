@@ -1,19 +1,8 @@
 import { getApiRoot, parseJson, resolveUploadUrl } from "@/lib/api";
 
 export { resolveUploadUrl };
-import { getAccessToken } from "@/lib/auth";
+import { authedFetch } from "@/lib/auth";
 import type { CreatedByUser } from "@/lib/createdBy";
-
-async function authedFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  const token = getAccessToken();
-  const url = `${getApiRoot()}${path.startsWith("/") ? path : `/${path}`}`;
-  const headers: Record<string, string> = { ...(init.headers as Record<string, string>) };
-  if (token) headers.Authorization = `Bearer ${token}`;
-  if (!(init.body instanceof FormData) && init.method !== "GET" && init.method !== "HEAD") {
-    headers["Content-Type"] = headers["Content-Type"] || "application/json";
-  }
-  return fetch(url, { ...init, credentials: "include", headers });
-}
 
 export interface Pagination {
   page: number;
@@ -559,12 +548,7 @@ export const exportStudentsCsv = async (params?: { search?: string; classId?: st
   const q = new URLSearchParams();
   if (params?.search) q.set("search", params.search);
   if (params?.classId) q.set("classId", params.classId);
-  const token = getAccessToken();
-  const url = `${getApiRoot()}/student-management/students/export?${q}`;
-  const res = await fetch(url, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    credentials: "include",
-  });
+  const res = await authedFetch(`/student-management/students/export?${q}`, { method: "GET" });
   if (!res.ok) throw new Error("Export failed");
   return res.blob();
 };
@@ -783,12 +767,7 @@ export const exportFeeDefaultersCsv = async (params?: {
   if (params?.month) q.set("month", String(params.month));
   if (params?.year) q.set("year", String(params.year));
   if (params?.search) q.set("search", params.search);
-  const token = getAccessToken();
-  const url = `${getApiRoot()}/student-management/fees/defaulters/export?${q}`;
-  const res = await fetch(url, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    credentials: "include",
-  });
+  const res = await authedFetch(`/student-management/fees/defaulters/export?${q}`, { method: "GET" });
   if (!res.ok) throw new Error("Export failed");
   return res.blob();
 };

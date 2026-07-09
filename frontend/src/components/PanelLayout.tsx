@@ -6,6 +6,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { logout } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
+import NotificationBell from "@/components/NotificationBell";
+import { usePanelRealtime } from "@/hooks/usePanelRealtime";
 
 const PanelLayout = () => {
   const { user, loading } = useAuth();
@@ -14,6 +16,8 @@ const PanelLayout = () => {
     document.body.classList.add("cms-active");
     return () => document.body.classList.remove("cms-active");
   }, []);
+
+  usePanelRealtime(Boolean(user));
 
   if (loading) {
     return (
@@ -35,9 +39,12 @@ const PanelLayout = () => {
               <SidebarTrigger />
               <div className="text-sm font-semibold text-primary truncate capitalize">{user.role} Portal</div>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => void logout()} className="hidden sm:inline-flex">
-              <LogOut className="h-4 w-4" /> Sign out
-            </Button>
+            <div className="flex items-center gap-1">
+              <NotificationBell />
+              <Button variant="ghost" size="sm" onClick={() => void logout()} className="hidden sm:inline-flex">
+                <LogOut className="h-4 w-4" /> Sign out
+              </Button>
+            </div>
           </header>
           <main className="flex-1 min-w-0">
             <Outlet />

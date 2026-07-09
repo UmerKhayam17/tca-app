@@ -7,10 +7,12 @@ const User = require('../models/User');
 const AcademyStudent = require('../models/academy/AcademyStudent');
 const { MODULES } = require('../modules');
 const { getSystemModulesForApi } = require('../config/systemModules');
+const rt = require('../services/realtime/academyRealtime');
 
-function notifyStaff(req) {
+function notifyStaff(req, action = 'updated', userId) {
   const io = req.app.get('io');
   if (io) io.emit('staff:update', { at: Date.now() });
+  rt.userCrud(action, userId || '');
 }
 
 function modulePermissionsToMap(input) {

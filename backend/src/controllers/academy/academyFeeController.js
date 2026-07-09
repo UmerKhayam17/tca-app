@@ -2,6 +2,7 @@ const catchAsync = require('../../utils/catchAsync');
 const ApiError = require('../../utils/ApiError');
 const feeService = require('../../services/academy/academyFeeService');
 const AcademyStudent = require('../../models/academy/AcademyStudent');
+const rt = require('../../services/realtime/academyRealtime');
 
 async function assertParentOwnsStudent(req, studentId) {
   const roleName = req.user?.roleDoc?.name || req.user?.role?.name || req.user?.role;
@@ -60,11 +61,13 @@ const list = catchAsync(async (req, res) => {
 
 const generate = catchAsync(async (req, res) => {
   const data = await feeService.generateMonthlyFees(req.body, req.user._id);
+  rt.feeCrud('generated', data?._id || 'batch');
   res.status(201).json({ success: true, data });
 });
 
 const pay = catchAsync(async (req, res) => {
   const data = await feeService.recordPayment(req.params.id, req.body, req.user._id);
+  rt.feeCrud('updated', req.params.id);
   res.json({ success: true, data });
 });
 

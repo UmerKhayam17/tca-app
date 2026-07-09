@@ -1,40 +1,48 @@
 /**
  * socket/namespaces/notification.namespace.js
- * Dedicated namespace for push-style in-app notifications.
- * Future use: HR alerts, leave approvals, project updates, etc.
+ * In-app notifications + module-wide CRUD sync (role/module rooms).
  */
+const {
+  loadUserForRealtime,
+  getModuleRoomsForUser,
+} = require('../../realtime/realtimeService');
 
 /**
  * @param {import("socket.io").Namespace} nsp
  */
 function registerNotificationNamespace(nsp) {
-  nsp.on("connection", (socket) => {
-    const _id = socket.user._id;
+  nsp.on('connection', async (socket) => {
+    try {
+      const fullUser = await loadUserForRealtime(socket.user._id);
+      if (fullUser) {
+        socket.user = fullUser;
+        const rooms = getModuleRoomsForUser(fullUser);
+        rooms.forEach((room) => socket.join(room));
+      } else {
+        socket.join(`user:${socket.user._id}`);
+      }
+    } catch {
+      socket.join(`user:${socket.user._id}`);
+    }
 
-    socket.join(`user:${_id}`);
-    
-    // Acknowledge connection
-    socket.emit("notification:connected", { userId: _id });
+    socket.emit('notification:connected', { userId: String(socket.user._id) });
 
-    socket.on("disconnect", () => {
-      // cleanup if needed
-    });
+    socket.on('disconnect', () => {});
   });
 }
 
 /**
  * Send a notification to a specific user.
- * Call from anywhere: notifyUser(io, userId, payload)
  */
 function notifyUser(io, userId, payload) {
-  io.of("/notifications").to(`user:${userId}`).emit("notification:new", payload);
+  io.of('/notifications').to(`user:${userId}`).emit('notification:new', payload);
 }
 
 /**
- * Broadcast to entire company.
+ * Broadcast to entire company (rare).
  */
 function notifyCompany(io, payload) {
-  io.of("/notifications").emit("notification:new", payload);
+  io.of('/notifications').emit('notification:new', payload);
 }
 
 module.exports = registerNotificationNamespace;

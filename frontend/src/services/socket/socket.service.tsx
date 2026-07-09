@@ -13,7 +13,9 @@ class SocketService {
   chat: Socket | null = null;
   notifications: Socket | null = null;
   presence: Socket | null = null;
+  staff: Socket | null = null;
   private _connected = false;
+  private _panelConnected = false;
 
   private socketOptions() {
     return {
@@ -51,10 +53,53 @@ class SocketService {
     this.chat?.disconnect();
     this.notifications?.disconnect();
     this.presence?.disconnect();
+    this.staff?.disconnect();
     this.chat = null;
     this.notifications = null;
     this.presence = null;
+    this.staff = null;
     this._connected = false;
+    this._panelConnected = false;
+  }
+
+  /** Panel-wide realtime: notifications namespace + staff updates on default namespace. */
+  connectPanel() {
+    if (this._panelConnected) return;
+    this._panelConnected = true;
+
+    const opts = this.socketOptions();
+    const base = getSocketUrl();
+
+    if (!this.notifications) {
+      this.notifications = io(`${base}/notifications`, opts);
+    }
+    if (!this.staff) {
+      this.staff = io(base, opts);
+    }
+  }
+
+  onModuleSync(handler: (event: unknown) => void) {
+    this.notifications?.on("module:sync", handler);
+  }
+
+  offModuleSync(handler: (event: unknown) => void) {
+    this.notifications?.off("module:sync", handler);
+  }
+
+  onNotificationNew(handler: (payload: unknown) => void) {
+    this.notifications?.on("notification:new", handler);
+  }
+
+  offNotificationNew(handler: (payload: unknown) => void) {
+    this.notifications?.off("notification:new", handler);
+  }
+
+  onStaffUpdate(handler: () => void) {
+    this.staff?.on("staff:update", handler);
+  }
+
+  offStaffUpdate(handler: () => void) {
+    this.staff?.off("staff:update", handler);
   }
 
   isConnected() {

@@ -1,5 +1,6 @@
 const catchAsync = require('../../utils/catchAsync');
 const attendanceService = require('../../services/academy/academyAttendanceService');
+const rt = require('../../services/realtime/academyRealtime');
 
 const list = catchAsync(async (req, res) => {
   const date = req.query.date;
@@ -15,6 +16,7 @@ const list = catchAsync(async (req, res) => {
 
 const mark = catchAsync(async (req, res) => {
   const data = await attendanceService.markAttendance(req.body, req.user._id);
+  rt.attendanceCrud('updated', req.body?.classId || 'batch');
   res.status(201).json({ success: true, data });
 });
 

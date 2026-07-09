@@ -1,5 +1,6 @@
 const catchAsync = require('../../utils/catchAsync');
 const salaryService = require('../../services/academy/academySalaryService');
+const rt = require('../../services/realtime/academyRealtime');
 
 const list = catchAsync(async (req, res) => {
   const result = await salaryService.listSalaryRecords({
@@ -25,11 +26,13 @@ const summary = catchAsync(async (req, res) => {
 
 const generate = catchAsync(async (req, res) => {
   const data = await salaryService.generateMonthlySalaries(req.body, req.user._id);
+  rt.salaryCrud('generated', 'batch');
   res.status(201).json({ success: true, data });
 });
 
 const pay = catchAsync(async (req, res) => {
   const data = await salaryService.recordSalaryPayment(req.params.id, req.body, req.user._id);
+  rt.salaryCrud('updated', req.params.id);
   res.json({ success: true, data });
 });
 

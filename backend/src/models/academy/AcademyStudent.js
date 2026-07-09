@@ -15,11 +15,11 @@ const academicRecordSchema = new mongoose.Schema(
 const academyStudentSchema = new mongoose.Schema(
   {
     /** Official academy ID (TCES-YYYY-XXXXXX) — assigned when admission is completed. */
-    studentId: { type: String, unique: true, sparse: true, trim: true },
+    studentId: { type: String, trim: true },
     /** Temporary reference while status is pending_fee (admission office intake). */
-    registrationNumber: { type: String, unique: true, sparse: true, trim: true },
+    registrationNumber: { type: String, trim: true },
     /** Class roll number — temporary (TMP-…) at intake, official on activation. */
-    rollNumber: { type: String, unique: true, sparse: true, trim: true },
+    rollNumber: { type: String, trim: true },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     studentName: { type: String, required: true, trim: true },
     photoImage: { type: String, trim: true },
@@ -75,5 +75,28 @@ academyStudentSchema.index({
   rollNumber: 'text',
   guardianName: 'text',
 });
+
+/** Partial unique indexes — omit pending students without IDs (avoids duplicate null). */
+academyStudentSchema.index(
+  { studentId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { studentId: { $type: 'string', $gt: '' } },
+  }
+);
+academyStudentSchema.index(
+  { registrationNumber: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { registrationNumber: { $type: 'string', $gt: '' } },
+  }
+);
+academyStudentSchema.index(
+  { rollNumber: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { rollNumber: { $type: 'string', $gt: '' } },
+  }
+);
 
 module.exports = mongoose.model('AcademyStudent', academyStudentSchema);

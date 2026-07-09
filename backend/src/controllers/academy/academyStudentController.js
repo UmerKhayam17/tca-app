@@ -4,6 +4,7 @@ const AcademyStudent = require('../../models/academy/AcademyStudent');
 const studentService = require('../../services/academy/academyStudentService');
 const recordService = require('../../services/academy/academyStudentRecordService');
 const feeStructureService = require('../../services/academy/academyFeeStructureService');
+const rt = require('../../services/realtime/academyRealtime');
 
 async function assertParentOwnsStudent(req, studentId) {
   const roleName = req.user?.roleDoc?.name || req.user?.role?.name || req.user?.role;
@@ -22,21 +23,25 @@ async function assertParentOwnsStudent(req, studentId) {
 
 const register = catchAsync(async (req, res) => {
   const data = await studentService.registerStudent(req.body, req.user._id);
+  rt.studentCreated(data, req.user._id);
   res.status(201).json({ success: true, data });
 });
 
 const registerProvisional = catchAsync(async (req, res) => {
   const data = await studentService.registerProvisionalStudent(req.body, req.user._id);
+  rt.studentCreated(data, req.user._id);
   res.status(201).json({ success: true, data });
 });
 
 const activate = catchAsync(async (req, res) => {
   const result = await studentService.activateStudent(req.params.id, req.body, req.user._id);
+  rt.studentActivated(result.student);
   res.json({ success: true, data: result.student, credentials: result.credentials });
 });
 
 const update = catchAsync(async (req, res) => {
   const data = await studentService.updateStudent(req.params.id, req.body);
+  rt.studentUpdated(data);
   res.json({ success: true, data });
 });
 
@@ -88,6 +93,7 @@ const previewFees = catchAsync(async (req, res) => {
 
 const remove = catchAsync(async (req, res) => {
   const data = await studentService.deleteStudent(req.params.id);
+  rt.studentDeleted(req.params.id);
   res.json({ success: true, data });
 });
 
@@ -106,6 +112,7 @@ const discountReport = catchAsync(async (req, res) => {
 const uploadPhoto = catchAsync(async (req, res) => {
   if (!req.file) throw new ApiError(400, 'Image file required');
   const data = await studentService.uploadStudentPhoto(req.params.id, req.file);
+  rt.studentUpdated(data);
   res.json({ success: true, data });
 });
 

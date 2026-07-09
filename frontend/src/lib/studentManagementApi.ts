@@ -81,6 +81,16 @@ export interface AcademicRecord {
   year?: string;
 }
 
+export type AcademyStudentStatus = "pending_fee" | "active" | "inactive" | "suspended";
+
+export interface AcademyStudentProvisionalBody {
+  studentName: string;
+  fatherName: string;
+  phone: string;
+  dateOfBirth: string;
+  classId: string;
+}
+
 export interface AcademyStudentRegisterBody {
   studentName: string;
   fatherName: string;
@@ -111,9 +121,30 @@ export interface AcademyStudentRegisterBody {
   admissionFeeDiscount?: number;
 }
 
+export interface AcademyStudentActivateBody extends AcademyStudentRegisterBody {
+  parentPassword: string;
+  studentPassword?: string;
+  paymentMethod?: "cash" | "bank_transfer" | "online" | "other";
+  receiptNumber?: string;
+  paymentDate?: string;
+}
+
+export interface AcademyStudentActivateResult {
+  student: AcademyStudent;
+  credentials: {
+    studentId: string;
+    rollNumber: string;
+    studentEmail: string;
+    studentPassword: string;
+    parentEmail: string;
+  };
+}
+
 export interface AcademyStudent {
   _id: string;
-  studentId: string;
+  studentId?: string;
+  registrationNumber?: string;
+  rollNumber?: string;
   studentName: string;
   photoImage?: string;
   fatherName: string;
@@ -128,11 +159,11 @@ export interface AcademyStudent {
   studentEmail?: string;
   postalAddress?: string;
   contactPhoneRes?: string;
-  phone: string;
+  phone?: string;
   permanentAddress?: string;
   currentSchoolCollege?: string;
   academicHistory?: AcademicRecord[];
-  gender: "male" | "female" | "other";
+  gender?: "male" | "female" | "other";
   address?: string;
   classId: string | AcademyClass;
   sectionId?: string | AcademySection;
@@ -144,7 +175,9 @@ export interface AcademyStudent {
   admissionFeeDiscount?: number;
   discountAmount?: number;
   totalFee: number;
-  status: string;
+  status: AcademyStudentStatus;
+  createdAt?: string;
+  activatedAt?: string;
   createdBy?: CreatedByUser | string;
 }
 
@@ -520,6 +553,25 @@ export const fetchAcademyStudents = async (params?: {
 export const registerAcademyStudent = (body: AcademyStudentRegisterBody) =>
   api<AcademyStudent>("/students", { method: "POST", body: JSON.stringify(body) });
 
+export const registerProvisionalStudent = (body: AcademyStudentProvisionalBody) =>
+  api<AcademyStudent>("/students/provisional", { method: "POST", body: JSON.stringify(body) });
+
+export async function activateAcademyStudent(id: string, body: AcademyStudentActivateBody) {
+  const res = await authedFetch(`/student-management/students/${id}/activate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const parsed = await parseJson<{
+    success?: boolean;
+    data?: AcademyStudent;
+    credentials?: AcademyStudentActivateResult["credentials"];
+    message?: string;
+  }>(res);
+  if (!res.ok) throw new Error(parsed.message || `Activation failed (${res.status})`);
+  return { student: parsed.data!, credentials: parsed.credentials! };
+}
+
 export const updateAcademyStudent = (id: string, body: Record<string, unknown>) =>
   api<AcademyStudent>(`/students/${id}`, { method: "PATCH", body: JSON.stringify(body) });
 
@@ -544,10 +596,11 @@ export const getAcademyStudentRecord = (id: string) =>
 export const deleteAcademyStudent = (id: string) =>
   api<{ deleted: boolean; studentId?: string }>(`/students/${id}`, { method: "DELETE" });
 
-export const exportStudentsCsv = async (params?: { search?: string; classId?: string }) => {
+export const exportStudentsCsv = async (params?: { search?: string; classId?: string; status?: string }) => {
   const q = new URLSearchParams();
   if (params?.search) q.set("search", params.search);
   if (params?.classId) q.set("classId", params.classId);
+  if (params?.status) q.set("status", params.status);
   const res = await authedFetch(`/student-management/students/export?${q}`, { method: "GET" });
   if (!res.ok) throw new Error("Export failed");
   return res.blob();

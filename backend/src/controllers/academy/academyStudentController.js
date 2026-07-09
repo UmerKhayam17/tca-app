@@ -25,6 +25,16 @@ const register = catchAsync(async (req, res) => {
   res.status(201).json({ success: true, data });
 });
 
+const registerProvisional = catchAsync(async (req, res) => {
+  const data = await studentService.registerProvisionalStudent(req.body, req.user._id);
+  res.status(201).json({ success: true, data });
+});
+
+const activate = catchAsync(async (req, res) => {
+  const result = await studentService.activateStudent(req.params.id, req.body, req.user._id);
+  res.json({ success: true, data: result.student, credentials: result.credentials });
+});
+
 const update = catchAsync(async (req, res) => {
   const data = await studentService.updateStudent(req.params.id, req.body);
   res.json({ success: true, data });
@@ -101,6 +111,8 @@ const uploadPhoto = catchAsync(async (req, res) => {
 
 module.exports = {
   register,
+  registerProvisional,
+  activate,
   update,
   getById,
   getRecord,

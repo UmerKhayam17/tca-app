@@ -1,10 +1,9 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Download, Eye, Pencil, Plus, Trash2 } from "lucide-react";
+import { Download, Eye, Pencil, Plus, Trash2, UserCheck } from "lucide-react";
 import PanelSearchBar from "@/components/modules/PanelSearchBar";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -18,18 +17,31 @@ import {
   exportStudentsCsv,
   fetchAcademyClasses,
   fetchAcademyStudents,
-  fetchSectionsByClass,
   type AcademyStudent,
+  type AcademyStudentStatus,
 } from "@/lib/studentManagementApi";
-import { classLabel, formatPkr } from "./studentDisplayUtils";
+import { classLabel, formatDate, formatPkr } from "./studentDisplayUtils";
+import ProvisionalIntakeDialog from "./ProvisionalIntakeDialog";
+
+function studentRef(s: AcademyStudent) {
+  if (s.status === "pending_fee") {
+    return s.rollNumber ?? s.registrationNumber ?? "Pending";
+  }
+  return s.rollNumber ?? s.studentId ?? "—";
+}
+
+function statusLabel(status: AcademyStudentStatus) {
+  if (status === "pending_fee") return "Pending fee";
+  return status;
+}
 
 export default function RegistrationTab({
   caps,
   routes: routesProp,
   sessionId = "",
-  heading = "Enrolled students",
-  registerLabel = "Register student",
-  emptyHint = "No students enrolled yet.",
+  heading = "Students",
+  registerLabel = "Admission intake",
+  emptyHint = "No students yet.",
   showHeading = true,
 }: {
   caps: ModuleActionCaps;
@@ -38,21 +50,29 @@ export default function RegistrationTab({
   heading?: string;
   registerLabel?: string;
   emptyHint?: string;
-  /** Hide when the panel module header already shows the page title */
   showHeading?: boolean;
 }) {
   const { toast } = useToast();
   const { user } = useAuth();
   const qc = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [classFilter, setClassFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"" | AcademyStudentStatus>("");
   const [page, setPage] = useState(1);
+  const [intakeOpen, setIntakeOpen] = useState(false);
 
   const routes =
     routesProp ?? (user?.role ? academyStudentRoutes(user.role, "registration") : null);
-  const registerHref = routes?.new ?? "#";
   const hasActions = caps.canView || caps.canEdit || caps.canDelete;
-  const colSpan = hasActions ? 7 : 6;
+  const colSpan = hasActions ? 9 : 8;
+
+  useEffect(() => {
+    if (searchParams.get("intake") === "1") {
+      setIntakeOpen(true);
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const { data: classes = [] } = useQuery({
     queryKey: ["academy-classes", sessionId],
@@ -60,27 +80,23 @@ export default function RegistrationTab({
     enabled: Boolean(sessionId),
   });
 
-  const { data: sections = [] } = useQuery({
-    queryKey: ["academy-registration-sections", sessionId, classes.map((c) => c._id).join(",")],
-    queryFn: async () => {
-      const lists = await Promise.all(classes.map((c) => fetchSectionsByClass(c._id, { status: "active" })));
-      return lists.flat();
-    },
-    enabled: classes.length > 0,
-  });
-
-  const canRegister = Boolean(sessionId) && classes.length > 0 && sections.length > 0;
-  const registerBlockedReason = !sessionId
+  const canIntake = Boolean(sessionId) && classes.length > 0;
+  const intakeBlockedReason = !sessionId
     ? "Select an academic session first"
     : classes.length === 0
       ? "Add at least one active class for this session"
-      : sections.length === 0
-        ? "Add at least one section (Student Management → Sections)"
-        : null;
+      : null;
 
   const { data: listData, isLoading } = useQuery({
-    queryKey: ["academy-students", page, search, classFilter],
-    queryFn: () => fetchAcademyStudents({ page, limit: 15, search: search || undefined, classId: classFilter || undefined }),
+    queryKey: ["academy-students", page, search, classFilter, statusFilter],
+    queryFn: () =>
+      fetchAcademyStudents({
+        page,
+        limit: 15,
+        search: search || undefined,
+        classId: classFilter || undefined,
+        status: statusFilter || undefined,
+      }),
   });
 
   const deleteMut = useMutation({
@@ -94,7 +110,11 @@ export default function RegistrationTab({
 
   const handleExport = async () => {
     try {
-      const blob = await exportStudentsCsv({ search: search || undefined, classId: classFilter || undefined });
+      const blob = await exportStudentsCsv({
+        search: search || undefined,
+        classId: classFilter || undefined,
+        status: statusFilter || undefined,
+      });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -107,7 +127,8 @@ export default function RegistrationTab({
   };
 
   const handleDelete = (s: AcademyStudent) => {
-    if (!confirm(`Delete student "${s.studentName}" (${s.studentId})? This cannot be undone.`)) return;
+    const label = studentRef(s);
+    if (!confirm(`Delete "${s.studentName}" (${label})? This cannot be undone.`)) return;
     deleteMut.mutate(s._id);
   };
 
@@ -128,14 +149,12 @@ export default function RegistrationTab({
         )}
         <div className="flex flex-wrap gap-2 items-center sm:ml-auto">
           {caps.canCreate && (
-            canRegister ? (
-              <Button className="gap-2" asChild>
-                <Link to={registerHref}>
-                  <Plus className="h-4 w-4" /> {registerLabel}
-                </Link>
+            canIntake ? (
+              <Button className="gap-2" onClick={() => setIntakeOpen(true)}>
+                <Plus className="h-4 w-4" /> {registerLabel}
               </Button>
             ) : (
-              <Button className="gap-2" disabled title={registerBlockedReason ?? undefined}>
+              <Button className="gap-2" disabled title={intakeBlockedReason ?? undefined}>
                 <Plus className="h-4 w-4" /> {registerLabel}
               </Button>
             )
@@ -143,9 +162,20 @@ export default function RegistrationTab({
           <PanelSearchBar
             value={search}
             onChange={(v) => { setSearch(v); setPage(1); }}
-            placeholder="Search name, ID, phone…"
+            placeholder="Search name, roll, phone…"
             className="w-48 max-w-none flex-none"
           />
+          <select
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+            value={statusFilter}
+            onChange={(e) => { setStatusFilter(e.target.value as "" | AcademyStudentStatus); setPage(1); }}
+          >
+            <option value="">All statuses</option>
+            <option value="pending_fee">Pending fee</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+            <option value="suspended">Suspended</option>
+          </select>
           <select
             className="h-10 rounded-md border border-input bg-background px-3 text-sm"
             value={classFilter}
@@ -167,10 +197,12 @@ export default function RegistrationTab({
           <table className="w-full text-sm">
             <thead className="bg-muted/50 border-b">
               <tr>
-                <th className="text-left p-3 font-medium">ID</th>
+                <th className="text-left p-3 font-medium">Roll / ID</th>
                 <th className="text-left p-3 font-medium">Name</th>
                 <th className="text-left p-3 font-medium">Father</th>
+                <th className="text-left p-3 font-medium">Phone</th>
                 <th className="text-left p-3 font-medium">Class</th>
+                <th className="text-left p-3 font-medium">Created</th>
                 <th className="text-left p-3 font-medium">Monthly</th>
                 <th className="text-left p-3 font-medium">Status</th>
                 {hasActions && <th className="text-right p-3 font-medium">Actions</th>}
@@ -184,12 +216,16 @@ export default function RegistrationTab({
                 <tr>
                   <td colSpan={colSpan} className="p-8 text-center text-muted-foreground">
                     {emptyHint}
-                    {caps.canCreate && (
+                    {caps.canCreate && canIntake && (
                       <>
                         {" "}
-                        <Link to={registerHref} className="text-primary underline-offset-2 hover:underline">
+                        <button
+                          type="button"
+                          className="text-primary underline-offset-2 hover:underline"
+                          onClick={() => setIntakeOpen(true)}
+                        >
                           {registerLabel}
-                        </Link>
+                        </button>
                       </>
                     )}
                   </td>
@@ -198,17 +234,38 @@ export default function RegistrationTab({
               {students.map((s) => {
                 const viewHref = routes ? routes.detail(s._id) : "#";
                 const editHref = routes ? routes.edit(s._id) : "#";
+                const activateHref = routes ? routes.activate(s._id) : "#";
+                const isPending = s.status === "pending_fee";
                 return (
                   <tr key={s._id} className="border-b hover:bg-muted/30">
-                    <td className="p-3 font-mono text-xs">{s.studentId}</td>
+                    <td className="p-3 font-mono text-xs">{studentRef(s)}</td>
                     <td className="p-3 font-medium">{s.studentName}</td>
                     <td className="p-3">{s.fatherName}</td>
+                    <td className="p-3">{s.phone || "—"}</td>
                     <td className="p-3">{classLabel(s.classId)}</td>
-                    <td className="p-3">{formatPkr(s.monthlyFee)}</td>
-                    <td className="p-3 capitalize">{s.status}</td>
+                    <td className="p-3 text-muted-foreground">{formatDate(s.createdAt)}</td>
+                    <td className="p-3">{isPending ? "—" : formatPkr(s.monthlyFee)}</td>
+                    <td className="p-3">
+                      <span
+                        className={
+                          isPending
+                            ? "text-xs font-semibold rounded-full px-2 py-0.5 bg-amber-500/15 text-amber-800 dark:text-amber-200"
+                            : "capitalize"
+                        }
+                      >
+                        {statusLabel(s.status as AcademyStudentStatus)}
+                      </span>
+                    </td>
                     {hasActions && (
                       <td className="p-3">
                         <div className="flex justify-end gap-1">
+                          {isPending && caps.canEdit && (
+                            <Button variant="default" size="sm" className="h-8 gap-1" asChild>
+                              <Link to={activateHref}>
+                                <UserCheck className="h-3.5 w-3.5" /> Activate
+                              </Link>
+                            </Button>
+                          )}
                           {caps.canView && (
                             <Button variant="ghost" size="icon" asChild aria-label="View student">
                               <Link to={viewHref}>
@@ -216,7 +273,7 @@ export default function RegistrationTab({
                               </Link>
                             </Button>
                           )}
-                          {caps.canEdit && (
+                          {caps.canEdit && !isPending && (
                             <Button variant="ghost" size="icon" asChild aria-label="Edit student">
                               <Link to={editHref}>
                                 <Pencil className="h-4 w-4" />
@@ -251,6 +308,13 @@ export default function RegistrationTab({
           </div>
         )}
       </Card>
+
+      <ProvisionalIntakeDialog
+        open={intakeOpen}
+        onOpenChange={setIntakeOpen}
+        caps={caps}
+        sessionId={sessionId}
+      />
     </div>
   );
 }

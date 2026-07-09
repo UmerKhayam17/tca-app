@@ -48,10 +48,21 @@ const StudentManagementModule = ({
 
     if (sectionParam === "registration") {
       if (action === "new") {
-        if (!caps.canCreate) return <Navigate to={registrationList} replace />;
-        return <RegisterStudentPage caps={caps} routes={registrationRoutes ?? undefined} sessionId={sessionId} />;
+        return <Navigate to={`${registrationList}?intake=1`} replace />;
       }
       if (action && isAcademyStudentId(action)) {
+        if (subAction === "activate") {
+          if (!caps.canEdit) return <Navigate to={registrationRoutes?.detail(action) ?? registrationList} replace />;
+          return (
+            <RegisterStudentPage
+              caps={caps}
+              studentId={action}
+              mode="activate"
+              routes={registrationRoutes ?? undefined}
+              sessionId={sessionId}
+            />
+          );
+        }
         if (subAction === "edit") {
           if (!caps.canEdit) return <Navigate to={`../${action}`} replace />;
           return (

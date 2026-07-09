@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import type { LucideIcon } from "lucide-react";
 import {
   ArrowLeft,
@@ -47,9 +54,11 @@ import {
   getAcademyStudent,
   previewFees,
   registerAcademyStudent,
+  activateAcademyStudent,
   resolveUploadUrl,
   updateAcademyStudent,
   uploadAcademyStudentPhoto,
+  type AcademyStudentActivateResult,
   type EnrollmentSubjectLayout,
   type FeePreview,
 } from "@/lib/studentManagementApi";
@@ -60,6 +69,7 @@ import {
   mapStudentToForm,
   type AcademicRow,
 } from "./registerStudentForm";
+import { formatDate } from "./studentDisplayUtils";
 
 function deriveChoiceSelections(
   layout: EnrollmentSubjectLayout,
@@ -152,24 +162,38 @@ export default function RegisterStudentPage({
   studentId,
   routes: routesProp,
   sessionId = "",
+  mode = "register",
+  asDialog = false,
+  open = true,
+  onOpenChange,
 }: {
   caps: ModuleActionCaps;
   studentId?: string;
   routes?: AcademyStudentRoutes;
   sessionId?: string;
+  mode?: "register" | "activate";
+  asDialog?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const isEdit = Boolean(studentId);
+  const isActivate = mode === "activate";
+  const isEdit = Boolean(studentId) && !isActivate;
   const { toast } = useToast();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { user } = useAuth();
   const [form, setForm] = useState(defaultRegisterForm);
   const [feePreview, setFeePreview] = useState<FeePreview | null>(null);
-  const [formReady, setFormReady] = useState(!isEdit);
+  const [formReady, setFormReady] = useState(!studentId);
   const [showParentPassword, setShowParentPassword] = useState(false);
   const [choiceSelections, setChoiceSelections] = useState<Record<string, string>>({});
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [studentPassword, setStudentPassword] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<"cash" | "bank_transfer" | "online" | "other">("cash");
+  const [receiptNumber, setReceiptNumber] = useState("");
+  const [credentials, setCredentials] = useState<AcademyStudentActivateResult["credentials"] | null>(null);
+  const autoPackageSectionRef = useRef<string | null>(null);
 
   const routes =
     routesProp ?? (user?.role ? academyStudentRoutes(user.role, "registration") : null);
@@ -182,8 +206,20 @@ export default function RegisterStudentPage({
   const { data: existingStudent, isLoading: loadingStudent } = useQuery({
     queryKey: ["academy-student", studentId],
     queryFn: () => getAcademyStudent(studentId!),
-    enabled: isEdit,
+    enabled: Boolean(studentId),
   });
+
+  useEffect(() => {
+    if (isActivate && existingStudent && existingStudent.status !== "pending_fee" && !asDialog) {
+      navigate(detailHref, { replace: true });
+    }
+  }, [isActivate, existingStudent, detailHref, navigate, asDialog]);
+
+  useEffect(() => {
+    if (isActivate && existingStudent && existingStudent.status !== "pending_fee" && asDialog) {
+      onOpenChange?.(false);
+    }
+  }, [isActivate, existingStudent, asDialog, onOpenChange]);
 
   useEffect(() => {
     if (existingStudent) {
@@ -222,7 +258,7 @@ export default function RegisterStudentPage({
   const { data: classes = [] } = useQuery({
     queryKey: ["academy-classes", sessionId],
     queryFn: () => fetchAcademyClasses({ status: "active", sessionId: sessionId || undefined }),
-    enabled: isEdit || Boolean(sessionId),
+    enabled: isEdit || isActivate || Boolean(sessionId),
   });
 
   const { data: enrollmentLayout, isLoading: enrollmentLoading } = useQuery({
@@ -254,6 +290,21 @@ export default function RegisterStudentPage({
       return same ? f : { ...f, selectedSubjects: next };
     });
   }, [enrollmentLayout, form.isFullPackage, choiceSelections]);
+
+  useEffect(() => {
+    if (!isActivate || !form.sectionId || !enrollmentLayout) return;
+    if (autoPackageSectionRef.current === form.sectionId) return;
+    autoPackageSectionRef.current = form.sectionId;
+    if (!enrollmentLayout.hasChoiceGroups && enrollmentLayout.coreSubjects.length > 0) {
+      setForm((f) => ({
+        ...f,
+        isFullPackage: true,
+        selectedSubjects: enrollmentLayout.coreSubjects.map((s) => s._id),
+      }));
+    } else if (enrollmentLayout.hasChoiceGroups) {
+      setForm((f) => ({ ...f, isFullPackage: true }));
+    }
+  }, [isActivate, form.sectionId, enrollmentLayout]);
 
   const { data: sections = [], isLoading: sectionsLoading } = useQuery({
     queryKey: ["academy-sections", form.classId],
@@ -306,6 +357,19 @@ export default function RegisterStudentPage({
   const saveMut = useMutation({
     mutationFn: async () => {
       const body = buildStudentPayload(form);
+      if (isActivate && studentId) {
+        const result = await activateAcademyStudent(studentId, {
+          ...body,
+          parentPassword: form.parentPassword.trim(),
+          studentPassword: studentPassword.trim() || undefined,
+          paymentMethod,
+          receiptNumber: receiptNumber.trim() || undefined,
+        });
+        if (photoFile) {
+          await uploadAcademyStudentPhoto(result.student._id, photoFile);
+        }
+        return result;
+      }
       const student =
         isEdit && studentId
           ? await updateAcademyStudent(studentId, body)
@@ -313,17 +377,28 @@ export default function RegisterStudentPage({
       if (photoFile) {
         await uploadAcademyStudentPhoto(student._id, photoFile);
       }
-      return student;
+      return { student, credentials: null as AcademyStudentActivateResult["credentials"] | null };
     },
-    onSuccess: (student) => {
+    onSuccess: ({ student, credentials: creds }) => {
       qc.invalidateQueries({ queryKey: ["academy-students"] });
       qc.invalidateQueries({ queryKey: ["academy-student", studentId] });
+      qc.invalidateQueries({ queryKey: ["academy-student-record", studentId] });
+      if (creds) {
+        setCredentials(creds);
+        toast({
+          title: "Student activated",
+          description: `Roll ${creds.rollNumber} · ID ${creds.studentId}`,
+        });
+        return;
+      }
       if (isEdit) {
         toast({ title: "Student updated" });
-        navigate(detailHref);
+        if (asDialog) onOpenChange?.(false);
+        else navigate(detailHref);
       } else {
         toast({ title: "Student registered", description: `ID: ${student.studentId}` });
-        navigate(listHref);
+        if (asDialog) onOpenChange?.(false);
+        else navigate(listHref);
       }
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -402,21 +477,64 @@ export default function RegisterStudentPage({
     }
     return form.selectedSubjects.length > 0;
   })();
+
+  const submitBlockers = (() => {
+    const missing: string[] = [];
+    if (!form.studentName.trim()) missing.push("Student name");
+    if (!form.fatherName.trim()) missing.push("Father's name");
+    if (!form.dateOfBirth) missing.push("Date of birth");
+    if (!form.gender) missing.push("Gender");
+    if (!form.mobileNo.trim()) missing.push("Mobile number");
+    if (!form.classId) missing.push("Class");
+    if (!form.sectionId) missing.push("Section");
+    if (!subjectSelectionValid) {
+      if (form.isFullPackage && hasChoiceGroups) {
+        missing.push("One elective per group (section 6)");
+      } else {
+        missing.push("Subjects or full package (section 6)");
+      }
+    }
+    if (isActivate || !isEdit) {
+      if (!form.guardianEmail.trim()) missing.push("Guardian email (section 2)");
+      if (form.parentPassword.trim().length < 8) {
+        missing.push("Parent login password — min 8 characters (section 2)");
+      }
+    }
+    return missing;
+  })();
+
   const canSubmit =
     form.studentName.trim()
     && form.fatherName.trim()
     && form.dateOfBirth
+    && form.gender
     && form.mobileNo.trim()
     && form.classId
     && form.sectionId
     && subjectSelectionValid
-    && (!isEdit
+    && (isActivate
       ? Boolean(form.guardianEmail.trim()) && form.parentPassword.trim().length >= 8
-      : true);
+      : !isEdit
+        ? Boolean(form.guardianEmail.trim()) && form.parentPassword.trim().length >= 8
+        : true);
 
   const selectedClassName = classes.find((c) => c._id === form.classId)?.className;
 
-  if (isEdit && (loadingStudent || !formReady)) {
+  const handleClose = () => {
+    if (asDialog) onOpenChange?.(false);
+    else navigate(isEdit || isActivate ? detailHref : listHref);
+  };
+
+  if ((isEdit || isActivate) && (loadingStudent || !formReady)) {
+    if (asDialog) {
+      return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+          <DialogContent className="max-w-lg">
+            <p className="py-8 text-center text-muted-foreground">Loading student…</p>
+          </DialogContent>
+        </Dialog>
+      );
+    }
     return (
       <div className="w-full px-4 sm:px-6 lg:px-8 py-12 text-center text-muted-foreground">
         Loading student…
@@ -424,7 +542,7 @@ export default function RegisterStudentPage({
     );
   }
 
-  if (!isEdit && !sessionId) {
+  if (!isEdit && !isActivate && !sessionId && !asDialog) {
     return (
       <div className="w-full px-4 sm:px-6 lg:px-8 py-12 space-y-3 text-center">
         <Button variant="outline" asChild>
@@ -434,8 +552,9 @@ export default function RegisterStudentPage({
     );
   }
 
-  return (
-    <div className="w-full px-4 sm:px-6 lg:px-8 py-6 space-y-8">
+  const formBody = (
+    <div className={asDialog ? "space-y-8" : "space-y-10"}>
+      {!asDialog && (
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b pb-6">
         <div className="space-y-1">
           <Button variant="ghost" size="sm" className="gap-1.5 -ml-2 mb-2" asChild>
@@ -444,10 +563,36 @@ export default function RegisterStudentPage({
             </Link>
           </Button>
           <h2 className="font-display text-xl sm:text-2xl font-semibold text-primary">
-            {isEdit ? "Edit student" : "Register new student"}
+            {isActivate
+              ? "Complete admission & activate"
+              : isEdit
+                ? "Edit student"
+                : "Register new student"}
           </h2>
+          {isActivate && (existingStudent?.rollNumber || existingStudent?.registrationNumber || existingStudent?.createdAt) && (
+            <p className="text-sm text-muted-foreground">
+              {existingStudent.rollNumber && (
+                <>
+                  Temp roll: <span className="font-medium text-foreground">{existingStudent.rollNumber}</span>
+                  {existingStudent.registrationNumber || existingStudent.createdAt ? " · " : null}
+                </>
+              )}
+              {existingStudent.registrationNumber && (
+                <>
+                  Ref: <span className="font-medium text-foreground">{existingStudent.registrationNumber}</span>
+                  {existingStudent.createdAt ? " · " : null}
+                </>
+              )}
+              {existingStudent.createdAt && (
+                <>
+                  Created: <span className="font-medium text-foreground">{formatDate(existingStudent.createdAt)}</span>
+                </>
+              )}
+            </p>
+          )}
         </div>
       </div>
+      )}
 
       <div className="space-y-10">
         <section className="space-y-4 pb-10 border-b">
@@ -1027,15 +1172,145 @@ export default function RegisterStudentPage({
           )}
         </section>
 
-        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-6 border-t">
-          <Button variant="outline" asChild>
-            <Link to={isEdit ? detailHref : listHref}>Cancel</Link>
+        {isActivate && (
+          <section className="space-y-4 pb-10 border-b">
+            <SectionTitle>Fee payment & portal access</SectionTitle>
+            <p className="text-sm text-muted-foreground rounded-md border bg-muted/30 px-3 py-2">
+              Parent portal login uses <strong>Guardian email</strong> and <strong>Parent login password</strong> from section 2 (password must be at least 8 characters).
+            </p>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <FormField label="Payment method">
+                <select
+                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value as typeof paymentMethod)}
+                >
+                  <option value="cash">Cash</option>
+                  <option value="bank_transfer">Bank transfer</option>
+                  <option value="online">Online</option>
+                  <option value="other">Other</option>
+                </select>
+              </FormField>
+              <FormField label="Receipt number">
+                <Input
+                  value={receiptNumber}
+                  onChange={(e) => setReceiptNumber(e.target.value)}
+                  placeholder="Optional — auto-generated if empty"
+                />
+              </FormField>
+              <FormField label="Student portal password">
+                <Input
+                  type="password"
+                  value={studentPassword}
+                  onChange={(e) => setStudentPassword(e.target.value)}
+                  placeholder="Leave blank for default"
+                />
+              </FormField>
+            </div>
+          </section>
+        )}
+
+        <div className="flex flex-col gap-3 pt-6 border-t">
+          {!canSubmit && submitBlockers.length > 0 && (
+            <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+              <p className="font-medium">Complete these before activating:</p>
+              <ul className="mt-1 list-disc pl-5 space-y-0.5">
+                {submitBlockers.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
+          <Button variant="outline" onClick={handleClose}>
+            Cancel
           </Button>
-          <Button disabled={saveMut.isPending || !canSubmit} onClick={() => saveMut.mutate()}>
-            {saveMut.isPending ? "Saving…" : isEdit ? "Save changes" : "Register & enroll"}
+          <Button
+            disabled={saveMut.isPending || !canSubmit}
+            title={!canSubmit ? submitBlockers.join("; ") : undefined}
+            onClick={() => saveMut.mutate()}
+          >
+            {saveMut.isPending
+              ? "Saving…"
+              : isActivate
+                ? "Record fee & activate"
+                : isEdit
+                  ? "Save changes"
+                  : "Register & enroll"}
           </Button>
+          </div>
         </div>
       </div>
+    </div>
+  );
+
+  const credentialsDialog = (
+    <Dialog
+      open={Boolean(credentials)}
+      onOpenChange={(o) => {
+        if (!o) {
+          setCredentials(null);
+          if (asDialog) onOpenChange?.(false);
+          else navigate(detailHref);
+        }
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Student activated</DialogTitle>
+        </DialogHeader>
+        {credentials && (
+          <div className="space-y-2 text-sm">
+            <p><span className="text-muted-foreground">Student ID:</span> {credentials.studentId}</p>
+            <p><span className="text-muted-foreground">Roll number:</span> {credentials.rollNumber}</p>
+            <p><span className="text-muted-foreground">Student login:</span> {credentials.studentEmail}</p>
+            <p><span className="text-muted-foreground">Student password:</span> {credentials.studentPassword}</p>
+            <p><span className="text-muted-foreground">Parent login:</span> {credentials.parentEmail}</p>
+          </div>
+        )}
+        <DialogFooter>
+          <Button
+            onClick={() => {
+              setCredentials(null);
+              if (asDialog) onOpenChange?.(false);
+              else navigate(detailHref);
+            }}
+          >
+            Done
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
+  if (asDialog) {
+    if (!open) return credentialsDialog;
+    return (
+      <>
+        <Dialog open={open} onOpenChange={onOpenChange}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Complete admission & activate</DialogTitle>
+              {isActivate && (existingStudent?.rollNumber || existingStudent?.registrationNumber) && (
+                <p className="text-sm text-muted-foreground font-normal">
+                  {existingStudent.rollNumber && <>Temp roll: {existingStudent.rollNumber}</>}
+                  {existingStudent.rollNumber && existingStudent.registrationNumber ? " · " : null}
+                  {existingStudent.registrationNumber && <>Ref: {existingStudent.registrationNumber}</>}
+                </p>
+              )}
+            </DialogHeader>
+            {formBody}
+          </DialogContent>
+        </Dialog>
+        {credentialsDialog}
+      </>
+    );
+  }
+
+  return (
+    <div className="w-full px-4 sm:px-6 lg:px-8 py-6 space-y-8">
+      {formBody}
+      {credentialsDialog}
     </div>
   );
 }

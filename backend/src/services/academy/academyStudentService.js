@@ -14,6 +14,8 @@ const {
   calculateFeesWithDiscount,
 } = require('./academyFeeStructureService');
 const { validateEnrollmentSubjects } = require('./academyEnrollmentSubjectService');
+const { generateAcademyRollNumber, generateTemporaryRollNumber } = require('../../utils/academyRollNumber');
+const { generateRegistrationNumber } = require('../../utils/academyRegistrationNumber');
 
 const STUDENT_PHOTO_DIR = path.join(__dirname, '../../../uploads/students');
 
@@ -206,6 +208,28 @@ async function updateStudent(id, payload) {
   const student = await AcademyStudent.findById(id);
   if (!student) throw new ApiError(404, 'Student not found');
 
+  if (student.status === 'pending_fee') {
+    if (payload.studentName) student.studentName = payload.studentName.trim();
+    if (payload.fatherName) student.fatherName = payload.fatherName.trim();
+    if (payload.phone) student.phone = payload.phone.trim();
+    if (payload.mobileNo) student.phone = payload.mobileNo.trim();
+    if (payload.dateOfBirth !== undefined) {
+      student.dateOfBirth = payload.dateOfBirth ? new Date(payload.dateOfBirth) : undefined;
+    }
+    if (payload.classId) {
+      const cls = await AcademyClass.findById(payload.classId);
+      if (!cls) throw new ApiError(404, 'Class not found');
+      if (cls.status !== 'active') throw new ApiError(400, 'Class is not active');
+      student.classId = payload.classId;
+      student.rollNumber = await generateTemporaryRollNumber(payload.classId);
+    }
+    await student.save();
+    return student.populate([
+      { path: 'classId', select: 'className' },
+      { path: 'createdBy', select: 'name email' },
+    ]);
+  }
+
   const classId = payload.classId || student.classId;
   const sectionId = payload.sectionId || student.sectionId;
   const isFullPackage = payload.isFullPackage !== undefined ? payload.isFullPackage : student.isFullPackage;
@@ -308,6 +332,8 @@ async function listStudents({
       { fatherName: { $regex: s, $options: 'i' } },
       { phone: { $regex: s, $options: 'i' } },
       { studentId: { $regex: s, $options: 'i' } },
+      { registrationNumber: { $regex: s, $options: 'i' } },
+      { rollNumber: { $regex: s, $options: 'i' } },
     ];
   }
 
@@ -344,6 +370,7 @@ function studentsToCsv(rows) {
     'Father',
     'Phone',
     'Class',
+    'Created',
     'Monthly Fee',
     'Admission Fee',
     'Total Fee',
@@ -352,13 +379,16 @@ function studentsToCsv(rows) {
   const lines = [header.join(',')];
   rows.forEach((s) => {
     const className = s.classId?.className || '';
+    const idCol = s.studentId || s.rollNumber || s.registrationNumber || '';
+    const created = s.createdAt ? new Date(s.createdAt).toISOString().slice(0, 10) : '';
     lines.push(
       [
-        s.studentId,
+        idCol,
         `"${(s.studentName || '').replace(/"/g, '""')}"`,
         `"${(s.fatherName || '').replace(/"/g, '""')}"`,
         s.phone,
         `"${className.replace(/"/g, '""')}"`,
+        created,
         s.monthlyFee,
         s.admissionFee,
         s.totalFee,
@@ -574,9 +604,185 @@ async function getDiscountReport({ page = 1, limit = 20, classId, search, from, 
   };
 }
 
+/** Phase 1 — admission office intake (minimal fields). */
+async function registerProvisionalStudent(payload, userId) {
+  const cls = await AcademyClass.findById(payload.classId);
+  if (!cls) throw new ApiError(404, 'Class not found');
+  if (cls.status !== 'active') throw new ApiError(400, 'Class is not active');
+  if (!cls.sessionId) {
+    throw new ApiError(400, 'Class must belong to an academic session');
+  }
+
+  const registrationNumber = await generateRegistrationNumber();
+  const rollNumber = await generateTemporaryRollNumber(payload.classId);
+  const phone = (payload.phone || '').trim();
+  if (!phone) throw new ApiError(400, 'Phone number is required');
+
+  const student = await AcademyStudent.create({
+    registrationNumber,
+    rollNumber,
+    studentName: payload.studentName.trim(),
+    fatherName: payload.fatherName.trim(),
+    phone,
+    dateOfBirth: payload.dateOfBirth ? new Date(payload.dateOfBirth) : undefined,
+    classId: payload.classId,
+    status: 'pending_fee',
+    createdBy: userId,
+  });
+
+  return student.populate([
+    { path: 'classId', select: 'className sessionId' },
+    { path: 'createdBy', select: 'name email' },
+  ]);
+}
+
+/** Phase 2 — accountant completes admission, fee, allocation, and logins. */
+async function activateStudent(id, payload, userId) {
+  const student = await AcademyStudent.findById(id);
+  if (!student) throw new ApiError(404, 'Student not found');
+  if (student.status !== 'pending_fee') {
+    throw new ApiError(400, 'Student is not awaiting fee confirmation');
+  }
+
+  const classId = payload.classId || student.classId;
+  const cls = await AcademyClass.findById(classId);
+  if (!cls) throw new ApiError(404, 'Class not found');
+  if (cls.status !== 'active') throw new ApiError(400, 'Class is not active');
+
+  const feeStructure = await getByClass(classId);
+  if (!feeStructure) throw new ApiError(400, 'Configure fee structure for this class first');
+
+  const isFullPackage = Boolean(payload.isFullPackage);
+  const section = await AcademySection.findById(payload.sectionId);
+  if (!section) throw new ApiError(404, 'Section not found');
+  if (section.status !== 'active') throw new ApiError(400, 'Section is not active');
+  if (String(section.classId) !== String(classId)) {
+    throw new ApiError(400, 'Section does not belong to this class');
+  }
+
+  const subjectIds = await validateSubjects(
+    classId,
+    payload.sectionId,
+    payload.selectedSubjects || [],
+    isFullPackage
+  );
+
+  const fees = calculateFeesWithDiscount(feeStructure, {
+    selectedSubjectIds: subjectIds,
+    isFullPackage,
+    monthlyFeeDiscount: payload.monthlyFeeDiscount,
+    admissionFeeDiscount: payload.admissionFeeDiscount,
+    discountAmount: payload.discountAmount,
+  });
+
+  const phone = (payload.phone || payload.mobileNo || '').trim();
+  if (!phone) throw new ApiError(400, 'Phone number is required');
+  if (!payload.gender) throw new ApiError(400, 'Gender is required');
+
+  const profile = pickStudentProfile(payload);
+  const parentRole = await Role.findOne({ name: 'parent' });
+  const studentRole = await Role.findOne({ name: 'student' });
+  if (!parentRole || !studentRole) throw new ApiError(500, 'Roles not initialized');
+
+  const parentEmail = (payload.guardianEmail || '').trim().toLowerCase();
+  const parentPassword = payload.parentPassword;
+  const parentName = payload.guardianName?.trim() || payload.fatherName?.trim() || student.fatherName || 'Parent';
+
+  let parentUser = await User.findOne({ email: parentEmail });
+  if (!parentUser) {
+    parentUser = await User.create({
+      name: parentName,
+      email: parentEmail,
+      phone,
+      password: await bcrypt.hash(parentPassword, 12),
+      role: parentRole._id,
+    });
+  } else {
+    parentUser.name = parentName || parentUser.name;
+    parentUser.phone = phone || parentUser.phone;
+    if (parentPassword) {
+      parentUser.password = await bcrypt.hash(parentPassword, 12);
+    }
+    await parentUser.save();
+  }
+
+  const officialStudentId = await generateStudentId();
+  const rollNumber = await generateAcademyRollNumber(classId);
+  const portalEmail = `${rollNumber.replace(/[^a-zA-Z0-9]/g, '')}@student.academy.local`.toLowerCase();
+  const studPwd = payload.studentPassword || 'Student@123456';
+
+  const studentUser = await User.create({
+    name: (payload.studentName || student.studentName).trim(),
+    email: portalEmail,
+    phone,
+    password: await bcrypt.hash(studPwd, 12),
+    role: studentRole._id,
+  });
+
+  student.studentId = officialStudentId;
+  student.rollNumber = rollNumber;
+  student.userId = studentUser._id;
+  student.studentName = (payload.studentName || student.studentName).trim();
+  student.fatherName = (payload.fatherName || student.fatherName).trim();
+  student.phone = phone;
+  student.gender = payload.gender;
+  applyProfileToStudent(student, payload);
+  student.classId = classId;
+  student.sectionId = payload.sectionId;
+  student.selectedSubjects = subjectIds;
+  student.isFullPackage = isFullPackage;
+  Object.assign(student, fees);
+  student.feeStructureId = feeStructure._id;
+  student.status = 'active';
+  student.activatedAt = new Date();
+  student.activatedBy = userId;
+  student.enrolledAt = new Date();
+
+  await student.save();
+
+  const paidAt = payload.paymentDate ? new Date(payload.paymentDate) : new Date();
+  const receiptNumber =
+    payload.receiptNumber?.trim() || `RCP-${officialStudentId}-ADM`;
+
+  await AcademyFeeRecord.create({
+    studentId: student._id,
+    month: paidAt.getMonth() + 1,
+    year: paidAt.getFullYear(),
+    amount: fees.totalFee,
+    feeType: 'admission',
+    status: 'paid',
+    dueDate: paidAt,
+    paidAt,
+    receiptNumber,
+    paymentMethod: payload.paymentMethod || 'cash',
+    createdBy: userId,
+    recordedBy: userId,
+  });
+
+  const populated = await student.populate([
+    { path: 'classId', select: 'className' },
+    { path: 'sectionId', select: 'sectionName' },
+    { path: 'selectedSubjects', select: 'subjectName subjectCode' },
+    { path: 'createdBy', select: 'name email' },
+  ]);
+
+  return {
+    student: populated,
+    credentials: {
+      studentId: officialStudentId,
+      rollNumber,
+      studentEmail: portalEmail,
+      studentPassword: studPwd,
+      parentEmail: parentUser.email,
+    },
+  };
+}
+
 module.exports = {
   generateStudentId,
   registerStudent,
+  registerProvisionalStudent,
+  activateStudent,
   updateStudent,
   getStudent,
   listStudents,

@@ -46,7 +46,7 @@ export const defaultRegisterForm = () => ({
   discountAmount: "",
   monthlyFeeDiscount: "",
   admissionFeeDiscount: "",
-  status: "active" as "active" | "inactive" | "suspended",
+  status: "active" as const,
 });
 
 export function mapStudentToForm(student: AcademyStudent) {
@@ -89,7 +89,7 @@ export function mapStudentToForm(student: AcademyStudent) {
     discountAmount: String(student.discountAmount ?? 0),
     monthlyFeeDiscount: String(student.monthlyFeeDiscount ?? 0),
     admissionFeeDiscount: String(student.admissionFeeDiscount ?? 0),
-    status: (student.status as "active" | "inactive" | "suspended") || "active",
+    status: (student.status as "active" | "inactive" | "suspended" | "pending_fee") || "active",
   };
 }
 

@@ -32,11 +32,22 @@ const StudentsRecordsModule = ({
 
   const body = (() => {
     if (section === "new") {
-      if (!caps.canCreate) return <Navigate to={listHref} replace />;
-      return <RegisterStudentPage caps={caps} routes={routes ?? undefined} sessionId={sessionId} />;
+      return <Navigate to={`${listHref}?intake=1`} replace />;
     }
 
     if (section && isAcademyStudentId(section)) {
+      if (action === "activate") {
+        if (!caps.canEdit) return <Navigate to={routes?.detail(section) ?? listHref} replace />;
+        return (
+          <RegisterStudentPage
+            caps={caps}
+            studentId={section}
+            mode="activate"
+            routes={routes ?? undefined}
+            sessionId={sessionId}
+          />
+        );
+      }
       if (action === "edit") {
         if (!caps.canEdit) return <Navigate to={routes?.detail(section) ?? listHref} replace />;
         return <RegisterStudentPage caps={caps} studentId={section} routes={routes ?? undefined} sessionId={sessionId} />;
@@ -53,7 +64,7 @@ const StudentsRecordsModule = ({
         routes={routes ?? undefined}
         sessionId={sessionId}
         showHeading={false}
-        registerLabel="Register student"
+        registerLabel="Admission intake"
         emptyHint="No students on record yet."
       />
     );

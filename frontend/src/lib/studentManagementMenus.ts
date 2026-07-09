@@ -48,6 +48,7 @@ export type AcademyStudentRoutes = {
   new: string;
   detail: (studentId: string) => string;
   edit: (studentId: string) => string;
+  activate: (studentId: string) => string;
 };
 
 export function academyStudentRoutes(
@@ -61,6 +62,7 @@ export function academyStudentRoutes(
       new: `${root}/new`,
       detail: (studentId) => `${root}/${studentId}`,
       edit: (studentId) => `${root}/${studentId}/edit`,
+      activate: (studentId) => `${root}/${studentId}/activate`,
     };
   }
   const root = `/panel/${role}/student-management/registration`;
@@ -69,6 +71,7 @@ export function academyStudentRoutes(
     new: `${root}/new`,
     detail: (studentId) => `${root}/${studentId}`,
     edit: (studentId) => `${root}/${studentId}/edit`,
+    activate: (studentId) => `${root}/${studentId}/activate`,
   };
 }
 

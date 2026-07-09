@@ -77,6 +77,16 @@
   h1, h2, h3, h4, h5 {
     @apply font-display tracking-tight;
   }
+
+  .cms-root,
+  .cms-root h1,
+  .cms-root h2,
+  .cms-root h3,
+  .cms-root h4,
+  .cms-root h5,
+  .cms-root .font-display {
+    @apply font-sans;
+  }
 }
 
 @layer utilities {

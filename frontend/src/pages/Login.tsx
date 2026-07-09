@@ -67,7 +67,7 @@ const Login = () => {
         title="Login | The Concept Educational System"
         description="Sign in with your academy portal account — staff and families only."
       />
-      <section className="min-h-[calc(100vh-7.25rem)] grid lg:grid-cols-2">
+      <section className="cms-root min-h-[calc(100vh-7.25rem)] grid lg:grid-cols-2">
         <div className="hidden lg:flex relative overflow-hidden bg-[image:var(--gradient-hero)] text-primary-foreground p-12 flex-col justify-between">
           <div>
             <div className="text-xs tracking-[0.3em] uppercase text-accent">The Concept</div>

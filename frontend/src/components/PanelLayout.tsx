@@ -21,7 +21,7 @@ const PanelLayout = () => {
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full bg-secondary/30">
+      <div className="cms-root min-h-screen flex w-full bg-secondary/30">
         <PanelSidebar user={user} />
         <div className="flex-1 flex flex-col min-w-0">
           <header className="h-14 flex items-center justify-between gap-2 border-b border-border bg-background/95 backdrop-blur px-3 sm:px-4 sticky top-0 z-30">

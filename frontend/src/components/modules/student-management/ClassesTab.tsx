@@ -79,11 +79,6 @@ export default function ClassesTab({ caps, sessionId }: { caps: ModuleActionCaps
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-4">
-      {!sessionId && (
-        <p className="text-sm text-muted-foreground rounded-lg border border-dashed p-4">
-          Choose an academic session above, or create one under System configuration → Academic.
-        </p>
-      )}
       <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
         <PanelSearchBar
           value={search}
@@ -114,7 +109,7 @@ export default function ClassesTab({ caps, sessionId }: { caps: ModuleActionCaps
                 <tr><td colSpan={4} className="p-8 text-center text-muted-foreground">Loading…</td></tr>
               )}
               {!isLoading && !sessionId && (
-                <tr><td colSpan={4} className="p-8 text-center text-muted-foreground">Select an academic session to view classes</td></tr>
+                <tr><td colSpan={4} className="p-8 text-center text-muted-foreground">—</td></tr>
               )}
               {!isLoading && sessionId && classes.length === 0 && (
                 <tr><td colSpan={4} className="p-8 text-center text-muted-foreground">No classes for this session yet</td></tr>

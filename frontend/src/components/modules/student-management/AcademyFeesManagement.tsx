@@ -375,11 +375,6 @@ export default function AcademyFeesManagement({
               </Button>
             )}
           </div>
-          {summary && !studentId && (
-            <p className="text-xs text-muted-foreground mt-2">
-              {summary.activeStudents} active students in scope · {summary.byStatus.paid} paid vouchers
-            </p>
-          )}
         </Card>
       )}
 

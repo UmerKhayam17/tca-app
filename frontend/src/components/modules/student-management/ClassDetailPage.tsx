@@ -421,9 +421,6 @@ export default function ClassDetailPage({
             <GraduationCap className="h-8 w-8 text-primary shrink-0" />
             <div>
               <h1 className="text-2xl font-bold tracking-tight">{cls.className}</h1>
-              <p className="text-sm text-muted-foreground">
-                Class overview — subjects, fees, students, tests & timetable
-              </p>
               <CreatedByLine createdBy={cls.createdBy} />
             </div>
             <StatusBadge status={cls.status} />
@@ -608,7 +605,6 @@ export default function ClassDetailPage({
 
         <TabsContent value="fees" className="mt-6 space-y-4">
           <div className="flex justify-between items-center">
-            <p className="text-sm text-muted-foreground">Fee structure versions for this class</p>
             {caps.canCreate && (
               <Button size="sm" className="gap-2" onClick={openFeeCreate}>
                 <Plus className="h-4 w-4" /> New structure
@@ -716,12 +712,6 @@ export default function ClassDetailPage({
         </TabsContent>
 
         <TabsContent value="tests" className="mt-6 space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Recent class tests (up to 30).{" "}
-            <Button variant="link" className="h-auto p-0" asChild>
-              <Link to={`/panel/${role}/exams/enter-tests`}>Open all tests</Link>
-            </Button>
-          </p>
           <div className="overflow-x-auto border rounded-md">
             <table className="w-full text-sm">
               <thead className="bg-muted/50 border-b">
@@ -795,7 +785,6 @@ export default function ClassDetailPage({
 
         <TabsContent value="timetable" className="mt-6 space-y-4">
           <div className="flex justify-between items-center">
-            <p className="text-sm text-muted-foreground">Weekly schedule for this class</p>
             {caps.canCreate && activeSubjects.length > 0 && (
               <Button size="sm" className="gap-2" onClick={openSlotCreate}>
                 <Plus className="h-4 w-4" /> Add slot
@@ -947,11 +936,6 @@ export default function ClassDetailPage({
                 }}
                 placeholder={subjectCodePlaceholder(cls.className)}
               />
-              {!editSubject && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Auto-filled from subject name and class ({cls.className}); you can edit.
-                </p>
-              )}
             </div>
             <div>
               <Label>Status</Label>

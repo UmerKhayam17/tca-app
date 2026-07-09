@@ -162,7 +162,6 @@ export default function FeeStructureTab({ caps, sessionId }: { caps: ModuleActio
                 <tr>
                   <td colSpan={canSave ? 6 : 5} className="p-8 text-center text-muted-foreground">
                     No fee structures yet.
-                    {caps.canCreate && " Click Create fee structure to add one."}
                   </td>
                 </tr>
               )}

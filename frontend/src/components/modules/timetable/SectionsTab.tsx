@@ -151,7 +151,7 @@ export default function SectionsTab({
   };
 
   if (!sessionId) {
-    return <p className="p-6 text-muted-foreground text-sm">Select an academic session above.</p>;
+    return null;
   }
 
   const selectedClass = classes.find((c) => c._id === classId);
@@ -318,10 +318,6 @@ export default function SectionsTab({
             </div>
           </Card>
         </>
-      )}
-
-      {!classId && !viewAll && (
-        <p className="text-sm text-muted-foreground">Select a class or enable “Show all sections in session”.</p>
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>

@@ -88,7 +88,7 @@ export default function AssignmentsTab({
     r.teacher.name,
   ]);
 
-  if (!sessionId) return <p className="p-6 text-muted-foreground text-sm">Select a session above.</p>;
+  if (!sessionId) return null;
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-4">

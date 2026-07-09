@@ -108,12 +108,6 @@ export default function SessionBar({
         </Button>
       )}
 
-      {sessionId && selected && !selectedWritable && selectedStatus === "archived" && (
-        <p className="text-xs text-muted-foreground max-w-xs">
-          This session is archived (read-only). Clone structure in Session history to start a new year.
-        </p>
-      )}
-
       {extra}
     </div>
   );

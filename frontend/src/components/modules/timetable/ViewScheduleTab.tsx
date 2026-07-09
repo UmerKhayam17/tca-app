@@ -30,7 +30,7 @@ export default function ViewScheduleTab({ sessionId }: { sessionId: string }) {
     enabled: !!sessionId && !!sectionId,
   });
 
-  if (!sessionId) return <p className="p-6 text-muted-foreground text-sm">Select a session above.</p>;
+  if (!sessionId) return null;
 
   const workingDays = (grid?.workingDays || []) as Weekday[];
   const lecturePeriods = (grid?.periods || []).filter((p) => p.type === "lecture");
@@ -67,13 +67,6 @@ export default function ViewScheduleTab({ sessionId }: { sessionId: string }) {
       </div>
 
       {isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
-      {sectionId && !isLoading && !grid && (
-        <p className="text-sm text-muted-foreground">
-          No published timetable for this section. Publish a draft from{" "}
-          <strong>Timetable builder</strong> first (same session, class, and section).
-        </p>
-      )}
-
       {grid && (
         <>
           <div className="flex flex-wrap items-center gap-2 text-sm">

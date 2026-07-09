@@ -63,7 +63,7 @@ export default function TimetableSettingsTab({
   });
 
   if (!sessionId) {
-    return <p className="p-6 text-muted-foreground text-sm">Select an academic session above.</p>;
+    return null;
   }
 
   if (isLoading) {
@@ -75,7 +75,6 @@ export default function TimetableSettingsTab({
       <Card className="p-6 max-w-xl space-y-4">
         <div>
           <h3 className="font-semibold text-primary">Timetable rules</h3>
-          <p className="text-xs text-muted-foreground mt-1">Defaults used when building and publishing timetables.</p>
         </div>
 
         <div>

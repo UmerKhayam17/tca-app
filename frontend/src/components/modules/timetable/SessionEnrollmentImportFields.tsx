@@ -88,9 +88,6 @@ export default function SessionEnrollmentImportFields({
           <Label htmlFor="import-enrollment" className="cursor-pointer font-medium">
             Import classes, sections & subjects from a previous session
           </Label>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Copies enrollment structure into this session. Students are not copied.
-          </p>
         </div>
       </div>
 

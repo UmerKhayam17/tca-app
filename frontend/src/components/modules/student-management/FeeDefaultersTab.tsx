@@ -135,9 +135,6 @@ export default function FeeDefaultersTab({ caps }: { caps: ModuleActionCaps }) {
             <AlertTriangle className="h-5 w-5 text-destructive" />
             Fee defaulters
           </h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            Active students with unpaid or overdue fee vouchers. Use filters to narrow by class or billing period.
-          </p>
         </div>
         {canExport && (
           <Button
@@ -232,10 +229,6 @@ export default function FeeDefaultersTab({ caps }: { caps: ModuleActionCaps }) {
             </Button>
           )}
         </div>
-        <p className="text-xs text-muted-foreground mt-2">
-          Tip: leave month/year empty to list all students with any outstanding fees. Period filters match
-          unpaid vouchers for that month only.
-        </p>
       </Card>
 
       <PanelSearchBar

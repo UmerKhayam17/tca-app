@@ -514,10 +514,6 @@ function TestsTab({
 
       <div>
         <SectionTitle>Term exam results (published)</SectionTitle>
-        <p className="text-xs text-muted-foreground mb-3">
-          Official multi-subject result cards from Exams → Term exams. Only published results appear here.
-          For bulk entry use Test And Exams management → Enter tests.
-        </p>
         {termResults.length === 0 ? (
           <EmptyBlock message="No published term exam results yet." />
         ) : (

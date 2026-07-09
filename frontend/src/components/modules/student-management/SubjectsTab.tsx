@@ -210,18 +210,6 @@ export default function SubjectsTab({ caps, sessionId }: { caps: ModuleActionCap
             <option key={c._id} value={c._id}>{c.className}</option>
           ))}
         </select>
-        {!classesLoading && classes.length === 0 && (
-          <p className="text-xs text-muted-foreground">
-            No classes yet.{" "}
-            {caps.canCreate ? (
-              <Link to={classesHref} className="text-primary underline-offset-2 hover:underline">
-                Add a class first
-              </Link>
-            ) : (
-              "Ask an administrator to create classes."
-            )}
-          </p>
-        )}
       </div>
 
       <Card className="overflow-hidden">
@@ -242,7 +230,7 @@ export default function SubjectsTab({ caps, sessionId }: { caps: ModuleActionCap
         )}
 
         {!classId ? (
-          <p className="p-8 text-center text-muted-foreground">Select a class above to view and add subjects.</p>
+          <div className="min-h-[8rem]" />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -379,11 +367,6 @@ export default function SubjectsTab({ caps, sessionId }: { caps: ModuleActionCap
                     }}
                     placeholder={selectedClass ? subjectCodePlaceholder(selectedClass.className) : "e.g. MATH-09"}
                   />
-                  {!edit && selectedClass && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Auto-filled from subject name and class; you can edit.
-                    </p>
-                  )}
                 </div>
               </>
             )}

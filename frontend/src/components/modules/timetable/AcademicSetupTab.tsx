@@ -19,7 +19,6 @@ import {
   sessionStatus,
   type AcademicSession,
 } from "@/lib/configApi";
-import { studentManagementHref } from "@/lib/studentManagementMenus";
 import { sessionDetailHref } from "@/lib/systemConfigMenus";
 import PanelSearchBar from "@/components/modules/PanelSearchBar";
 import { matchesPanelSearch } from "@/lib/panelSearch";
@@ -152,17 +151,6 @@ export default function AcademicSetupTab({
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-      <Card className="p-4 border-dashed bg-secondary/10">
-        <p className="text-sm text-muted-foreground">
-          Manage academic years here only. After selecting a session in the bar above, add{" "}
-          <strong className="text-foreground">classes, sections, and students</strong> under{" "}
-          <Link to={studentManagementHref(role, "classes")} className="text-accent underline-offset-2 hover:underline">
-            Enrollment → Classes
-          </Link>
-          . Click a session name or <strong>View detail</strong> for the full summary.
-        </p>
-      </Card>
-
       <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
         <PanelSearchBar
           value={search}
@@ -189,7 +177,6 @@ export default function AcademicSetupTab({
         <Card className="p-4 border-accent/30 bg-accent/5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <div className="text-xs text-muted-foreground mb-1">Selected in session bar</div>
               <div className="font-semibold text-primary">{selected.name}</div>
               <div className="text-sm text-muted-foreground mt-1">
                 {formatDate(selected.startDate)} – {formatDate(selected.endDate)}
@@ -214,7 +201,7 @@ export default function AcademicSetupTab({
           <p className="p-8 text-center text-sm text-muted-foreground">Loading sessions…</p>
         ) : filtered.length === 0 ? (
           <p className="p-8 text-center text-sm text-muted-foreground">
-            {sessions.length === 0 ? "No sessions yet. Click New session to create one." : "No sessions match your search."}
+            {sessions.length === 0 ? "No sessions yet." : "No sessions match your search."}
           </p>
         ) : (
           <div className="overflow-x-auto">

@@ -12,7 +12,6 @@ import {
 } from "@/lib/studentManagementMenus";
 import { useAuth } from "@/hooks/useAuth";
 import SessionBar, { useActiveSessionId } from "@/components/modules/timetable/SessionBar";
-import AcademySetupWorkflow from "@/components/modules/student-management/AcademySetupWorkflow";
 import ClassesTab from "@/components/modules/student-management/ClassesTab";
 import SectionsTab from "@/components/modules/student-management/SectionsTab";
 import SubjectsTab from "@/components/modules/student-management/SubjectsTab";
@@ -41,13 +40,6 @@ const StudentManagementModule = ({
 
   const registrationRoutes = user?.role ? academyStudentRoutes(user.role, "registration") : null;
   const registrationList = registrationRoutes?.list ?? "../registration";
-
-  const setupSection =
-    sectionParam === "registration" || (sectionParam && isAcademyStudentId(sectionParam))
-      ? "registration"
-      : sectionParam === "classes" || (sectionParam && isAcademyClassId(sectionParam))
-        ? "classes"
-        : sectionParam;
 
   const renderBody = () => {
     if (sectionParam === "fees" || sectionParam === "fee-defaulters") {
@@ -115,7 +107,6 @@ const StudentManagementModule = ({
   return (
     <div>
       <SessionBar sessionId={sessionId} onSessionChange={setSessionId} />
-      <AcademySetupWorkflow role={role} sessionId={sessionId} currentSection={setupSection} />
       {renderBody()}
     </div>
   );

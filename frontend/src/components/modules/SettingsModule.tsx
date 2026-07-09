@@ -39,9 +39,6 @@ const SettingsModule = () => {
       {modulePerms.length > 0 && (
         <Card className="p-4 space-y-3">
           <div className="font-semibold text-primary">Module permissions</div>
-          <p className="text-xs text-muted-foreground">
-            Your account has access to the following modules with these actions:
-          </p>
           <div className="space-y-2">
             {modulePerms.map(([moduleName, actions]) => (
               <div key={moduleName} className="text-sm bg-muted/40 rounded p-3">
@@ -59,10 +56,6 @@ const SettingsModule = () => {
 
       <Card className="p-4 space-y-2">
         <div className="font-semibold text-primary">Access & permissions</div>
-        <p className="text-xs text-muted-foreground">
-          Module access is controlled by your account permissions on the server. Admins can assign
-          per-user access on the Permissions page.
-        </p>
         {(role === "admin" || user?.modulePermissions) && (
           <Button variant="outline" size="sm" asChild>
             <Link to={moduleHref(role, "permissions")}>Open Permissions</Link>

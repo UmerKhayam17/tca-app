@@ -7,7 +7,6 @@ import {
 } from "@/lib/studentManagementMenus";
 import { useAuth } from "@/hooks/useAuth";
 import SessionBar, { useActiveSessionId } from "@/components/modules/timetable/SessionBar";
-import AcademySetupWorkflow from "@/components/modules/student-management/AcademySetupWorkflow";
 import RegistrationTab from "@/components/modules/student-management/RegistrationTab";
 import RegisterStudentPage from "@/components/modules/student-management/RegisterStudentPage";
 import StudentDetailPage from "@/components/modules/student-management/StudentDetailPage";
@@ -63,7 +62,6 @@ const StudentsRecordsModule = ({
   return (
     <div>
       <SessionBar sessionId={sessionId} onSessionChange={setSessionId} />
-      <AcademySetupWorkflow role={role} sessionId={sessionId} currentSection="registration" />
       {body}
     </div>
   );

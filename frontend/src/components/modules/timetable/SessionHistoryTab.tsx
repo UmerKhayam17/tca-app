@@ -123,10 +123,6 @@ export default function SessionHistoryTab({ caps }: { caps: ModuleActionCaps }) 
         <History className="h-8 w-8 text-primary shrink-0 mt-1" />
         <div>
           <h2 className="font-semibold text-lg text-primary">Session history</h2>
-          <p className="text-sm text-muted-foreground max-w-2xl">
-            Sessions are never deleted. Complete or archive past years, then clone class structure into a new session.
-            Timetables use versions — old data stays for reports.
-          </p>
         </div>
       </div>
 
@@ -173,9 +169,7 @@ export default function SessionHistoryTab({ caps }: { caps: ModuleActionCaps }) 
         </Card>
 
         <Card className="lg:col-span-2 p-4">
-          {!selectedId && (
-            <p className="text-sm text-muted-foreground py-8 text-center">Select a session to view history</p>
-          )}
+          {!selectedId && <div className="min-h-[8rem]" />}
           {selectedId && isLoading && <p className="text-sm text-muted-foreground">Loading history…</p>}
           {selectedId && history && (
             <div className="space-y-4">
@@ -307,9 +301,6 @@ export default function SessionHistoryTab({ caps }: { caps: ModuleActionCaps }) 
           <DialogHeader>
             <DialogTitle>Clone structure to new session</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Copies classes, sections, subjects, teachers, periods & rooms. Does not copy timetables or students.
-          </p>
           <div className="space-y-3 py-2">
             <div>
               <Label>New session name</Label>

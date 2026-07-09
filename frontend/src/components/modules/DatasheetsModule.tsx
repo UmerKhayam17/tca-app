@@ -188,7 +188,6 @@ const DatasheetsModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Module
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
             <h2 className="font-display text-xl font-bold text-primary">Datasheets</h2>
-            <p className="text-sm text-muted-foreground">Shared spreadsheets stored on the server.</p>
           </div>
           {canCreate && (
             <Button onClick={() => setCreating(true)} className="gap-2">
@@ -205,7 +204,7 @@ const DatasheetsModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Module
         {!listLoading && sheets.length === 0 && (
           <Card className="p-10 text-center text-muted-foreground">
             <FileSpreadsheet className="h-10 w-10 mx-auto mb-3 text-accent" />
-            No datasheets yet. Click &quot;New Datasheet&quot; to get started.
+            No datasheets yet.
           </Card>
         )}
         {!listLoading && sheets.length > 0 && sheetsFiltered.length === 0 && (
@@ -471,7 +470,7 @@ const DatasheetsModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Module
               {active.rows.length === 0 && (
                 <tr>
                   <td colSpan={active.columns.length + 2} className="text-center text-muted-foreground py-6">
-                    No rows. Click &quot;Row&quot; to add one.
+                    No rows.
                   </td>
                 </tr>
               )}
@@ -479,12 +478,6 @@ const DatasheetsModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Module
           </table>
         </div>
       </Card>
-
-      {canEditCells && (
-        <p className="text-xs text-muted-foreground flex items-center gap-1">
-          <Save className="h-3 w-3" /> Changes auto-save to the server.
-        </p>
-      )}
     </div>
   );
 };

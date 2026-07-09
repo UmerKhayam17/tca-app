@@ -109,11 +109,6 @@ export default function RegistrationTab({
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-4 space-y-3">
-      {!canRegister && caps.canCreate && (
-        <p className="text-sm text-muted-foreground rounded-lg border border-dashed p-3">
-          Complete setup first: active session → class → section. Then you can register students into a section.
-        </p>
-      )}
       <div
         className={
           showHeading

@@ -130,16 +130,6 @@ export default function SectionsTab({ caps, sessionId }: { caps: ModuleActionCap
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-4">
-      {!sessionId && (
-        <p className="text-sm text-muted-foreground rounded-lg border border-dashed p-4">
-          Select an academic session above before creating sections.
-        </p>
-      )}
-      {sessionId && classes.length === 0 && (
-        <p className="text-sm text-muted-foreground rounded-lg border border-dashed p-4">
-          Create a class for this session first, then add sections here.
-        </p>
-      )}
       <div className="max-w-sm space-y-1">
         <Label>Select class</Label>
         <select
@@ -173,7 +163,7 @@ export default function SectionsTab({ caps, sessionId }: { caps: ModuleActionCap
         )}
 
         {!classId ? (
-          <p className="p-8 text-center text-muted-foreground">Select a class above to manage sections.</p>
+          <div className="min-h-[8rem]" />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

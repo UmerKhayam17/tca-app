@@ -427,7 +427,6 @@ export default function RegisterStudentPage({
   if (!isEdit && !sessionId) {
     return (
       <div className="w-full px-4 sm:px-6 lg:px-8 py-12 space-y-3 text-center">
-        <p className="text-muted-foreground">Select an active academic session before registering a student.</p>
         <Button variant="outline" asChild>
           <Link to={listHref}>{listBackLabel}</Link>
         </Button>
@@ -447,11 +446,6 @@ export default function RegisterStudentPage({
           <h2 className="font-display text-xl sm:text-2xl font-semibold text-primary">
             {isEdit ? "Edit student" : "Register new student"}
           </h2>
-          <p className="text-sm text-muted-foreground">
-            {isEdit
-              ? `Update profile and enrollment for ${existingStudent?.studentId || "student"}.`
-              : "Complete the admission form, select class and subjects, then enroll."}
-          </p>
         </div>
       </div>
 
@@ -487,10 +481,6 @@ export default function RegisterStudentPage({
                 </button>
               ) : null}
             </div>
-            <p className="text-xs text-muted-foreground flex-1 pt-2">
-              Student photo is optional. JPEG, PNG, GIF, or WebP up to 5 MB. The image is stored on the server when
-              you save the registration.
-            </p>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <FormField label="Student name" required>
@@ -823,11 +813,6 @@ export default function RegisterStudentPage({
                 />
                 <div>
                   <span className="font-medium text-sm">Full package</span>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {hasChoiceGroups
-                      ? "Standard subjects included at full package fee. Still pick one subject from each group below."
-                      : "Enroll in all subjects for this class at the full package fee."}
-                  </p>
                 </div>
               </label>
 
@@ -856,9 +841,6 @@ export default function RegisterStudentPage({
                   {enrollmentLayout.choiceGroups.map((group) => (
                     <div key={group._id} className="space-y-2 rounded-md border bg-background p-3">
                       <p className="text-sm font-medium">{group.groupName}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Select only one subject from this group.
-                      </p>
                       <div className="grid sm:grid-cols-2 gap-2">
                         {group.subjects.map((s) => {
                           const selected = choiceSelections[group._id] === s._id;
@@ -903,9 +885,6 @@ export default function RegisterStudentPage({
                       {enrollmentLayout.coreSubjects.length > 0 && (
                         <div className="space-y-2">
                           <p className="text-sm font-medium">Subjects to enroll</p>
-                          <p className="text-xs text-muted-foreground">
-                            Select the subjects this student will take (outside of choice groups above).
-                          </p>
                           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
                             {enrollmentLayout.coreSubjects.map((s) => {
                               const selected = form.selectedSubjects.includes(s._id);
@@ -992,9 +971,6 @@ export default function RegisterStudentPage({
                 value={form.monthlyFeeDiscount}
                 onChange={(e) => setForm((f) => ({ ...f, monthlyFeeDiscount: e.target.value }))}
               />
-              <p className="text-xs text-muted-foreground">
-                One-time discount on subject/monthly fee for the first payment.
-              </p>
             </FormField>
             <FormField label="Admission fee discount (PKR)">
               <IconInput
@@ -1006,9 +982,6 @@ export default function RegisterStudentPage({
                 value={form.admissionFeeDiscount}
                 onChange={(e) => setForm((f) => ({ ...f, admissionFeeDiscount: e.target.value }))}
               />
-              <p className="text-xs text-muted-foreground">
-                One-time discount on admission fee for the first payment.
-              </p>
             </FormField>
           </div>
 

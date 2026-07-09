@@ -213,11 +213,6 @@ export default function SessionDetailPage({
                 <PlayCircle className="h-4 w-4" /> Reactivate session
               </Button>
             )}
-            {status === "archived" && (
-              <p className="text-xs text-muted-foreground max-w-xs">
-                Archived sessions cannot be reactivated. Create a new session instead.
-              </p>
-            )}
           </div>
         )}
       </div>

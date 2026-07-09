@@ -177,7 +177,6 @@ const Dashboard = ({
             <Card key={s.label} className="p-4 sm:p-5 hover:shadow-elegant transition-smooth">
               <div className="text-xs sm:text-sm text-muted-foreground">{s.label}</div>
               <div className="font-display text-2xl sm:text-3xl font-bold text-primary mt-2 break-words">{s.value}</div>
-              <div className="text-[11px] sm:text-xs text-accent mt-1">{s.hint}</div>
             </Card>
           ))}
         </div>
@@ -194,7 +193,6 @@ const Dashboard = ({
                     </div>
                     <div className="min-w-0">
                       <div className="font-semibold text-primary">{m.label}</div>
-                      <div className="text-sm text-muted-foreground mt-1">{m.desc}</div>
                     </div>
                   </div>
                 </Card>

@@ -240,9 +240,6 @@ export default function ClassTestMarksPage({
       />
 
       <Card className="overflow-hidden">
-        <p className="px-4 py-3 text-sm text-muted-foreground border-b bg-muted/20">
-          Enter marks and optionally upload or take a photo of each student's test paper. Leave obtained blank to skip a student.
-        </p>
         {rows.length === 0 ? (
           <p className="p-8 text-sm text-center text-muted-foreground">
             No students enrolled in this test&apos;s subject.

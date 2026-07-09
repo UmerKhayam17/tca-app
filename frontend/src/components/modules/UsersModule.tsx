@@ -443,18 +443,6 @@ const UsersModule = ({
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-      <Card className="p-4 border-dashed">
-        <div className="text-sm font-semibold text-primary mb-1">
-          {scope === "staff" ? "Staff management" : "Users management"}
-        </div>
-        <p className="text-xs text-muted-foreground">
-          {scope === "staff"
-            ? "Manage only teachers and accountants: contact details, login, salary, profile photo (upload), status, and per-module actions."
-            : "Manage all users (including staff and parents): contact details, login, status, and per-module actions."}
-          {" "}Data loads via React Query and refreshes live when anyone updates users.
-        </p>
-      </Card>
-
       <PanelToolbar
         search={search}
         onSearchChange={setSearch}
@@ -555,9 +543,6 @@ const UsersModule = ({
                             ))}
                           </select>
                         )}
-                        <p className="text-xs text-muted-foreground mt-2">
-                          Only selected children&apos;s progress will be visible to this parent.
-                        </p>
                       </div>
                     </div>
                   )}

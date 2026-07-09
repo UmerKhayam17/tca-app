@@ -282,9 +282,7 @@ export default function TermExamsPanel({ caps }: { caps: ModuleActionCaps }) {
 
         <div className="min-w-0">
           {!selectedExamId && (
-            <Card className="p-8 text-center text-muted-foreground text-sm">
-              Select a term exam to enter marks or view results.
-            </Card>
+            <Card className="p-8 text-center text-muted-foreground text-sm" />
           )}
           {selectedExam && (
             <Card className="overflow-hidden">
@@ -432,9 +430,6 @@ export default function TermExamsPanel({ caps }: { caps: ModuleActionCaps }) {
                     </div>
                     </>
                   )}
-                  <p className="text-xs text-muted-foreground px-4 py-2 border-t">
-                    Draft marks are not visible to parents until you publish.
-                  </p>
                 </TabsContent>
 
                 <TabsContent value="results" className="m-0">

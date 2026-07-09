@@ -108,39 +108,43 @@ async function notifyByAccess(criteria, notification, excludeUserId) {
 async function notifyStudentIntake(student, actorId) {
   const studentId = String(student._id);
   const title = 'New admission intake';
-  const body = `${student.studentName} is pending fee confirmation.`;
+  const notes = (student.intakeNotes || '').trim();
+  const body = notes
+    ? `${student.studentName} is pending fee confirmation. ${notes}`
+    : `${student.studentName} is pending fee confirmation.`;
   const path = `/students/${studentId}/activate`;
 
-  await notifyByAccess(
-    {
-      roles: ['accountant', 'admin'],
-      permissions: ['activate_student', 'manage_academy_fees', 'manage_academy_students'],
-      moduleKey: 'student',
-      moduleAction: 'edit',
-    },
-    {
-      type: 'student_intake',
-      title,
-      body,
-      path,
-      moduleKey: 'student',
-      resource: 'students',
-      resourceId: studentId,
-      meta: {
-        studentName: student.studentName,
-        rollNumber: student.rollNumber,
-        registrationNumber: student.registrationNumber,
-        status: student.status,
+  try {
+    await notifyByAccess(
+      {
+        roles: ['accountant', 'admin'],
+        permissions: ['activate_student', 'manage_academy_fees', 'manage_academy_students'],
+        moduleKey: 'student',
+        moduleAction: 'edit',
       },
-    },
-    actorId
-  );
+      {
+        type: 'student_intake',
+        title,
+        body,
+        path,
+        moduleKey: 'student',
+        resource: 'students',
+        resourceId: studentId,
+        meta: {
+          studentName: student.studentName,
+          rollNumber: student.rollNumber,
+          registrationNumber: student.registrationNumber,
+          intakeNotes: notes,
+          status: student.status,
+        },
+      },
+      actorId
+    );
+  } catch (err) {
+    console.error('notifyStudentIntake notifications failed:', err.message);
+  }
 
   emitModuleSync('studentManagement', 'students', 'created', {
-    id: studentId,
-    status: student.status,
-  });
-  emitModuleSync('student', 'students', 'created', {
     id: studentId,
     status: student.status,
   });

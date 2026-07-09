@@ -22,22 +22,14 @@ const list = catchAsync(async (req, res) => {
 });
 
 const markRead = catchAsync(async (req, res) => {
-  const doc = await Notification.findOne({ _id: req.params.id, userId: req.user._id });
+  const doc = await Notification.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
   if (!doc) throw new ApiError(404, 'Notification not found');
-  if (!doc.read) {
-    doc.read = true;
-    doc.readAt = new Date();
-    await doc.save();
-  }
-  res.json({ success: true, data: formatNotification(doc) });
+  res.json({ success: true, data: { deleted: true, _id: String(doc._id) } });
 });
 
 const markAllRead = catchAsync(async (req, res) => {
-  await Notification.updateMany(
-    { userId: req.user._id, read: false },
-    { $set: { read: true, readAt: new Date() } }
-  );
-  res.json({ success: true, data: { read: true } });
+  const result = await Notification.deleteMany({ userId: req.user._id, read: false });
+  res.json({ success: true, data: { deleted: result.deletedCount } });
 });
 
 module.exports = { list, markRead, markAllRead };

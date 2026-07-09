@@ -36,6 +36,8 @@ const academyStudentSchema = new mongoose.Schema(
     postalAddress: { type: String, trim: true },
     contactPhoneRes: { type: String, trim: true },
     phone: { type: String, trim: true, default: '' },
+    /** Optional notes from admission office at provisional intake. */
+    intakeNotes: { type: String, trim: true, default: '' },
     permanentAddress: { type: String, trim: true },
     currentSchoolCollege: { type: String, trim: true },
     academicHistory: [academicRecordSchema],

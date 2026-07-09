@@ -618,6 +618,8 @@ async function registerProvisionalStudent(payload, userId) {
   const phone = (payload.phone || '').trim();
   if (!phone) throw new ApiError(400, 'Phone number is required');
 
+  const intakeNotes = (payload.description || payload.intakeNotes || '').trim();
+
   const student = await AcademyStudent.create({
     registrationNumber,
     rollNumber,
@@ -625,6 +627,7 @@ async function registerProvisionalStudent(payload, userId) {
     fatherName: payload.fatherName.trim(),
     phone,
     dateOfBirth: payload.dateOfBirth ? new Date(payload.dateOfBirth) : undefined,
+    intakeNotes,
     classId: payload.classId,
     status: 'pending_fee',
     createdBy: userId,

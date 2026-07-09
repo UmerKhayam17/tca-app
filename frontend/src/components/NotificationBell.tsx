@@ -18,7 +18,6 @@ import {
   notificationHref,
   type AppNotification,
 } from "@/lib/notificationsApi";
-import { cn } from "@/lib/utils";
 
 function formatWhen(iso: string) {
   const d = new Date(iso);
@@ -41,13 +40,13 @@ export default function NotificationBell() {
 
   const { data, refetch } = useQuery({
     queryKey: ["notifications"],
-    queryFn: () => fetchNotifications({ limit: 25 }),
+    queryFn: () => fetchNotifications({ limit: 25, unread: true }),
     enabled: Boolean(user),
     refetchInterval: 60_000,
   });
 
   const items = data?.items ?? [];
-  const unreadCount = Math.max(data?.unreadCount ?? 0, liveUnread);
+  const unreadCount = Math.max(items.length, data?.unreadCount ?? 0, liveUnread);
 
   useEffect(() => {
     if (!user) return;
@@ -79,29 +78,49 @@ export default function NotificationBell() {
 
   const markReadMut = useMutation({
     mutationFn: markNotificationRead,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
+    onSuccess: (_data, id) => {
+      qc.setQueryData<{ items: AppNotification[]; unreadCount: number }>(
+        ["notifications"],
+        (prev) => {
+          if (!prev) return prev;
+          const items = prev.items.filter((n) => n._id !== id);
+          return { items, unreadCount: items.length };
+        }
+      );
+    },
   });
 
   const markAllMut = useMutation({
     mutationFn: markAllNotificationsRead,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
+    onSuccess: () => {
+      qc.setQueryData<{ items: AppNotification[]; unreadCount: number }>(
+        ["notifications"],
+        { items: [], unreadCount: 0 }
+      );
+    },
   });
 
   const handleClick = useCallback(
     async (n: AppNotification) => {
-      if (!n.read) {
-        try {
-          await markReadMut.mutateAsync(n._id);
-        } catch {
-          /* ignore */
+      qc.setQueryData<{ items: AppNotification[]; unreadCount: number }>(
+        ["notifications"],
+        (prev) => {
+          if (!prev) return prev;
+          const items = prev.items.filter((x) => x._id !== n._id);
+          return { items, unreadCount: items.length };
         }
+      );
+      try {
+        await markReadMut.mutateAsync(n._id);
+      } catch {
+        void refetch();
       }
       setOpen(false);
       if (n.path && user?.role) {
         navigate(notificationHref(user.role, n.path));
       }
     },
-    [markReadMut, navigate, user?.role]
+    [markReadMut, navigate, qc, refetch, user?.role]
   );
 
   return (
@@ -133,16 +152,13 @@ export default function NotificationBell() {
         </div>
         <div className="max-h-80 overflow-y-auto">
           {items.length === 0 && (
-            <p className="p-4 text-sm text-muted-foreground text-center">No notifications yet.</p>
+            <p className="p-4 text-sm text-muted-foreground text-center">No new notifications.</p>
           )}
           {items.map((n) => (
             <button
               key={n._id}
               type="button"
-              className={cn(
-                "w-full text-left px-3 py-2.5 border-b last:border-0 hover:bg-muted/50 transition-colors",
-                !n.read && "bg-primary/5"
-              )}
+              className="w-full text-left px-3 py-2.5 border-b last:border-0 hover:bg-muted/50 transition-colors bg-primary/5"
               onClick={() => void handleClick(n)}
             >
               <p className="text-sm font-medium leading-snug">{n.title}</p>

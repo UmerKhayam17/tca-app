@@ -162,6 +162,7 @@ const academyStudentProvisional = Joi.object({
   phone: Joi.string().trim().required(),
   dateOfBirth: Joi.date().required(),
   classId: objectId.required(),
+  description: Joi.string().allow('').trim().max(2000),
 });
 
 const academyStudentActivate = Joi.object({

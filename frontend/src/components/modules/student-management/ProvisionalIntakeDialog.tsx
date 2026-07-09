@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import type { ModuleActionCaps } from "@/lib/permissions";
 import { fetchAcademyClasses, registerProvisionalStudent } from "@/lib/studentManagementApi";
@@ -22,6 +23,7 @@ const emptyForm = {
   phone: "",
   dateOfBirth: "",
   classId: "",
+  description: "",
 };
 
 export default function ProvisionalIntakeDialog({
@@ -57,6 +59,7 @@ export default function ProvisionalIntakeDialog({
         phone: form.phone.trim(),
         dateOfBirth: form.dateOfBirth,
         classId: form.classId,
+        description: form.description.trim() || undefined,
       }),
     onSuccess: (student) => {
       qc.invalidateQueries({ queryKey: ["academy-students"] });
@@ -141,6 +144,16 @@ export default function ProvisionalIntakeDialog({
                 <option key={c._id} value={c._id}>{c.className}</option>
               ))}
             </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="intake-description">Description</Label>
+            <Textarea
+              id="intake-description"
+              rows={3}
+              placeholder="Optional notes for accounts (e.g. sibling discount, special requests)"
+              value={form.description}
+              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+            />
           </div>
         </div>
 

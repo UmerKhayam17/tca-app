@@ -6,7 +6,9 @@ const SM = 'studentManagement';
 module.exports = {
   studentCreated: (student, actorId) => {
     if (student?.status === 'pending_fee') {
-      void notifyStudentIntake(student, actorId);
+      void notifyStudentIntake(student, actorId).catch((err) => {
+        console.error('notifyStudentIntake failed:', err.message);
+      });
     } else {
       syncStudentCrud('created', student);
     }

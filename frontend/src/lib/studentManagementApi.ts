@@ -89,6 +89,7 @@ export interface AcademyStudentProvisionalBody {
   phone: string;
   dateOfBirth: string;
   classId: string;
+  description?: string;
 }
 
 export interface AcademyStudentRegisterBody {
@@ -160,6 +161,7 @@ export interface AcademyStudent {
   postalAddress?: string;
   contactPhoneRes?: string;
   phone?: string;
+  intakeNotes?: string;
   permanentAddress?: string;
   currentSchoolCollege?: string;
   academicHistory?: AcademicRecord[];

@@ -590,6 +590,11 @@ export default function RegisterStudentPage({
               )}
             </p>
           )}
+          {isActivate && existingStudent?.intakeNotes?.trim() && (
+            <p className="text-sm text-muted-foreground max-w-2xl">
+              Intake notes: <span className="text-foreground">{existingStudent.intakeNotes.trim()}</span>
+            </p>
+          )}
         </div>
       </div>
       )}

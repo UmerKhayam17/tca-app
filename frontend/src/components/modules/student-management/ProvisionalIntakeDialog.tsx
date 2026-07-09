@@ -77,9 +77,17 @@ export default function ProvisionalIntakeDialog({
     && form.dateOfBirth
     && form.classId;
 
+  const handleOpenChange = (next: boolean) => {
+    if (!next) setForm(emptyForm);
+    onOpenChange(next);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent
+        className="sm:max-w-md cms-portal font-sans"
+        onClose={() => handleOpenChange(false)}
+      >
         <DialogHeader>
           <DialogTitle>Admission intake</DialogTitle>
         </DialogHeader>
@@ -124,7 +132,7 @@ export default function ProvisionalIntakeDialog({
             <Label htmlFor="intake-class">Class</Label>
             <select
               id="intake-class"
-              className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+              className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm font-sans"
               value={form.classId}
               onChange={(e) => setForm((f) => ({ ...f, classId: e.target.value }))}
             >
@@ -137,7 +145,7 @@ export default function ProvisionalIntakeDialog({
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
             Cancel
           </Button>
           <Button

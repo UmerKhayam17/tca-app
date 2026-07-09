@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Navigate, Outlet } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import PanelSidebar from "./PanelSidebar";
@@ -8,6 +9,11 @@ import { LogOut } from "lucide-react";
 
 const PanelLayout = () => {
   const { user, loading } = useAuth();
+
+  useEffect(() => {
+    document.body.classList.add("cms-active");
+    return () => document.body.classList.remove("cms-active");
+  }, []);
 
   if (loading) {
     return (

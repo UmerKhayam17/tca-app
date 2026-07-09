@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
@@ -61,6 +61,7 @@ export default function RegistrationTab({
   const [statusFilter, setStatusFilter] = useState<"" | AcademyStudentStatus>("");
   const [page, setPage] = useState(1);
   const [intakeOpen, setIntakeOpen] = useState(false);
+  const intakeParamHandled = useRef(false);
 
   const routes =
     routesProp ?? (user?.role ? academyStudentRoutes(user.role, "registration") : null);
@@ -68,7 +69,9 @@ export default function RegistrationTab({
   const colSpan = hasActions ? 9 : 8;
 
   useEffect(() => {
+    if (intakeParamHandled.current) return;
     if (searchParams.get("intake") === "1") {
+      intakeParamHandled.current = true;
       setIntakeOpen(true);
       setSearchParams({}, { replace: true });
     }

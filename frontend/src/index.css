@@ -79,12 +79,46 @@
   }
 
   .cms-root,
+  .cms-portal,
+  body.cms-active [data-radix-popper-content-wrapper],
+  body.cms-active [role="dialog"] {
+    @apply font-sans;
+  }
+
   .cms-root h1,
   .cms-root h2,
   .cms-root h3,
   .cms-root h4,
   .cms-root h5,
-  .cms-root .font-display {
+  .cms-root .font-display,
+  .cms-portal h1,
+  .cms-portal h2,
+  .cms-portal h3,
+  .cms-portal h4,
+  .cms-portal h5,
+  .cms-portal .font-display,
+  body.cms-active [role="dialog"] .font-display {
+    @apply font-sans;
+  }
+
+  .cms-root input,
+  .cms-root select,
+  .cms-root textarea,
+  .cms-root button,
+  .cms-root label,
+  .cms-root option,
+  .cms-portal input,
+  .cms-portal select,
+  .cms-portal textarea,
+  .cms-portal button,
+  .cms-portal label,
+  .cms-portal option,
+  body.cms-active [role="dialog"] input,
+  body.cms-active [role="dialog"] select,
+  body.cms-active [role="dialog"] textarea,
+  body.cms-active [role="dialog"] button,
+  body.cms-active [role="dialog"] label,
+  body.cms-active [role="dialog"] option {
     @apply font-sans;
   }
 }

@@ -146,7 +146,7 @@ function IconSelect({
       <Icon className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <select
         className={cn(
-          "flex h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+          "flex h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 py-2 text-sm font-sans ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
           className,
         )}
         {...props}
@@ -1181,7 +1181,7 @@ export default function RegisterStudentPage({
             <div className="grid sm:grid-cols-2 gap-4">
               <FormField label="Payment method">
                 <select
-                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm font-sans"
                   value={paymentMethod}
                   onChange={(e) => setPaymentMethod(e.target.value as typeof paymentMethod)}
                 >

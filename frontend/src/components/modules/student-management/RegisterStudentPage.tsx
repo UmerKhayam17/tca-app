@@ -1215,18 +1215,7 @@ export default function RegisterStudentPage({
           </section>
         )}
 
-        <div className="flex flex-col gap-3 pt-6 border-t">
-          {!canSubmit && submitBlockers.length > 0 && (
-            <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-              <p className="font-medium">Complete these before activating:</p>
-              <ul className="mt-1 list-disc pl-5 space-y-0.5">
-                {submitBlockers.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
+        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-6 border-t">
           <Button variant="outline" onClick={handleClose}>
             Cancel
           </Button>
@@ -1243,7 +1232,6 @@ export default function RegisterStudentPage({
                   ? "Save changes"
                   : "Register & enroll"}
           </Button>
-          </div>
         </div>
       </div>
     </div>

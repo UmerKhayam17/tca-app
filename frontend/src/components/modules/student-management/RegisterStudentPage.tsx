@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,6 +13,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -19,6 +21,7 @@ import {
   Briefcase,
   Building2,
   Calendar,
+  CircleCheck,
   GraduationCap,
   Globe,
   Heart,
@@ -70,6 +73,7 @@ import {
   updateAcademyStudent,
   uploadAcademyStudentPhoto,
   type AcademyStudentActivateResult,
+  type AcademyStudent,
   type EnrollmentSubjectLayout,
   type FeePreview,
 } from "@/lib/studentManagementApi";
@@ -94,8 +98,78 @@ function deriveChoiceSelections(
   return map;
 }
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <h3 className="text-sm font-semibold text-primary border-b pb-1">{children}</h3>;
+function SectionTitle({
+  children,
+  description,
+}: {
+  children: React.ReactNode;
+  description?: string;
+}) {
+  return (
+    <div className="space-y-1 border-b border-border/60 pb-3">
+      <h3 className="text-sm font-semibold tracking-tight text-primary">{children}</h3>
+      {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
+    </div>
+  );
+}
+
+function ActivateSummaryBanner({ student }: { student: AcademyStudent }) {
+  const className =
+    typeof student.classId === "object" && student.classId ? student.classId.className : undefined;
+
+  return (
+    <div className="rounded-xl border bg-gradient-to-br from-primary/8 via-background to-accent/10 p-4 sm:p-5 shadow-sm">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-1 min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-primary">
+            Pending admission
+          </p>
+          <h3 className="text-lg font-semibold text-foreground truncate">{student.studentName}</h3>
+          <p className="text-sm text-muted-foreground">{student.fatherName}</p>
+          {student.phone ? (
+            <p className="text-sm text-muted-foreground">{student.phone}</p>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap gap-2 shrink-0">
+          {student.rollNumber ? (
+            <Badge variant="secondary" className="font-normal">
+              Temp roll {student.rollNumber}
+            </Badge>
+          ) : null}
+          {student.registrationNumber ? (
+            <Badge variant="outline" className="font-normal">
+              Ref {student.registrationNumber}
+            </Badge>
+          ) : null}
+          {className ? (
+            <Badge variant="outline" className="font-normal">
+              {className}
+            </Badge>
+          ) : null}
+          {student.createdAt ? (
+            <Badge variant="outline" className="font-normal">
+              Intake {formatDate(student.createdAt)}
+            </Badge>
+          ) : null}
+        </div>
+      </div>
+      {student.intakeNotes?.trim() ? (
+        <div className="mt-4 rounded-lg border bg-background/80 px-3 py-2.5 text-sm">
+          <p className="text-xs font-medium text-muted-foreground mb-1">Intake notes</p>
+          <p className="text-foreground">{student.intakeNotes.trim()}</p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function sectionShellClass(isActivate: boolean, last = false) {
+  return cn(
+    "space-y-4",
+    isActivate
+      ? "rounded-xl border bg-card p-5 sm:p-6 shadow-sm"
+      : cn("pb-10", !last && "border-b"),
+  );
 }
 
 function FormField({
@@ -203,9 +277,6 @@ export default function RegisterStudentPage({
   const [choiceSelections, setChoiceSelections] = useState<Record<string, string>>({});
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [studentPassword, setStudentPassword] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<"cash" | "bank_transfer" | "online" | "other">("cash");
-  const [receiptNumber, setReceiptNumber] = useState("");
   const [credentials, setCredentials] = useState<AcademyStudentActivateResult["credentials"] | null>(null);
   const [fieldTouched, setFieldTouched] = useState({
     fatherGuardianCnic: false,
@@ -384,13 +455,7 @@ export default function RegisterStudentPage({
 
       const body = buildStudentPayload(form);
       if (isActivate && studentId) {
-        const result = await activateAcademyStudent(studentId, {
-          ...body,
-          parentPassword: form.parentPassword.trim(),
-          studentPassword: studentPassword.trim() || undefined,
-          paymentMethod,
-          receiptNumber: receiptNumber.trim() || undefined,
-        });
+        const result = await activateAcademyStudent(studentId, body);
         if (photoFile) {
           await uploadAcademyStudentPhoto(result.student._id, photoFile);
         }
@@ -526,7 +591,7 @@ export default function RegisterStudentPage({
         missing.push("Subjects or full package (section 6)");
       }
     }
-    if (isActivate || !isEdit) {
+    if (!isEdit && !isActivate) {
       if (!form.guardianEmail.trim()) missing.push("Guardian email (section 2)");
       if (form.parentPassword.trim().length < 8) {
         missing.push("Parent login password — min 8 characters (section 2)");
@@ -546,11 +611,9 @@ export default function RegisterStudentPage({
     && form.classId
     && form.sectionId
     && subjectSelectionValid
-    && (isActivate
-      ? Boolean(form.guardianEmail.trim()) && form.parentPassword.trim().length >= 8
-      : !isEdit
-        ? Boolean(form.guardianEmail.trim()) && form.parentPassword.trim().length >= 8
-        : true);
+    && (isEdit || isActivate
+      ? true
+      : Boolean(form.guardianEmail.trim()) && form.parentPassword.trim().length >= 8);
 
   const selectedClassName = classes.find((c) => c._id === form.classId)?.className;
 
@@ -591,7 +654,7 @@ export default function RegisterStudentPage({
   }
 
   const formBody = (
-    <div className={asDialog ? "space-y-8" : "space-y-10"}>
+    <div className={cn(asDialog ? "space-y-6" : "space-y-10")}>
       {!asDialog && (
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b pb-6">
         <div className="space-y-1">
@@ -607,40 +670,27 @@ export default function RegisterStudentPage({
                 ? "Edit student"
                 : "Register new student"}
           </h2>
-          {isActivate && (existingStudent?.rollNumber || existingStudent?.registrationNumber || existingStudent?.createdAt) && (
+          {isActivate && !existingStudent && (
             <p className="text-sm text-muted-foreground">
-              {existingStudent.rollNumber && (
-                <>
-                  Temp roll: <span className="font-medium text-foreground">{existingStudent.rollNumber}</span>
-                  {existingStudent.registrationNumber || existingStudent.createdAt ? " · " : null}
-                </>
-              )}
-              {existingStudent.registrationNumber && (
-                <>
-                  Ref: <span className="font-medium text-foreground">{existingStudent.registrationNumber}</span>
-                  {existingStudent.createdAt ? " · " : null}
-                </>
-              )}
-              {existingStudent.createdAt && (
-                <>
-                  Created: <span className="font-medium text-foreground">{formatDate(existingStudent.createdAt)}</span>
-                </>
-              )}
-            </p>
-          )}
-          {isActivate && existingStudent?.intakeNotes?.trim() && (
-            <p className="text-sm text-muted-foreground max-w-2xl">
-              Intake notes: <span className="text-foreground">{existingStudent.intakeNotes.trim()}</span>
+              Confirm student details, assign section and subjects, then activate.
             </p>
           )}
         </div>
       </div>
       )}
 
-      <div className="space-y-10">
-        <section className="space-y-4 pb-10 border-b">
-          <SectionTitle>1. Student information</SectionTitle>
-          <div className="flex flex-col sm:flex-row gap-6 items-start pb-2">
+      {isActivate && existingStudent ? (
+        <ActivateSummaryBanner student={existingStudent} />
+      ) : null}
+
+      <div className={cn(isActivate ? "space-y-6" : "space-y-10")}>
+        <section className={sectionShellClass(isActivate)}>
+          <SectionTitle
+            description={isActivate ? "Verify and complete the student profile before activation." : undefined}
+          >
+            1. Student information
+          </SectionTitle>
+          <div className="flex justify-center pb-2">
             <div className="flex flex-col items-center gap-2 shrink-0">
               <div className="h-28 w-28 rounded-full border-2 border-dashed border-border bg-muted flex items-center justify-center overflow-hidden">
                 {photoPreview ? (
@@ -739,8 +789,12 @@ export default function RegisterStudentPage({
           </div>
         </section>
 
-        <section className="space-y-4 pb-10 border-b">
-          <SectionTitle>2. Guardian information</SectionTitle>
+        <section className={sectionShellClass(isActivate)}>
+          <SectionTitle
+            description={isActivate ? "Guardian contact details only — parent portal logins are created from Users." : undefined}
+          >
+            2. Guardian information
+          </SectionTitle>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <FormField label="Guardian name">
               <IconInput
@@ -760,7 +814,6 @@ export default function RegisterStudentPage({
             </FormField>
             <FormField
               label="Father / Guardian CNIC no."
-              className="sm:col-span-2 lg:col-span-3"
               error={cnicError}
             >
               <IconInput
@@ -791,7 +844,7 @@ export default function RegisterStudentPage({
                 onChange={(e) => setForm((f) => ({ ...f, guardianWorkAddress: e.target.value }))}
               />
             </FormField>
-            <FormField label="Guardian email" required>
+            <FormField label="Guardian email" required={!isEdit && !isActivate}>
               <IconInput
                 icon={Mail}
                 type="email"
@@ -800,7 +853,8 @@ export default function RegisterStudentPage({
                 onChange={(e) => setForm((f) => ({ ...f, guardianEmail: e.target.value }))}
               />
             </FormField>
-            <FormField label="Parent login password" required={!isEdit}>
+            {!isEdit && !isActivate && (
+            <FormField label="Parent login password" required>
               <div className="relative">
                 <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -808,7 +862,6 @@ export default function RegisterStudentPage({
                   className="pl-9 pr-10"
                   placeholder="Minimum 8 characters"
                   value={form.parentPassword}
-                  disabled={isEdit}
                   onChange={(e) => setForm((f) => ({ ...f, parentPassword: e.target.value }))}
                 />
                 <button
@@ -821,10 +874,11 @@ export default function RegisterStudentPage({
                 </button>
               </div>
             </FormField>
+            )}
           </div>
         </section>
 
-        <section className="space-y-4 pb-10 border-b">
+        <section className={sectionShellClass(isActivate)}>
           <SectionTitle>3. Contact & address</SectionTitle>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <FormField label="Mobile no." required error={mobileError}>
@@ -874,7 +928,7 @@ export default function RegisterStudentPage({
           </div>
         </section>
 
-        <section className="space-y-4 pb-10 border-b">
+        <section className={sectionShellClass(isActivate)}>
           <SectionTitle>4. Previous school / college</SectionTitle>
           <FormField label="Student current school / college">
             <IconInput
@@ -886,7 +940,7 @@ export default function RegisterStudentPage({
           </FormField>
         </section>
 
-        <section className="space-y-4 pb-10 border-b">
+        <section className={sectionShellClass(isActivate)}>
           <div className="flex items-center justify-between gap-2">
             <SectionTitle>5. Academic history</SectionTitle>
             <Button
@@ -956,8 +1010,12 @@ export default function RegisterStudentPage({
           </div>
         </section>
 
-        <section className="space-y-4 pb-10">
-          <SectionTitle>6. Class & subject selection</SectionTitle>
+        <section className={sectionShellClass(isActivate, true)}>
+          <SectionTitle
+            description={isActivate ? "Assign section, subjects, and review fees before activation." : undefined}
+          >
+            6. Class & subject selection
+          </SectionTitle>
           <FormField label="Class" required>
             <IconSelect
               id="enroll-class"
@@ -1232,51 +1290,17 @@ export default function RegisterStudentPage({
           )}
         </section>
 
-        {isActivate && (
-          <section className="space-y-4 pb-10 border-b">
-            <SectionTitle>Fee payment & portal access</SectionTitle>
-            <p className="text-sm text-muted-foreground rounded-md border bg-muted/30 px-3 py-2">
-              Parent portal login uses <strong>Guardian email</strong> and <strong>Parent login password</strong> from section 2 (password must be at least 8 characters).
-            </p>
-            <div className="grid sm:grid-cols-2 gap-4">
-              <FormField label="Payment method">
-                <select
-                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm font-sans"
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value as typeof paymentMethod)}
-                >
-                  <option value="cash">Cash</option>
-                  <option value="bank_transfer">Bank transfer</option>
-                  <option value="online">Online</option>
-                  <option value="other">Other</option>
-                </select>
-              </FormField>
-              <FormField label="Receipt number">
-                <Input
-                  value={receiptNumber}
-                  onChange={(e) => setReceiptNumber(e.target.value)}
-                  placeholder="Optional — auto-generated if empty"
-                />
-              </FormField>
-              <FormField label="Student portal password">
-                <Input
-                  type="password"
-                  value={studentPassword}
-                  onChange={(e) => setStudentPassword(e.target.value)}
-                  placeholder="Leave blank for default"
-                />
-              </FormField>
-            </div>
-          </section>
-        )}
-
-        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-6 border-t">
+        <div className={cn(
+          "flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-2",
+          isActivate && "rounded-xl border bg-muted/20 p-4 sm:p-5",
+        )}>
           <Button variant="outline" onClick={handleClose}>
             Cancel
           </Button>
           <Button
             disabled={saveMut.isPending || !canSubmit}
             title={!canSubmit ? submitBlockers.join("; ") : undefined}
+            className={cn(isActivate && "gap-2")}
             onClick={() => {
               setFieldTouched({
                 fatherGuardianCnic: true,
@@ -1289,7 +1313,12 @@ export default function RegisterStudentPage({
             {saveMut.isPending
               ? "Saving…"
               : isActivate
-                ? "Record fee & activate"
+                ? (
+                  <>
+                    <CircleCheck className="h-4 w-4" />
+                    Activate student
+                  </>
+                )
                 : isEdit
                   ? "Save changes"
                   : "Register & enroll"}
@@ -1312,15 +1341,34 @@ export default function RegisterStudentPage({
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Student activated</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <CircleCheck className="h-5 w-5 text-primary" />
+            Student activated
+          </DialogTitle>
         </DialogHeader>
         {credentials && (
-          <div className="space-y-2 text-sm">
-            <p><span className="text-muted-foreground">Student ID:</span> {credentials.studentId}</p>
-            <p><span className="text-muted-foreground">Roll number:</span> {credentials.rollNumber}</p>
-            <p><span className="text-muted-foreground">Student login:</span> {credentials.studentEmail}</p>
-            <p><span className="text-muted-foreground">Student password:</span> {credentials.studentPassword}</p>
-            <p><span className="text-muted-foreground">Parent login:</span> {credentials.parentEmail}</p>
+          <div className="space-y-4 text-sm">
+            <div className="rounded-lg border bg-muted/30 p-4 grid sm:grid-cols-2 gap-3">
+              <div>
+                <p className="text-xs text-muted-foreground">Student ID</p>
+                <p className="font-medium">{credentials.studentId}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Roll number</p>
+                <p className="font-medium">{credentials.rollNumber}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Student login</p>
+                <p className="font-medium break-all">{credentials.studentEmail}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Student password</p>
+                <p className="font-medium">{credentials.studentPassword}</p>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Parent portal access can be set up separately from the Users module.
+            </p>
           </div>
         )}
         <DialogFooter>
@@ -1344,15 +1392,11 @@ export default function RegisterStudentPage({
       <>
         <Dialog open={open} onOpenChange={onOpenChange}>
           <DialogContent className="sm:max-w-4xl">
-            <DialogHeader>
+            <DialogHeader className="space-y-2">
               <DialogTitle>Complete admission & activate</DialogTitle>
-              {isActivate && (existingStudent?.rollNumber || existingStudent?.registrationNumber) && (
-                <p className="text-sm text-muted-foreground font-normal">
-                  {existingStudent.rollNumber && <>Temp roll: {existingStudent.rollNumber}</>}
-                  {existingStudent.rollNumber && existingStudent.registrationNumber ? " · " : null}
-                  {existingStudent.registrationNumber && <>Ref: {existingStudent.registrationNumber}</>}
-                </p>
-              )}
+              <DialogDescription>
+                Review intake details, complete the profile, assign section and subjects, then activate the student.
+              </DialogDescription>
             </DialogHeader>
             {formBody}
           </DialogContent>

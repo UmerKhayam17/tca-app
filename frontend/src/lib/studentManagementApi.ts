@@ -123,7 +123,7 @@ export interface AcademyStudentRegisterBody {
 }
 
 export interface AcademyStudentActivateBody extends AcademyStudentRegisterBody {
-  parentPassword: string;
+  parentPassword?: string;
   studentPassword?: string;
   paymentMethod?: "cash" | "bank_transfer" | "online" | "other";
   receiptNumber?: string;
@@ -137,7 +137,7 @@ export interface AcademyStudentActivateResult {
     rollNumber: string;
     studentEmail: string;
     studentPassword: string;
-    parentEmail: string;
+    parentEmail?: string;
   };
 }
 

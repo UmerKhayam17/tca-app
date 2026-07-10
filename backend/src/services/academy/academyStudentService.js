@@ -694,32 +694,10 @@ async function activateStudent(id, payload, userId) {
   if (!payload.gender) throw new ApiError(400, 'Gender is required');
 
   const profile = pickStudentProfile(payload);
-  const parentRole = await Role.findOne({ name: 'parent' });
   const studentRole = await Role.findOne({ name: 'student' });
-  if (!parentRole || !studentRole) throw new ApiError(500, 'Roles not initialized');
+  if (!studentRole) throw new ApiError(500, 'Roles not initialized');
 
   const parentEmail = (payload.guardianEmail || '').trim().toLowerCase();
-  const parentPassword = payload.parentPassword;
-  const parentName = payload.guardianName?.trim() || payload.fatherName?.trim() || student.fatherName || 'Parent';
-
-  let parentUser = await User.findOne({ email: parentEmail });
-  if (!parentUser) {
-    parentUser = await User.create({
-      name: parentName,
-      email: parentEmail,
-      phone,
-      password: await bcrypt.hash(parentPassword, 12),
-      role: parentRole._id,
-    });
-  } else {
-    parentUser.name = parentName || parentUser.name;
-    parentUser.phone = phone || parentUser.phone;
-    if (parentPassword) {
-      parentUser.password = await bcrypt.hash(parentPassword, 12);
-    }
-    await parentUser.save();
-  }
-
   const officialStudentId = await generateStudentId();
   const rollNumber = await generateAcademyRollNumber(classId);
   const portalEmail = `${rollNumber.replace(/[^a-zA-Z0-9]/g, '')}@student.academy.local`.toLowerCase();
@@ -787,7 +765,7 @@ async function activateStudent(id, payload, userId) {
       rollNumber,
       studentEmail: portalEmail,
       studentPassword: studPwd,
-      parentEmail: parentUser.email,
+      ...(parentEmail ? { parentEmail } : {}),
     },
   };
 }

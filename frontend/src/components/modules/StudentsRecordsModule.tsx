@@ -11,7 +11,7 @@ import RegistrationTab from "@/components/modules/student-management/Registratio
 import RegisterStudentPage from "@/components/modules/student-management/RegisterStudentPage";
 import StudentDetailPage from "@/components/modules/student-management/StudentDetailPage";
 
-/** Student Records module — same academy enrollment UI as Registration, under `/panel/:role/students`. */
+/** Student Records module — accountant enrollment under `/panel/:role/students`. */
 const StudentsRecordsModule = ({
   caps,
   section,
@@ -31,6 +31,18 @@ const StudentsRecordsModule = ({
   const listHref = routes?.list ?? "..";
 
   const body = (() => {
+    if (section === "register") {
+      if (!caps.canEdit) return <Navigate to={listHref} replace />;
+      return (
+        <RegisterStudentPage
+          caps={caps}
+          routes={routes ?? undefined}
+          sessionId={sessionId}
+          mode="direct"
+        />
+      );
+    }
+
     if (section === "new") {
       return <Navigate to={`${listHref}?intake=1`} replace />;
     }
@@ -64,7 +76,7 @@ const StudentsRecordsModule = ({
         routes={routes ?? undefined}
         sessionId={sessionId}
         showHeading={false}
-        registerLabel="Admission intake"
+        enrollmentFlow="both"
         emptyHint="No students on record yet."
       />
     );

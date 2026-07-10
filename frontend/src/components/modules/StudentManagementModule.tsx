@@ -84,7 +84,7 @@ const StudentManagementModule = ({
         );
       }
       if (action) return <Navigate to={registrationList} replace />;
-      return <RegistrationTab caps={caps} routes={registrationRoutes ?? undefined} sessionId={sessionId} />;
+      return <RegistrationTab caps={caps} routes={registrationRoutes ?? undefined} sessionId={sessionId} enrollmentFlow="intake" />;
     }
 
     if (sectionParam === "classes") {
@@ -110,7 +110,7 @@ const StudentManagementModule = ({
     if (section === "subjects") return <SubjectsTab caps={caps} sessionId={sessionId} />;
     if (section === "fees-structure") return <FeeStructureTab caps={caps} sessionId={sessionId} />;
     if (section === "registration") {
-      return <RegistrationTab caps={caps} routes={registrationRoutes ?? undefined} sessionId={sessionId} />;
+      return <RegistrationTab caps={caps} routes={registrationRoutes ?? undefined} sessionId={sessionId} enrollmentFlow="intake" />;
     }
     return null;
   };

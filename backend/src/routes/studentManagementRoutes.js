@@ -216,7 +216,7 @@ router.post(
 );
 router.post(
   '/students/provisional',
-  requireAnyPermission('temporary_register_student', 'manage_academy_students'),
+  requireAnyPermission('temporary_register_student', 'manage_academy_students', 'activate_student'),
   validate(schemas.academyStudentProvisional),
   studentCtrl.registerProvisional
 );
@@ -225,6 +225,12 @@ router.post(
   requirePermission('manage_academy_students'),
   validate(schemas.academyStudentRegister),
   studentCtrl.register
+);
+router.post(
+  '/students/direct',
+  requireAnyPermission('activate_student', 'manage_academy_students'),
+  validate(schemas.academyStudentDirectRegister),
+  studentCtrl.registerDirect
 );
 router.get(
   '/students/export',

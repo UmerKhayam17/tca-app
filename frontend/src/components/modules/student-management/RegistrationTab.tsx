@@ -44,6 +44,7 @@ export default function RegistrationTab({
   registerLabel = "Admission intake",
   emptyHint = "No students yet.",
   showHeading = true,
+  enrollmentFlow = "intake",
 }: {
   caps: ModuleActionCaps;
   routes?: AcademyStudentRoutes;
@@ -52,6 +53,8 @@ export default function RegistrationTab({
   registerLabel?: string;
   emptyHint?: string;
   showHeading?: boolean;
+  /** Admin: intake only. Accountant: intake + direct register. Both: show both buttons. */
+  enrollmentFlow?: "intake" | "direct" | "both";
 }) {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -71,14 +74,18 @@ export default function RegistrationTab({
   const hasActions = caps.canView || (writable && (caps.canEdit || caps.canDelete));
   const colSpan = (hasActions ? 9 : 8) + (showSessionCol ? 1 : 0);
 
+  const showIntake = enrollmentFlow === "intake" || enrollmentFlow === "both";
+  const showDirectRegister = enrollmentFlow === "direct" || enrollmentFlow === "both";
+
   useEffect(() => {
+    if (!showIntake) return;
     if (intakeParamHandled.current) return;
     if (searchParams.get("intake") === "1") {
       intakeParamHandled.current = true;
       setIntakeOpen(true);
       setSearchParams({}, { replace: true });
     }
-  }, [searchParams, setSearchParams]);
+  }, [searchParams, setSearchParams, showIntake]);
 
   useEffect(() => {
     setClassFilter("");
@@ -95,14 +102,26 @@ export default function RegistrationTab({
     enabled: hasScope,
   });
 
-  const canIntake = writable && classes.length > 0;
+  const canIntake = showIntake && writable && classes.length > 0 && (caps.canCreate || caps.canEdit);
+  const canDirectRegister = showDirectRegister && writable && classes.length > 0 && caps.canEdit;
   const intakeBlockedReason = !hasScope
     ? "Select an academic session first"
     : !writable
       ? "Switch to the active session to register students"
       : classes.length === 0
         ? "Add at least one active class for this session"
-        : null;
+        : showIntake && !caps.canCreate && !caps.canEdit
+          ? "You do not have permission for admission intake"
+          : null;
+  const directBlockedReason = !hasScope
+    ? "Select an academic session first"
+    : !writable
+      ? "Switch to the active session to register students"
+      : classes.length === 0
+        ? "Add at least one active class for this session"
+        : !caps.canEdit
+          ? "You do not have permission to register students"
+          : null;
 
   const { data: listData, isLoading } = useQuery({
     queryKey: ["academy-students", sessionId, page, search, classFilter, statusFilter],
@@ -168,14 +187,27 @@ export default function RegistrationTab({
           <h2 className="font-display text-base font-semibold text-primary shrink-0">{heading}</h2>
         )}
         <div className="flex flex-wrap gap-2 items-center sm:ml-auto">
-          {caps.canCreate && writable && (
+          {showIntake && (
             canIntake ? (
-              <Button className="gap-2" onClick={() => setIntakeOpen(true)}>
+              <Button className="gap-2" variant={showDirectRegister ? "outline" : "default"} onClick={() => setIntakeOpen(true)}>
                 <Plus className="h-4 w-4" /> {registerLabel}
               </Button>
             ) : (
-              <Button className="gap-2" disabled title={intakeBlockedReason ?? undefined}>
+              <Button className="gap-2" variant={showDirectRegister ? "outline" : "default"} disabled title={intakeBlockedReason ?? undefined}>
                 <Plus className="h-4 w-4" /> {registerLabel}
+              </Button>
+            )
+          )}
+          {showDirectRegister && routes && (
+            canDirectRegister ? (
+              <Button className="gap-2" asChild>
+                <Link to={routes.register}>
+                  <Plus className="h-4 w-4" /> Register student
+                </Link>
+              </Button>
+            ) : (
+              <Button className="gap-2" disabled title={directBlockedReason ?? undefined}>
+                <Plus className="h-4 w-4" /> Register student
               </Button>
             )
           )}
@@ -335,12 +367,14 @@ export default function RegistrationTab({
         )}
       </Card>
 
-      <ProvisionalIntakeDialog
-        open={intakeOpen}
-        onOpenChange={setIntakeOpen}
-        caps={caps}
-        sessionId={writable ? sessionId : ""}
-      />
+      {showIntake && (
+        <ProvisionalIntakeDialog
+          open={intakeOpen}
+          onOpenChange={setIntakeOpen}
+          caps={caps}
+          sessionId={writable ? sessionId : ""}
+        />
+      )}
     </div>
   );
 }

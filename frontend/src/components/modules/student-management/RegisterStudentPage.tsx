@@ -69,6 +69,7 @@ import {
   previewFees,
   registerAcademyStudent,
   activateAcademyStudent,
+  registerDirectAcademyStudent,
   resolveUploadUrl,
   updateAcademyStudent,
   uploadAcademyStudentPhoto,
@@ -259,12 +260,14 @@ export default function RegisterStudentPage({
   studentId?: string;
   routes?: AcademyStudentRoutes;
   sessionId?: string;
-  mode?: "register" | "activate";
+  mode?: "register" | "activate" | "direct";
   asDialog?: boolean;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
   const isActivate = mode === "activate";
+  const isDirect = mode === "direct";
+  const isAccountsEnrollment = isActivate || isDirect;
   const isEdit = Boolean(studentId) && !isActivate;
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -348,7 +351,7 @@ export default function RegisterStudentPage({
   const { data: classes = [] } = useQuery({
     queryKey: ["academy-classes", sessionId],
     queryFn: () => fetchAcademyClasses({ status: "active", sessionId: sessionId || undefined }),
-    enabled: isEdit || isActivate || Boolean(sessionId),
+    enabled: isEdit || isActivate || isDirect || Boolean(sessionId),
   });
 
   const { data: enrollmentLayout, isLoading: enrollmentLoading } = useQuery({
@@ -461,6 +464,13 @@ export default function RegisterStudentPage({
         }
         return result;
       }
+      if (isDirect) {
+        const result = await registerDirectAcademyStudent(body);
+        if (photoFile) {
+          await uploadAcademyStudentPhoto(result.student._id, photoFile);
+        }
+        return result;
+      }
       const student =
         isEdit && studentId
           ? await updateAcademyStudent(studentId, body)
@@ -477,7 +487,7 @@ export default function RegisterStudentPage({
       if (creds) {
         setCredentials(creds);
         toast({
-          title: "Student activated",
+          title: isDirect ? "Student registered" : "Student activated",
           description: `Roll ${creds.rollNumber} · ID ${creds.studentId}`,
         });
         return;
@@ -591,7 +601,7 @@ export default function RegisterStudentPage({
         missing.push("Subjects or full package (section 6)");
       }
     }
-    if (!isEdit && !isActivate) {
+    if (!isEdit && !isAccountsEnrollment) {
       if (!form.guardianEmail.trim()) missing.push("Guardian email (section 2)");
       if (form.parentPassword.trim().length < 8) {
         missing.push("Parent login password — min 8 characters (section 2)");
@@ -611,7 +621,7 @@ export default function RegisterStudentPage({
     && form.classId
     && form.sectionId
     && subjectSelectionValid
-    && (isEdit || isActivate
+    && (isEdit || isAccountsEnrollment
       ? true
       : Boolean(form.guardianEmail.trim()) && form.parentPassword.trim().length >= 8);
 
@@ -643,7 +653,7 @@ export default function RegisterStudentPage({
     );
   }
 
-  if (!isEdit && !isActivate && !sessionId && !asDialog) {
+  if (!isEdit && !isActivate && !isDirect && !sessionId && !asDialog) {
     return (
       <div className="w-full px-4 sm:px-6 lg:px-8 py-12 space-y-3 text-center">
         <Button variant="outline" asChild>
@@ -666,6 +676,8 @@ export default function RegisterStudentPage({
           <h2 className="font-display text-xl sm:text-2xl font-semibold text-primary">
             {isActivate
               ? "Complete admission & activate"
+              : isDirect
+                ? "Register student"
               : isEdit
                 ? "Edit student"
                 : "Register new student"}
@@ -673,6 +685,11 @@ export default function RegisterStudentPage({
           {isActivate && !existingStudent && (
             <p className="text-sm text-muted-foreground">
               Confirm student details, assign section and subjects, then activate.
+            </p>
+          )}
+          {isDirect && (
+            <p className="text-sm text-muted-foreground">
+              Complete the student profile, assign section and subjects, then register.
             </p>
           )}
         </div>
@@ -683,10 +700,16 @@ export default function RegisterStudentPage({
         <ActivateSummaryBanner student={existingStudent} />
       ) : null}
 
-      <div className={cn(isActivate ? "space-y-6" : "space-y-10")}>
-        <section className={sectionShellClass(isActivate)}>
+      <div className={cn((isActivate || isDirect) ? "space-y-6" : "space-y-10")}>
+        <section className={sectionShellClass(isActivate || isDirect)}>
           <SectionTitle
-            description={isActivate ? "Verify and complete the student profile before activation." : undefined}
+            description={
+              isActivate
+                ? "Verify and complete the student profile before activation."
+                : isDirect
+                  ? "Enter the full student profile for walk-in registration."
+                  : undefined
+            }
           >
             1. Student information
           </SectionTitle>
@@ -789,9 +812,9 @@ export default function RegisterStudentPage({
           </div>
         </section>
 
-        <section className={sectionShellClass(isActivate)}>
+        <section className={sectionShellClass(isActivate || isDirect)}>
           <SectionTitle
-            description={isActivate ? "Guardian contact details only — parent portal logins are created from Users." : undefined}
+            description={isAccountsEnrollment ? "Guardian contact details only — parent portal logins are created from Users." : undefined}
           >
             2. Guardian information
           </SectionTitle>
@@ -844,7 +867,7 @@ export default function RegisterStudentPage({
                 onChange={(e) => setForm((f) => ({ ...f, guardianWorkAddress: e.target.value }))}
               />
             </FormField>
-            <FormField label="Guardian email" required={!isEdit && !isActivate}>
+            <FormField label="Guardian email" required={!isEdit && !isAccountsEnrollment}>
               <IconInput
                 icon={Mail}
                 type="email"
@@ -853,7 +876,7 @@ export default function RegisterStudentPage({
                 onChange={(e) => setForm((f) => ({ ...f, guardianEmail: e.target.value }))}
               />
             </FormField>
-            {!isEdit && !isActivate && (
+            {!isEdit && !isAccountsEnrollment && (
             <FormField label="Parent login password" required>
               <div className="relative">
                 <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -878,7 +901,7 @@ export default function RegisterStudentPage({
           </div>
         </section>
 
-        <section className={sectionShellClass(isActivate)}>
+        <section className={sectionShellClass(isActivate || isDirect)}>
           <SectionTitle>3. Contact & address</SectionTitle>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <FormField label="Mobile no." required error={mobileError}>
@@ -928,7 +951,7 @@ export default function RegisterStudentPage({
           </div>
         </section>
 
-        <section className={sectionShellClass(isActivate)}>
+        <section className={sectionShellClass(isActivate || isDirect)}>
           <SectionTitle>4. Previous school / college</SectionTitle>
           <FormField label="Student current school / college">
             <IconInput
@@ -940,7 +963,7 @@ export default function RegisterStudentPage({
           </FormField>
         </section>
 
-        <section className={sectionShellClass(isActivate)}>
+        <section className={sectionShellClass(isActivate || isDirect)}>
           <div className="flex items-center justify-between gap-2">
             <SectionTitle>5. Academic history</SectionTitle>
             <Button
@@ -1010,9 +1033,15 @@ export default function RegisterStudentPage({
           </div>
         </section>
 
-        <section className={sectionShellClass(isActivate, true)}>
+        <section className={sectionShellClass(isActivate || isDirect, true)}>
           <SectionTitle
-            description={isActivate ? "Assign section, subjects, and review fees before activation." : undefined}
+            description={
+              isActivate
+                ? "Assign section, subjects, and review fees before activation."
+                : isDirect
+                  ? "Assign section, subjects, and review fees before registering."
+                  : undefined
+            }
           >
             6. Class & subject selection
           </SectionTitle>
@@ -1292,7 +1321,7 @@ export default function RegisterStudentPage({
 
         <div className={cn(
           "flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-2",
-          isActivate && "rounded-xl border bg-muted/20 p-4 sm:p-5",
+          (isActivate || isDirect) && "rounded-xl border bg-muted/20 p-4 sm:p-5",
         )}>
           <Button variant="outline" onClick={handleClose}>
             Cancel
@@ -1300,7 +1329,7 @@ export default function RegisterStudentPage({
           <Button
             disabled={saveMut.isPending || !canSubmit}
             title={!canSubmit ? submitBlockers.join("; ") : undefined}
-            className={cn(isActivate && "gap-2")}
+            className={cn((isActivate || isDirect) && "gap-2")}
             onClick={() => {
               setFieldTouched({
                 fatherGuardianCnic: true,
@@ -1319,6 +1348,13 @@ export default function RegisterStudentPage({
                     Activate student
                   </>
                 )
+                : isDirect
+                  ? (
+                    <>
+                      <CircleCheck className="h-4 w-4" />
+                      Register student
+                    </>
+                  )
                 : isEdit
                   ? "Save changes"
                   : "Register & enroll"}
@@ -1343,7 +1379,7 @@ export default function RegisterStudentPage({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CircleCheck className="h-5 w-5 text-primary" />
-            Student activated
+            {isDirect ? "Student registered" : "Student activated"}
           </DialogTitle>
         </DialogHeader>
         {credentials && (

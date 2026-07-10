@@ -88,7 +88,7 @@ export default function ProvisionalIntakeDialog({
   const phoneError = phoneTouched ? mobileValidationMessage(form.phone) : null;
 
   const canSubmit =
-    caps.canCreate
+    (caps.canCreate || caps.canEdit)
     && form.studentName.trim()
     && form.fatherName.trim()
     && isValidMobile(form.phone)

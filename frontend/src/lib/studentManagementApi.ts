@@ -130,6 +130,14 @@ export interface AcademyStudentActivateBody extends AcademyStudentRegisterBody {
   paymentDate?: string;
 }
 
+export type AcademyStudentDirectRegisterBody = AcademyStudentActivateBody & {
+  studentName: string;
+  fatherName: string;
+  dateOfBirth: string;
+  classId: string;
+  sectionId: string;
+};
+
 export interface AcademyStudentActivateResult {
   student: AcademyStudent;
   credentials: {
@@ -566,6 +574,22 @@ export const registerAcademyStudent = (body: AcademyStudentRegisterBody) =>
 
 export const registerProvisionalStudent = (body: AcademyStudentProvisionalBody) =>
   api<AcademyStudent>("/students/provisional", { method: "POST", body: JSON.stringify(body) });
+
+export async function registerDirectAcademyStudent(body: AcademyStudentDirectRegisterBody) {
+  const res = await authedFetch("/student-management/students/direct", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const parsed = await parseJson<{
+    success?: boolean;
+    data?: AcademyStudent;
+    credentials?: AcademyStudentActivateResult["credentials"];
+    message?: string;
+  }>(res);
+  if (!res.ok) throw new Error(parsed.message || `Registration failed (${res.status})`);
+  return { student: parsed.data!, credentials: parsed.credentials! };
+}
 
 export async function activateAcademyStudent(id: string, body: AcademyStudentActivateBody) {
   const res = await authedFetch(`/student-management/students/${id}/activate`, {

@@ -47,6 +47,11 @@ async function createSubject(payload, userId) {
     await choiceGroupService.syncSubjectEnrollment(payload.classId, subject._id, payload, userId);
   }
 
+  if (cls.sessionId) {
+    const { syncAcademyToTimetableStructure } = require('./academyDefaultStructureService');
+    await syncAcademyToTimetableStructure(cls.sessionId, userId);
+  }
+
   return subject;
 }
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,12 @@ export default function AssignmentsTab({
   const [subjectId, setSubjectId] = useState("");
   const [teacherId, setTeacherId] = useState("");
 
+  useEffect(() => {
+    setClassId("");
+    setSectionId("");
+    setSubjectId("");
+  }, [sessionId]);
+
   const { data: classes = [] } = useQuery({
     queryKey: ["config-classes", sessionId],
     queryFn: () => fetchClasses(sessionId),
@@ -35,8 +41,8 @@ export default function AssignmentsTab({
   });
 
   const { data: sections = [] } = useQuery({
-    queryKey: ["config-sections", classId],
-    queryFn: () => fetchSections({ classId }),
+    queryKey: ["config-sections", classId, sessionId],
+    queryFn: () => fetchSections({ classId, sessionId }),
     enabled: !!classId,
   });
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -12,6 +12,11 @@ export default function ViewScheduleTab({ sessionId }: { sessionId: string }) {
   const [classId, setClassId] = useState("");
   const [sectionId, setSectionId] = useState("");
 
+  useEffect(() => {
+    setClassId("");
+    setSectionId("");
+  }, [sessionId]);
+
   const { data: classes = [] } = useQuery({
     queryKey: ["config-classes", sessionId],
     queryFn: () => fetchClasses(sessionId),
@@ -19,8 +24,8 @@ export default function ViewScheduleTab({ sessionId }: { sessionId: string }) {
   });
 
   const { data: sections = [] } = useQuery({
-    queryKey: ["config-sections", classId],
-    queryFn: () => fetchSections({ classId }),
+    queryKey: ["config-sections", classId, sessionId],
+    queryFn: () => fetchSections({ classId, sessionId }),
     enabled: !!classId,
   });
 

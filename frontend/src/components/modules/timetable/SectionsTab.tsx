@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -50,6 +50,11 @@ export default function SectionsTab({
   const [open, setOpen] = useState(false);
   const [edit, setEdit] = useState<SchoolSection | null>(null);
   const [form, setForm] = useState<SectionForm>(emptyForm());
+
+  useEffect(() => {
+    setClassId("");
+    setViewAll(false);
+  }, [sessionId]);
 
   const { data: classes = [] } = useQuery({
     queryKey: ["config-classes", sessionId],

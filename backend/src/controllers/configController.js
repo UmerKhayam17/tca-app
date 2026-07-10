@@ -4,7 +4,7 @@ const { getSystemModulesForApi } = require('../config/systemModules');
 const { logAudit } = require('../services/session/auditService');
 const { assertSessionWritable, syncSessionFlags, resolveSessionStatus, healSessionFlags } = require('../services/session/sessionGuard');
 const Session = require('../models/Session');
-const { ensureDefaultAcademyStructure } = require('../services/academy/academyDefaultStructureService');
+const { ensureDefaultAcademyStructure, syncAcademyToTimetableStructure } = require('../services/academy/academyDefaultStructureService');
 const Class = require('../models/Class');
 const Section = require('../models/Section');
 const Subject = require('../models/Subject');
@@ -102,6 +102,9 @@ const patchSession = catchAsync(async (req, res) => {
 
 const listClasses = catchAsync(async (req, res) => {
   const { sessionId } = req.query;
+  if (sessionId) {
+    await syncAcademyToTimetableStructure(sessionId, req.user?._id);
+  }
   const q = sessionId ? { session: sessionId } : {};
   const classes = await Class.find(q).populate('sections').populate('subjects').populate('classTeacher');
   res.json({ success: true, data: classes });
@@ -175,6 +178,14 @@ const createSubject = catchAsync(async (req, res) => {
 
 const listSections = catchAsync(async (req, res) => {
   const { classId, sessionId } = req.query;
+  if (sessionId) {
+    await syncAcademyToTimetableStructure(sessionId, req.user?._id);
+  } else if (classId) {
+    const parent = await Class.findById(classId).select('session');
+    if (parent?.session) {
+      await syncAcademyToTimetableStructure(parent.session, req.user?._id);
+    }
+  }
   const q = {};
   if (classId) {
     q.class = classId;
@@ -206,6 +217,12 @@ const listSections = catchAsync(async (req, res) => {
 
 const listSubjects = catchAsync(async (req, res) => {
   const { classId } = req.query;
+  if (classId) {
+    const parent = await Class.findById(classId).select('session');
+    if (parent?.session) {
+      await syncAcademyToTimetableStructure(parent.session, req.user?._id);
+    }
+  }
   const q = classId ? { class: classId } : {};
   const subjects = await Subject.find(q).populate('teacher').populate('class');
   res.json({ success: true, data: subjects });

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -52,6 +52,12 @@ export default function GridTab({
   const [dropOver, setDropOver] = useState<{ day: Weekday; periodId: string } | null>(null);
   const skipClickRef = useRef(false);
 
+  useEffect(() => {
+    setClassId("");
+    setSectionId("");
+    setVersionId("");
+  }, [sessionId]);
+
   const { data: classes = [] } = useQuery({
     queryKey: ["config-classes", sessionId],
     queryFn: () => fetchClasses(sessionId),
@@ -59,8 +65,8 @@ export default function GridTab({
   });
 
   const { data: sections = [] } = useQuery({
-    queryKey: ["config-sections", classId],
-    queryFn: () => fetchSections({ classId }),
+    queryKey: ["config-sections", classId, sessionId],
+    queryFn: () => fetchSections({ classId, sessionId }),
     enabled: !!classId,
   });
 

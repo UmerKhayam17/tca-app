@@ -40,6 +40,17 @@ import {
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  cnicValidationMessage,
+  formatCnicInput,
+  formatLandlineInput,
+  formatMobileInput,
+  isValidCnic,
+  isValidLandline,
+  isValidMobile,
+  landlineValidationMessage,
+  mobileValidationMessage,
+} from "@/lib/pkFieldFormat";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import type { ModuleActionCaps } from "@/lib/permissions";
@@ -91,11 +102,13 @@ function FormField({
   label,
   required,
   className,
+  error,
   children,
 }: {
   label: string;
   required?: boolean;
   className?: string;
+  error?: string | null;
   children: React.ReactNode;
 }) {
   return (
@@ -105,6 +118,7 @@ function FormField({
         {required && <span className="text-destructive ml-0.5">*</span>}
       </Label>
       {children}
+      {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );
 }
@@ -193,6 +207,11 @@ export default function RegisterStudentPage({
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "bank_transfer" | "online" | "other">("cash");
   const [receiptNumber, setReceiptNumber] = useState("");
   const [credentials, setCredentials] = useState<AcademyStudentActivateResult["credentials"] | null>(null);
+  const [fieldTouched, setFieldTouched] = useState({
+    fatherGuardianCnic: false,
+    mobileNo: false,
+    contactPhoneRes: false,
+  });
   const autoPackageSectionRef = useRef<string | null>(null);
 
   const routes =
@@ -356,6 +375,13 @@ export default function RegisterStudentPage({
 
   const saveMut = useMutation({
     mutationFn: async () => {
+      const mobileErr = mobileValidationMessage(form.mobileNo);
+      if (mobileErr) throw new Error(mobileErr);
+      const cnicErr = cnicValidationMessage(form.fatherGuardianCnic);
+      if (cnicErr) throw new Error(cnicErr);
+      const landlineErr = landlineValidationMessage(form.contactPhoneRes);
+      if (landlineErr) throw new Error(landlineErr);
+
       const body = buildStudentPayload(form);
       if (isActivate && studentId) {
         const result = await activateAcademyStudent(studentId, {
@@ -484,7 +510,13 @@ export default function RegisterStudentPage({
     if (!form.fatherName.trim()) missing.push("Father's name");
     if (!form.dateOfBirth) missing.push("Date of birth");
     if (!form.gender) missing.push("Gender");
-    if (!form.mobileNo.trim()) missing.push("Mobile number");
+    if (!isValidMobile(form.mobileNo)) missing.push("Valid mobile number (03XX-XXXXXXX)");
+    if (form.fatherGuardianCnic.trim() && !isValidCnic(form.fatherGuardianCnic)) {
+      missing.push("Valid CNIC (13 digits)");
+    }
+    if (form.contactPhoneRes.trim() && !isValidLandline(form.contactPhoneRes)) {
+      missing.push("Valid contact number (0XX-XXXXXXX)");
+    }
     if (!form.classId) missing.push("Class");
     if (!form.sectionId) missing.push("Section");
     if (!subjectSelectionValid) {
@@ -508,7 +540,9 @@ export default function RegisterStudentPage({
     && form.fatherName.trim()
     && form.dateOfBirth
     && form.gender
-    && form.mobileNo.trim()
+    && isValidMobile(form.mobileNo)
+    && (!form.fatherGuardianCnic.trim() || isValidCnic(form.fatherGuardianCnic))
+    && (!form.contactPhoneRes.trim() || isValidLandline(form.contactPhoneRes))
     && form.classId
     && form.sectionId
     && subjectSelectionValid
@@ -519,6 +553,10 @@ export default function RegisterStudentPage({
         : true);
 
   const selectedClassName = classes.find((c) => c._id === form.classId)?.className;
+
+  const cnicError = fieldTouched.fatherGuardianCnic ? cnicValidationMessage(form.fatherGuardianCnic) : null;
+  const mobileError = fieldTouched.mobileNo ? mobileValidationMessage(form.mobileNo) : null;
+  const contactError = fieldTouched.contactPhoneRes ? landlineValidationMessage(form.contactPhoneRes) : null;
 
   const handleClose = () => {
     if (asDialog) onOpenChange?.(false);
@@ -720,12 +758,21 @@ export default function RegisterStudentPage({
                 onChange={(e) => setForm((f) => ({ ...f, guardianRelation: e.target.value }))}
               />
             </FormField>
-            <FormField label="Father / Guardian CNIC no." className="sm:col-span-2 lg:col-span-3">
+            <FormField
+              label="Father / Guardian CNIC no."
+              className="sm:col-span-2 lg:col-span-3"
+              error={cnicError}
+            >
               <IconInput
                 icon={IdCard}
+                type="tel"
+                inputMode="numeric"
                 placeholder="35201-1234567-1"
+                maxLength={15}
+                className={cn(cnicError && "border-destructive")}
                 value={form.fatherGuardianCnic}
-                onChange={(e) => setForm((f) => ({ ...f, fatherGuardianCnic: e.target.value }))}
+                onChange={(e) => setForm((f) => ({ ...f, fatherGuardianCnic: formatCnicInput(e.target.value) }))}
+                onBlur={() => setFieldTouched((t) => ({ ...t, fatherGuardianCnic: true }))}
               />
             </FormField>
             <FormField label="Occupation">
@@ -780,22 +827,30 @@ export default function RegisterStudentPage({
         <section className="space-y-4 pb-10 border-b">
           <SectionTitle>3. Contact & address</SectionTitle>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <FormField label="Mobile no." required>
+            <FormField label="Mobile no." required error={mobileError}>
               <IconInput
                 icon={Smartphone}
                 type="tel"
+                inputMode="numeric"
                 placeholder="03XX-XXXXXXX"
+                maxLength={12}
+                className={cn(mobileError && "border-destructive")}
                 value={form.mobileNo}
-                onChange={(e) => setForm((f) => ({ ...f, mobileNo: e.target.value }))}
+                onChange={(e) => setForm((f) => ({ ...f, mobileNo: formatMobileInput(e.target.value) }))}
+                onBlur={() => setFieldTouched((t) => ({ ...t, mobileNo: true }))}
               />
             </FormField>
-            <FormField label="Contact no. (residence)">
+            <FormField label="Contact no. (residence)" error={contactError}>
               <IconInput
                 icon={Phone}
                 type="tel"
+                inputMode="numeric"
                 placeholder="042-XXXXXXX"
+                maxLength={11}
+                className={cn(contactError && "border-destructive")}
                 value={form.contactPhoneRes}
-                onChange={(e) => setForm((f) => ({ ...f, contactPhoneRes: e.target.value }))}
+                onChange={(e) => setForm((f) => ({ ...f, contactPhoneRes: formatLandlineInput(e.target.value) }))}
+                onBlur={() => setFieldTouched((t) => ({ ...t, contactPhoneRes: true }))}
               />
             </FormField>
             <FormField label="Postal address" className="sm:col-span-2 lg:col-span-3">
@@ -1222,7 +1277,14 @@ export default function RegisterStudentPage({
           <Button
             disabled={saveMut.isPending || !canSubmit}
             title={!canSubmit ? submitBlockers.join("; ") : undefined}
-            onClick={() => saveMut.mutate()}
+            onClick={() => {
+              setFieldTouched({
+                fatherGuardianCnic: true,
+                mobileNo: true,
+                contactPhoneRes: true,
+              });
+              saveMut.mutate();
+            }}
           >
             {saveMut.isPending
               ? "Saving…"

@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import type { ModuleActionCaps } from "@/lib/permissions";
 import { fetchAcademyClasses, fetchFeeStructureByClass, registerProvisionalStudent } from "@/lib/studentManagementApi";
+import { formatMobileInput, isValidMobile, mobileValidationMessage } from "@/lib/pkFieldFormat";
 import { formatDate, formatPkr } from "./studentDisplayUtils";
 
 const emptyForm = {
@@ -40,6 +41,7 @@ export default function ProvisionalIntakeDialog({
   const { toast } = useToast();
   const qc = useQueryClient();
   const [form, setForm] = useState(emptyForm);
+  const [phoneTouched, setPhoneTouched] = useState(false);
 
   const { data: classes = [] } = useQuery({
     queryKey: ["academy-classes", sessionId],
@@ -56,7 +58,10 @@ export default function ProvisionalIntakeDialog({
   const selectedClass = classes.find((c) => c._id === form.classId);
 
   useEffect(() => {
-    if (!open) setForm(emptyForm);
+    if (!open) {
+      setForm(emptyForm);
+      setPhoneTouched(false);
+    }
   }, [open]);
 
   const saveMut = useMutation({
@@ -80,11 +85,13 @@ export default function ProvisionalIntakeDialog({
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
+  const phoneError = phoneTouched ? mobileValidationMessage(form.phone) : null;
+
   const canSubmit =
     caps.canCreate
     && form.studentName.trim()
     && form.fatherName.trim()
-    && form.phone.trim()
+    && isValidMobile(form.phone)
     && form.dateOfBirth
     && form.classId;
 
@@ -108,7 +115,8 @@ export default function ProvisionalIntakeDialog({
             <Label htmlFor="intake-student-name">Student name</Label>
             <Input
               id="intake-student-name"
-              placeholder="Enter student's full name"              value={form.studentName}
+              placeholder="Enter student's full name"
+              value={form.studentName}
               onChange={(e) => setForm((f) => ({ ...f, studentName: e.target.value }))}
             />
           </div>
@@ -126,10 +134,15 @@ export default function ProvisionalIntakeDialog({
             <Input
               id="intake-phone"
               type="tel"
-              placeholder="03xx-xxxxxxx"
+              inputMode="numeric"
+              placeholder="03XX-XXXXXXX"
+              maxLength={12}
+              className={phoneError ? "border-destructive" : undefined}
               value={form.phone}
-              onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+              onChange={(e) => setForm((f) => ({ ...f, phone: formatMobileInput(e.target.value) }))}
+              onBlur={() => setPhoneTouched(true)}
             />
+            {phoneError && <p className="text-xs text-destructive">{phoneError}</p>}
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="intake-dob">Date of birth</Label>
@@ -206,7 +219,15 @@ export default function ProvisionalIntakeDialog({
           <Button
             className="gap-2"
             disabled={!canSubmit || saveMut.isPending}
-            onClick={() => saveMut.mutate()}
+            onClick={() => {
+              setPhoneTouched(true);
+              const err = mobileValidationMessage(form.phone);
+              if (err) {
+                toast({ title: "Invalid phone number", description: err, variant: "destructive" });
+                return;
+              }
+              saveMut.mutate();
+            }}
           >
             <Plus className="h-4 w-4" /> Save intake
           </Button>

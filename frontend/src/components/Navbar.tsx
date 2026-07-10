@@ -59,10 +59,10 @@ const Navbar = () => {
       </div>
       <div className="container flex items-center justify-between h-20">
         <Link to="/" className="flex items-center gap-3 group">
-          <img src={logo} alt="The Concept Educational System logo" className="h-12 w-auto" width={120} height={48} />
+          <img src={logo} alt="The Concept Academy logo" className="h-12 w-auto" width={120} height={48} />
           <div className="hidden sm:block leading-tight">
-            <div className="font-display text-lg font-bold text-primary">The Concept</div>
-            <div className="text-[10px] tracking-[0.2em] uppercase text-muted-foreground">Educational System</div>
+            <div className="font-display text-lg font-bold text-primary">The Concept Academy</div>
+            <div className="text-[10px] tracking-[0.2em] uppercase text-muted-foreground">Read · Rise · Radiate</div>
           </div>
         </Link>
 

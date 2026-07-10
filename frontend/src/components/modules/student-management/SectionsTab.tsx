@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,8 @@ import {
 } from "@/lib/studentManagementApi";
 import PanelSearchBar from "@/components/modules/PanelSearchBar";
 import { matchesPanelSearch } from "@/lib/panelSearch";
+import { useSessionScope } from "@/components/modules/timetable/SessionBar";
+import { sessionLabelFromAcademyClass } from "./studentDisplayUtils";
 
 export default function SectionsTab({ caps, sessionId }: { caps: ModuleActionCaps; sessionId: string }) {
   const { toast } = useToast();
@@ -34,13 +36,18 @@ export default function SectionsTab({ caps, sessionId }: { caps: ModuleActionCap
     subjectIds: [] as string[],
     status: "active" as "active" | "inactive",
   });
+  const { apiSessionId, writable, hasScope, isAll } = useSessionScope(sessionId);
 
   const { data: classes = [] } = useQuery({
     queryKey: ["academy-classes", sessionId],
-    queryFn: () => fetchAcademyClasses({ status: "active", sessionId }),
-    enabled: Boolean(sessionId),
+    queryFn: () => fetchAcademyClasses({ status: "active", sessionId: apiSessionId }),
+    enabled: hasScope,
   });
   const selectedClass = classes.find((c) => c._id === classId);
+
+  useEffect(() => {
+    setClassId("");
+  }, [sessionId]);
 
   const { data: sections = [], isLoading: sectionsLoading } = useQuery({
     queryKey: ["academy-sections", classId],
@@ -68,6 +75,10 @@ export default function SectionsTab({ caps, sessionId }: { caps: ModuleActionCap
   }, [sections, search]);
 
   const openCreate = () => {
+    if (!writable) {
+      toast({ title: "Read-only session", description: "Switch to the active session to add sections.", variant: "destructive" });
+      return;
+    }
     if (!classId) {
       toast({ title: "Select a class first", variant: "destructive" });
       return;
@@ -126,7 +137,7 @@ export default function SectionsTab({ caps, sessionId }: { caps: ModuleActionCap
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
-  const hasActions = caps.canEdit || caps.canDelete;
+  const hasActions = writable && (caps.canEdit || caps.canDelete);
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-4">
@@ -136,11 +147,14 @@ export default function SectionsTab({ caps, sessionId }: { caps: ModuleActionCap
           className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
           value={classId}
           onChange={(e) => setClassId(e.target.value)}
-          disabled={!sessionId || classes.length === 0}
+          disabled={!hasScope || classes.length === 0}
         >
           <option value="">Choose class…</option>
           {classes.map((c) => (
-            <option key={c._id} value={c._id}>{c.className}</option>
+            <option key={c._id} value={c._id}>
+              {c.className}
+              {isAll && sessionLabelFromAcademyClass(c) ? ` (${sessionLabelFromAcademyClass(c)})` : ""}
+            </option>
           ))}
         </select>
       </div>
@@ -150,10 +164,13 @@ export default function SectionsTab({ caps, sessionId }: { caps: ModuleActionCap
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-4 py-3 border-b bg-muted/30">
             <p className="text-sm">
               Sections for <span className="font-semibold">{selectedClass.className}</span>
+              {sessionLabelFromAcademyClass(selectedClass) ? (
+                <span className="text-muted-foreground"> · {sessionLabelFromAcademyClass(selectedClass)}</span>
+              ) : null}
             </p>
             <div className="flex items-center gap-2">
               <PanelSearchBar value={search} onChange={setSearch} placeholder="Search sections…" className="max-w-xs" />
-              {caps.canCreate && (
+              {caps.canCreate && writable && (
                 <Button className="gap-2 shrink-0" onClick={openCreate}>
                   <Plus className="h-4 w-4" /> Add Section
                 </Button>

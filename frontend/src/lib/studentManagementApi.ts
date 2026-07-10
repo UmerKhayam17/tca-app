@@ -13,7 +13,7 @@ export interface Pagination {
 
 export interface AcademyClass {
   _id: string;
-  sessionId?: string;
+  sessionId?: string | { _id: string; name?: string; status?: string };
   className: string;
   totalSubjects: number;
   status: "active" | "inactive";
@@ -408,12 +408,19 @@ export const fetchSectionsByClass = (classId: string, params?: { status?: string
 
 export interface AcademySectionWithClass extends AcademySection {
   className?: string | null;
+  sessionName?: string | null;
+  sessionId?: string | { _id: string; name?: string } | null;
 }
 
-export const fetchAcademySectionsBySession = (sessionId: string, params?: { status?: string }) => {
-  const q = new URLSearchParams({ sessionId });
+export const fetchAcademySectionsBySession = (
+  sessionId?: string,
+  params?: { status?: string }
+) => {
+  const q = new URLSearchParams();
+  if (sessionId) q.set("sessionId", sessionId);
   if (params?.status) q.set("status", params.status);
-  return api<AcademySectionWithClass[]>(`/sections?${q.toString()}`);
+  const qs = q.toString();
+  return api<AcademySectionWithClass[]>(`/sections${qs ? `?${qs}` : ""}`);
 };
 
 export const createAcademySection = (body: {
@@ -534,6 +541,7 @@ export const fetchAcademyStudents = async (params?: {
   search?: string;
   classId?: string;
   status?: string;
+  sessionId?: string;
 }) => {
   const q = new URLSearchParams();
   if (params?.page) q.set("page", String(params.page));
@@ -541,6 +549,7 @@ export const fetchAcademyStudents = async (params?: {
   if (params?.search) q.set("search", params.search);
   if (params?.classId) q.set("classId", params.classId);
   if (params?.status) q.set("status", params.status);
+  if (params?.sessionId) q.set("sessionId", params.sessionId);
   const res = await authedFetch(`/student-management/students?${q}`);
   const body = await parseJson<{
     success?: boolean;
@@ -598,11 +607,17 @@ export const getAcademyStudentRecord = (id: string) =>
 export const deleteAcademyStudent = (id: string) =>
   api<{ deleted: boolean; studentId?: string }>(`/students/${id}`, { method: "DELETE" });
 
-export const exportStudentsCsv = async (params?: { search?: string; classId?: string; status?: string }) => {
+export const exportStudentsCsv = async (params?: {
+  search?: string;
+  classId?: string;
+  status?: string;
+  sessionId?: string;
+}) => {
   const q = new URLSearchParams();
   if (params?.search) q.set("search", params.search);
   if (params?.classId) q.set("classId", params.classId);
   if (params?.status) q.set("status", params.status);
+  if (params?.sessionId) q.set("sessionId", params.sessionId);
   const res = await authedFetch(`/student-management/students/export?${q}`, { method: "GET" });
   if (!res.ok) throw new Error("Export failed");
   return res.blob();
@@ -627,6 +642,7 @@ export const fetchAcademyFees = async (params?: {
   studentId?: string;
   month?: number;
   year?: number;
+  sessionId?: string;
 }) => {
   const q = new URLSearchParams();
   if (params?.page) q.set("page", String(params.page));
@@ -637,6 +653,7 @@ export const fetchAcademyFees = async (params?: {
   if (params?.studentId) q.set("studentId", params.studentId);
   if (params?.month) q.set("month", String(params.month));
   if (params?.year) q.set("year", String(params.year));
+  if (params?.sessionId) q.set("sessionId", params.sessionId);
   const res = await authedFetch(`/student-management/fees?${q}`);
   const body = await parseJson<{
     success?: boolean;
@@ -653,12 +670,14 @@ export const fetchAcademyFeeSummary = (params?: {
   year?: number;
   classId?: string;
   studentId?: string;
+  sessionId?: string;
 }) => {
   const q = new URLSearchParams();
   if (params?.month) q.set("month", String(params.month));
   if (params?.year) q.set("year", String(params.year));
   if (params?.classId) q.set("classId", params.classId);
   if (params?.studentId) q.set("studentId", params.studentId);
+  if (params?.sessionId) q.set("sessionId", params.sessionId);
   const qs = q.toString();
   return api<AcademyFeeSummary>(`/fees/summary${qs ? `?${qs}` : ""}`);
 };
@@ -779,6 +798,7 @@ export const fetchFeeDefaulters = async (params?: {
   month?: number;
   year?: number;
   search?: string;
+  sessionId?: string;
 }) => {
   const q = new URLSearchParams();
   if (params?.page) q.set("page", String(params.page));
@@ -787,6 +807,7 @@ export const fetchFeeDefaulters = async (params?: {
   if (params?.month) q.set("month", String(params.month));
   if (params?.year) q.set("year", String(params.year));
   if (params?.search) q.set("search", params.search);
+  if (params?.sessionId) q.set("sessionId", params.sessionId);
   const res = await authedFetch(`/student-management/fees/defaulters?${q}`);
   const body = await parseJson<{
     success?: boolean;
@@ -802,11 +823,13 @@ export const fetchFeeDefaultersSummary = (params?: {
   classId?: string;
   month?: number;
   year?: number;
+  sessionId?: string;
 }) => {
   const q = new URLSearchParams();
   if (params?.classId) q.set("classId", params.classId);
   if (params?.month) q.set("month", String(params.month));
   if (params?.year) q.set("year", String(params.year));
+  if (params?.sessionId) q.set("sessionId", params.sessionId);
   const qs = q.toString();
   return api<FeeDefaultersSummary>(`/fees/defaulters/summary${qs ? `?${qs}` : ""}`);
 };
@@ -816,12 +839,14 @@ export const exportFeeDefaultersCsv = async (params?: {
   month?: number;
   year?: number;
   search?: string;
+  sessionId?: string;
 }) => {
   const q = new URLSearchParams();
   if (params?.classId) q.set("classId", params.classId);
   if (params?.month) q.set("month", String(params.month));
   if (params?.year) q.set("year", String(params.year));
   if (params?.search) q.set("search", params.search);
+  if (params?.sessionId) q.set("sessionId", params.sessionId);
   const res = await authedFetch(`/student-management/fees/defaulters/export?${q}`, { method: "GET" });
   if (!res.ok) throw new Error("Export failed");
   return res.blob();

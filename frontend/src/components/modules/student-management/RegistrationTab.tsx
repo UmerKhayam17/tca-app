@@ -20,7 +20,8 @@ import {
   type AcademyStudent,
   type AcademyStudentStatus,
 } from "@/lib/studentManagementApi";
-import { classLabel, formatDate, formatPkr } from "./studentDisplayUtils";
+import { useSessionScope } from "@/components/modules/timetable/SessionBar";
+import { classLabel, formatDate, formatPkr, sessionLabelFromClass } from "./studentDisplayUtils";
 import ProvisionalIntakeDialog from "./ProvisionalIntakeDialog";
 
 function studentRef(s: AcademyStudent) {
@@ -65,8 +66,10 @@ export default function RegistrationTab({
 
   const routes =
     routesProp ?? (user?.role ? academyStudentRoutes(user.role, "registration") : null);
-  const hasActions = caps.canView || caps.canEdit || caps.canDelete;
-  const colSpan = hasActions ? 9 : 8;
+  const { apiSessionId, writable, isAll, hasScope } = useSessionScope(sessionId);
+  const showSessionCol = isAll || !writable;
+  const hasActions = caps.canView || (writable && (caps.canEdit || caps.canDelete));
+  const colSpan = (hasActions ? 9 : 8) + (showSessionCol ? 1 : 0);
 
   useEffect(() => {
     if (intakeParamHandled.current) return;
@@ -77,21 +80,32 @@ export default function RegistrationTab({
     }
   }, [searchParams, setSearchParams]);
 
+  useEffect(() => {
+    setClassFilter("");
+    setPage(1);
+  }, [sessionId]);
+
   const { data: classes = [] } = useQuery({
     queryKey: ["academy-classes", sessionId],
-    queryFn: () => fetchAcademyClasses({ status: "active", sessionId: sessionId || undefined }),
-    enabled: Boolean(sessionId),
+    queryFn: () =>
+      fetchAcademyClasses({
+        status: "active",
+        sessionId: apiSessionId,
+      }),
+    enabled: hasScope,
   });
 
-  const canIntake = Boolean(sessionId) && classes.length > 0;
-  const intakeBlockedReason = !sessionId
+  const canIntake = writable && classes.length > 0;
+  const intakeBlockedReason = !hasScope
     ? "Select an academic session first"
-    : classes.length === 0
-      ? "Add at least one active class for this session"
-      : null;
+    : !writable
+      ? "Switch to the active session to register students"
+      : classes.length === 0
+        ? "Add at least one active class for this session"
+        : null;
 
   const { data: listData, isLoading } = useQuery({
-    queryKey: ["academy-students", page, search, classFilter, statusFilter],
+    queryKey: ["academy-students", sessionId, page, search, classFilter, statusFilter],
     queryFn: () =>
       fetchAcademyStudents({
         page,
@@ -99,7 +113,9 @@ export default function RegistrationTab({
         search: search || undefined,
         classId: classFilter || undefined,
         status: statusFilter || undefined,
+        sessionId: apiSessionId,
       }),
+    enabled: hasScope,
   });
 
   const deleteMut = useMutation({
@@ -117,6 +133,7 @@ export default function RegistrationTab({
         search: search || undefined,
         classId: classFilter || undefined,
         status: statusFilter || undefined,
+        sessionId: apiSessionId,
       });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -151,7 +168,7 @@ export default function RegistrationTab({
           <h2 className="font-display text-base font-semibold text-primary shrink-0">{heading}</h2>
         )}
         <div className="flex flex-wrap gap-2 items-center sm:ml-auto">
-          {caps.canCreate && (
+          {caps.canCreate && writable && (
             canIntake ? (
               <Button className="gap-2" onClick={() => setIntakeOpen(true)}>
                 <Plus className="h-4 w-4" /> {registerLabel}
@@ -205,6 +222,7 @@ export default function RegistrationTab({
                 <th className="text-left p-3 font-medium">Father</th>
                 <th className="text-left p-3 font-medium">Phone</th>
                 <th className="text-left p-3 font-medium">Class</th>
+                {showSessionCol && <th className="text-left p-3 font-medium">Session</th>}
                 <th className="text-left p-3 font-medium">Created</th>
                 <th className="text-left p-3 font-medium">Monthly</th>
                 <th className="text-left p-3 font-medium">Status</th>
@@ -246,6 +264,11 @@ export default function RegistrationTab({
                     <td className="p-3">{s.fatherName}</td>
                     <td className="p-3">{s.phone || "—"}</td>
                     <td className="p-3">{classLabel(s.classId)}</td>
+                    {showSessionCol && (
+                      <td className="p-3 text-muted-foreground text-xs">
+                        {sessionLabelFromClass(s.classId) || "—"}
+                      </td>
+                    )}
                     <td className="p-3 text-muted-foreground">{formatDate(s.createdAt)}</td>
                     <td className="p-3">{isPending ? "—" : formatPkr(s.monthlyFee)}</td>
                     <td className="p-3">
@@ -262,7 +285,7 @@ export default function RegistrationTab({
                     {hasActions && (
                       <td className="p-3">
                         <div className="flex justify-end gap-1">
-                          {isPending && caps.canEdit && (
+                          {isPending && writable && caps.canEdit && (
                             <Button variant="default" size="sm" className="h-8 gap-1" asChild>
                               <Link to={activateHref}>
                                 <UserCheck className="h-3.5 w-3.5" /> Activate
@@ -276,14 +299,14 @@ export default function RegistrationTab({
                               </Link>
                             </Button>
                           )}
-                          {caps.canEdit && !isPending && (
+                          {writable && caps.canEdit && !isPending && (
                             <Button variant="ghost" size="icon" asChild aria-label="Edit student">
                               <Link to={editHref}>
                                 <Pencil className="h-4 w-4" />
                               </Link>
                             </Button>
                           )}
-                          {caps.canDelete && (
+                          {writable && caps.canDelete && (
                             <Button
                               variant="ghost"
                               size="icon"
@@ -316,7 +339,7 @@ export default function RegistrationTab({
         open={intakeOpen}
         onOpenChange={setIntakeOpen}
         caps={caps}
-        sessionId={sessionId}
+        sessionId={writable ? sessionId : ""}
       />
     </div>
   );

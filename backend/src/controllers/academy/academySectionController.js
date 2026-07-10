@@ -8,10 +8,7 @@ const listByClass = catchAsync(async (req, res) => {
 });
 
 const listBySession = catchAsync(async (req, res) => {
-  const sessionId = req.query.sessionId;
-  if (!sessionId) {
-    return res.status(400).json({ success: false, message: 'sessionId query parameter required' });
-  }
+  const sessionId = req.query.sessionId || undefined;
   const data = await sectionService.listBySession(sessionId, { status: req.query.status });
   res.json({ success: true, data });
 });

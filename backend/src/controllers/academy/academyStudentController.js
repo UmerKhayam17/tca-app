@@ -66,6 +66,7 @@ const list = catchAsync(async (req, res) => {
     search: req.query.search,
     classId: req.query.classId,
     status: req.query.status,
+    sessionId: req.query.sessionId,
     sort: req.query.sort,
     guardianEmail,
   });
@@ -79,6 +80,7 @@ const exportCsv = catchAsync(async (req, res) => {
     search: req.query.search,
     classId: req.query.classId,
     status: req.query.status,
+    sessionId: req.query.sessionId,
   });
   const csv = studentService.studentsToCsv(result.items);
   res.setHeader('Content-Type', 'text/csv');

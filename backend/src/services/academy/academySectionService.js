@@ -28,9 +28,11 @@ async function listByClass(classId, { status } = {}) {
 }
 
 async function listBySession(sessionId, { status } = {}) {
-  if (!sessionId) throw new ApiError(400, 'sessionId required');
-
-  const classes = await AcademyClass.find({ sessionId }).select('_id className status');
+  const classQuery = sessionId ? { sessionId } : {};
+  const classes = await AcademyClass.find(classQuery)
+    .select('_id className status sessionId')
+    .populate('sessionId', 'name status')
+    .lean();
   if (!classes.length) return [];
 
   const classIds = classes.map((c) => c._id);
@@ -40,16 +42,24 @@ async function listBySession(sessionId, { status } = {}) {
   if (status) q.status = status;
 
   const sections = await AcademySection.find(q)
-    .populate('classId', 'className status sessionId')
+    .populate({
+      path: 'classId',
+      select: 'className status sessionId',
+      populate: { path: 'sessionId', select: 'name status' },
+    })
     .sort({ sectionName: 1 })
     .lean();
 
-  return sections.map((s) => ({
-    ...s,
-    className: classMap[String(s.classId?._id || s.classId)]?.className
-      || s.classId?.className
-      || null,
-  }));
+  return sections.map((s) => {
+    const cls = classMap[String(s.classId?._id || s.classId)];
+    const session = cls?.sessionId || s.classId?.sessionId;
+    return {
+      ...s,
+      className: cls?.className || s.classId?.className || null,
+      sessionName: session?.name || null,
+      sessionId: session?._id || cls?.sessionId || s.classId?.sessionId || null,
+    };
+  });
 }
 
 async function createSection(payload, userId) {

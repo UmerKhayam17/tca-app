@@ -316,10 +316,10 @@ async function listStudents({
   classId,
   status,
   guardianEmail,
+  sessionId,
   sort = '-createdAt',
 }) {
   const q = {};
-  if (classId) q.classId = classId;
   if (status) q.status = status;
   if (guardianEmail) {
     const escaped = String(guardianEmail).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -337,12 +337,23 @@ async function listStudents({
     ];
   }
 
+  if (classId) {
+    q.classId = classId;
+  } else if (sessionId) {
+    const classes = await AcademyClass.find({ sessionId }).select('_id');
+    q.classId = { $in: classes.map((c) => c._id) };
+  }
+
   const skip = (Math.max(1, page) - 1) * Math.min(100, Math.max(1, limit));
   const perPage = Math.min(100, Math.max(1, limit));
 
   const [items, total] = await Promise.all([
     AcademyStudent.find(q)
-      .populate('classId', 'className')
+      .populate({
+        path: 'classId',
+        select: 'className sessionId',
+        populate: { path: 'sessionId', select: 'name status' },
+      })
       .populate('sectionId', 'sectionName')
       .populate('selectedSubjects', 'subjectName')
       .populate('createdBy', 'name email')

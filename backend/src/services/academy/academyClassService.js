@@ -11,7 +11,10 @@ async function listClasses({ status, search, sessionId }) {
   if (search) {
     q.className = { $regex: search.trim(), $options: 'i' };
   }
-  return AcademyClass.find(q).populate('createdBy', 'name email').sort({ className: 1 });
+  return AcademyClass.find(q)
+    .populate('createdBy', 'name email')
+    .populate('sessionId', 'name status isActive isClosed')
+    .sort({ className: 1 });
 }
 
 async function createClass(payload, userId) {

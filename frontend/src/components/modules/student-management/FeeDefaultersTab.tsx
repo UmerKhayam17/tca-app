@@ -18,6 +18,7 @@ import {
 } from "@/lib/studentManagementApi";
 import { academyStudentRoutes } from "@/lib/studentManagementMenus";
 import PanelSearchBar from "@/components/modules/PanelSearchBar";
+import { useSessionScope } from "@/components/modules/timetable/SessionBar";
 import { formatDate, formatPkr } from "./studentDisplayUtils";
 
 function SeverityBadge({ days }: { days: number }) {
@@ -49,10 +50,17 @@ function SeverityBadge({ days }: { days: number }) {
   );
 }
 
-export default function FeeDefaultersTab({ caps }: { caps: ModuleActionCaps }) {
+export default function FeeDefaultersTab({
+  caps,
+  sessionId = "",
+}: {
+  caps: ModuleActionCaps;
+  sessionId?: string;
+}) {
   const { toast } = useToast();
   const { user } = useAuth();
   const routes = user?.role ? academyStudentRoutes(user.role, "records") : null;
+  const { apiSessionId, hasScope } = useSessionScope(sessionId);
 
   const [month, setMonth] = useState("");
   const [year, setYear] = useState("");
@@ -67,17 +75,24 @@ export default function FeeDefaultersTab({ caps }: { caps: ModuleActionCaps }) {
       year: year ? Number(year) : undefined,
       classId: classFilter || undefined,
       search: search.trim() || undefined,
+      sessionId: apiSessionId,
     }),
-    [month, year, classFilter, search]
+    [month, year, classFilter, search, apiSessionId]
   );
 
   useEffect(() => {
     setPage(1);
   }, [month, year, classFilter, search]);
 
+  useEffect(() => {
+    setClassFilter("");
+    setPage(1);
+  }, [sessionId]);
+
   const { data: classes = [] } = useQuery({
-    queryKey: ["academy-classes"],
-    queryFn: () => fetchAcademyClasses({ status: "active" }),
+    queryKey: ["academy-classes", sessionId],
+    queryFn: () => fetchAcademyClasses({ status: "active", sessionId: apiSessionId }),
+    enabled: hasScope,
   });
 
   const { data: summary, isLoading: summaryLoading } = useQuery({
@@ -87,7 +102,9 @@ export default function FeeDefaultersTab({ caps }: { caps: ModuleActionCaps }) {
         classId: filterParams.classId,
         month: filterParams.month,
         year: filterParams.year,
+        sessionId: filterParams.sessionId,
       }),
+    enabled: hasScope,
   });
 
   const { data, isLoading } = useQuery({
@@ -98,6 +115,7 @@ export default function FeeDefaultersTab({ caps }: { caps: ModuleActionCaps }) {
         limit: 20,
         ...filterParams,
       }),
+    enabled: hasScope,
   });
 
   const defaulters = data?.defaulters ?? [];

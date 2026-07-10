@@ -1,7 +1,20 @@
-import type { AcademyStudent, AcademySubject } from "@/lib/studentManagementApi";
+import type { AcademyClass, AcademyStudent, AcademySubject } from "@/lib/studentManagementApi";
 
 export function classLabel(classId: AcademyStudent["classId"]): string {
   return typeof classId === "object" && classId && "className" in classId ? classId.className : "—";
+}
+
+export function sessionLabelFromClass(classId: AcademyStudent["classId"]): string {
+  if (!classId || typeof classId === "string") return "";
+  const session = classId.sessionId;
+  if (!session || typeof session === "string") return "";
+  return session.name || "";
+}
+
+export function sessionLabelFromAcademyClass(cls: AcademyClass | undefined): string {
+  if (!cls?.sessionId) return "";
+  if (typeof cls.sessionId === "string") return "";
+  return cls.sessionId.name || "";
 }
 
 export function subjectList(subjects: AcademyStudent["selectedSubjects"], isFullPackage: boolean): string {

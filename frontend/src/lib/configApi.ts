@@ -122,6 +122,28 @@ export function isSessionWritable(s: AcademicSession): boolean {
   return s.writable ?? sessionStatus(s) === "active";
 }
 
+/** Sentinel for the session bar “All sessions” option (not persisted across refresh). */
+export const ALL_SESSIONS_ID = "__all__";
+
+export function isAllSessions(sessionId: string | undefined | null): boolean {
+  return sessionId === ALL_SESSIONS_ID;
+}
+
+/** Mongo session id for API queries, or undefined when browsing all sessions. */
+export function sessionQueryId(sessionId: string | undefined | null): string | undefined {
+  if (!sessionId || isAllSessions(sessionId)) return undefined;
+  return sessionId;
+}
+
+export function isSessionScopeWritable(
+  sessionId: string | undefined | null,
+  sessions: AcademicSession[]
+): boolean {
+  if (!sessionId || isAllSessions(sessionId)) return false;
+  const selected = sessions.find((s) => s._id === sessionId);
+  return selected ? isSessionWritable(selected) : false;
+}
+
 export const fetchSessions = (status?: SessionStatus) => {
   const q =
     status && typeof status === "string" && SESSION_STATUSES.includes(status as SessionStatus)

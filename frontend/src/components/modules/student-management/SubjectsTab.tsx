@@ -51,6 +51,8 @@ import SubjectEnrollmentFields, {
   SubjectEnrollmentConfig,
   type SubjectEnrollmentForm,
 } from "@/components/modules/student-management/SubjectEnrollmentFields";
+import { useSessionScope } from "@/components/modules/timetable/SessionBar";
+import { sessionLabelFromAcademyClass } from "./studentDisplayUtils";
 
 export default function SubjectsTab({ caps, sessionId }: { caps: ModuleActionCaps; sessionId: string }) {
   const { toast } = useToast();
@@ -67,14 +69,19 @@ export default function SubjectsTab({ caps, sessionId }: { caps: ModuleActionCap
   ]);
   const [codeManuallyEdited, setCodeManuallyEdited] = useState(false);
   const [search, setSearch] = useState("");
+  const { apiSessionId, writable, hasScope, isAll } = useSessionScope(sessionId);
 
   const { data: classes = [], isLoading: classesLoading } = useQuery({
     queryKey: ["academy-classes", sessionId],
-    queryFn: () => fetchAcademyClasses({ sessionId }),
-    enabled: Boolean(sessionId),
+    queryFn: () => fetchAcademyClasses({ sessionId: apiSessionId }),
+    enabled: hasScope,
   });
 
   const selectedClass = classes.find((c) => c._id === classId);
+
+  useEffect(() => {
+    setClassId("");
+  }, [sessionId]);
 
   const { data: subjects = [], isLoading: subjectsLoading } = useQuery({
     queryKey: ["academy-subjects", classId],
@@ -188,7 +195,7 @@ export default function SubjectsTab({ caps, sessionId }: { caps: ModuleActionCap
   });
 
   const classesHref = session?.role ? studentManagementHref(session.role, "classes") : "#";
-  const hasActions = caps.canEdit || caps.canDelete;
+  const hasActions = writable && (caps.canEdit || caps.canDelete);
 
   const canSave = bulkGroupCreate
     ? choiceGroupValid(enrollmentForm) && groupSubjectRowsValid(groupSubjectRows)
@@ -203,11 +210,14 @@ export default function SubjectsTab({ caps, sessionId }: { caps: ModuleActionCap
           className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
           value={classId}
           onChange={(e) => setClassId(e.target.value)}
-          disabled={classesLoading}
+          disabled={classesLoading || !hasScope}
         >
           <option value="">Choose class…</option>
           {classes.map((c) => (
-            <option key={c._id} value={c._id}>{c.className}</option>
+            <option key={c._id} value={c._id}>
+              {c.className}
+              {isAll && sessionLabelFromAcademyClass(c) ? ` (${sessionLabelFromAcademyClass(c)})` : ""}
+            </option>
           ))}
         </select>
       </div>
@@ -217,10 +227,13 @@ export default function SubjectsTab({ caps, sessionId }: { caps: ModuleActionCap
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-4 py-3 border-b bg-muted/30">
             <p className="text-sm">
               Subjects for <span className="font-semibold">{selectedClass.className}</span>
+              {sessionLabelFromAcademyClass(selectedClass) ? (
+                <span className="text-muted-foreground"> · {sessionLabelFromAcademyClass(selectedClass)}</span>
+              ) : null}
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <PanelSearchBar value={search} onChange={setSearch} placeholder="Search subjects…" className="max-w-xs" />
-              {caps.canCreate && (
+              {caps.canCreate && writable && (
                 <Button className="gap-2 shrink-0" onClick={openCreate}>
                   <Plus className="h-4 w-4" /> Add Subject
                 </Button>

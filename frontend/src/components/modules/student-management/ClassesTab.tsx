@@ -17,6 +17,8 @@ import type { ModuleActionCaps } from "@/lib/permissions";
 import {
   createAcademyClass, deleteAcademyClass, fetchAcademyClasses, updateAcademyClass, type AcademyClass,
 } from "@/lib/studentManagementApi";
+import { useSessionScope } from "@/components/modules/timetable/SessionBar";
+import { sessionLabelFromAcademyClass } from "./studentDisplayUtils";
 
 const QK = ["academy-classes"] as const;
 
@@ -30,18 +32,20 @@ export default function ClassesTab({ caps, sessionId }: { caps: ModuleActionCaps
   const [open, setOpen] = useState(false);
   const [edit, setEdit] = useState<AcademyClass | null>(null);
   const [form, setForm] = useState({ className: "", status: "active" as "active" | "inactive" });
+  const { apiSessionId, writable, isAll, hasScope } = useSessionScope(sessionId);
+  const showSessionCol = isAll || !writable;
 
   const { data: classes = [], isLoading } = useQuery({
     queryKey: [...QK, sessionId, search],
-    queryFn: () => fetchAcademyClasses({ sessionId, search: search || undefined }),
-    enabled: Boolean(sessionId),
+    queryFn: () => fetchAcademyClasses({ sessionId: apiSessionId, search: search || undefined }),
+    enabled: hasScope,
   });
 
   const saveMut = useMutation({
     mutationFn: async () => {
-      if (!sessionId) throw new Error("Select an active academic session first.");
+      if (!writable || !apiSessionId) throw new Error("Switch to the active academic session to make changes.");
       if (edit) return updateAcademyClass(edit._id, form);
-      return createAcademyClass({ ...form, sessionId });
+      return createAcademyClass({ ...form, sessionId: apiSessionId });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QK });
@@ -62,8 +66,12 @@ export default function ClassesTab({ caps, sessionId }: { caps: ModuleActionCaps
   });
 
   const openCreate = () => {
-    if (!sessionId) {
-      toast({ title: "Select a session", description: "Create or choose an active academic session first.", variant: "destructive" });
+    if (!writable || !apiSessionId) {
+      toast({
+        title: "Active session required",
+        description: "Switch to the active academic session to add classes.",
+        variant: "destructive",
+      });
       return;
     }
     setEdit(null);
@@ -72,10 +80,20 @@ export default function ClassesTab({ caps, sessionId }: { caps: ModuleActionCaps
   };
 
   const openEdit = (c: AcademyClass) => {
+    if (!writable) {
+      toast({
+        title: "Read-only session",
+        description: "Switch to the active academic session to edit.",
+        variant: "destructive",
+      });
+      return;
+    }
     setEdit(c);
     setForm({ className: c.className, status: c.status });
     setOpen(true);
   };
+
+  const colSpan = 3 + (showSessionCol ? 1 : 0) + ((writable && (caps.canEdit || caps.canDelete)) ? 1 : 0);
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-4">
@@ -86,8 +104,8 @@ export default function ClassesTab({ caps, sessionId }: { caps: ModuleActionCaps
           placeholder="Search classes…"
           className="max-w-md"
         />
-        {caps.canCreate && (
-          <Button onClick={openCreate} className="gap-2 shrink-0" disabled={!sessionId}>
+        {caps.canCreate && writable && (
+          <Button onClick={openCreate} className="gap-2 shrink-0" disabled={!hasScope}>
             <Plus className="h-4 w-4" /> Add Class
           </Button>
         )}
@@ -99,20 +117,27 @@ export default function ClassesTab({ caps, sessionId }: { caps: ModuleActionCaps
             <thead className="bg-muted/50 border-b">
               <tr>
                 <th className="text-left p-3 font-medium">Class</th>
+                {showSessionCol && <th className="text-left p-3 font-medium">Session</th>}
                 <th className="text-left p-3 font-medium">Subjects</th>
                 <th className="text-left p-3 font-medium">Status</th>
-                {(caps.canEdit || caps.canDelete) && <th className="text-right p-3 font-medium">Actions</th>}
+                {writable && (caps.canEdit || caps.canDelete) && (
+                  <th className="text-right p-3 font-medium">Actions</th>
+                )}
               </tr>
             </thead>
             <tbody>
               {isLoading && (
-                <tr><td colSpan={4} className="p-8 text-center text-muted-foreground">Loading…</td></tr>
+                <tr><td colSpan={colSpan} className="p-8 text-center text-muted-foreground">Loading…</td></tr>
               )}
-              {!isLoading && !sessionId && (
-                <tr><td colSpan={4} className="p-8 text-center text-muted-foreground">—</td></tr>
+              {!isLoading && !hasScope && (
+                <tr><td colSpan={colSpan} className="p-8 text-center text-muted-foreground">—</td></tr>
               )}
-              {!isLoading && sessionId && classes.length === 0 && (
-                <tr><td colSpan={4} className="p-8 text-center text-muted-foreground">No classes for this session yet</td></tr>
+              {!isLoading && hasScope && classes.length === 0 && (
+                <tr>
+                  <td colSpan={colSpan} className="p-8 text-center text-muted-foreground">
+                    {isAll ? "No classes found" : "No classes for this session yet"}
+                  </td>
+                </tr>
               )}
               {classes.map((c) => (
                 <tr
@@ -123,13 +148,18 @@ export default function ClassesTab({ caps, sessionId }: { caps: ModuleActionCaps
                   <td className="p-3 font-medium text-primary">
                     {c.className}
                   </td>
+                  {showSessionCol && (
+                    <td className="p-3 text-muted-foreground text-xs">
+                      {sessionLabelFromAcademyClass(c) || "—"}
+                    </td>
+                  )}
                   <td className="p-3">{c.totalSubjects}</td>
                   <td className="p-3">
                     <span className={`text-xs font-semibold rounded-full px-2 py-0.5 ${
                       c.status === "active" ? "bg-accent/15 text-accent" : "bg-muted text-muted-foreground"
                     }`}>{c.status}</span>
                   </td>
-                  {(caps.canEdit || caps.canDelete) && (
+                  {writable && (caps.canEdit || caps.canDelete) && (
                     <td className="p-3 text-right space-x-1">
                       {caps.canEdit && (
                         <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); openEdit(c); }} aria-label="Edit">

@@ -380,7 +380,7 @@ export default function AcademyExpensesManagement({ caps }: { caps: ModuleAction
       </Card>
 
       <Dialog open={dialogOpen} onOpenChange={(o) => !o && setDialogOpen(false)}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{editing ? "Edit expense" : "Add academy expense"}</DialogTitle>
           </DialogHeader>

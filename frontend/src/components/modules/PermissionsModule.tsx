@@ -240,7 +240,7 @@ const PermissionsModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Modul
           if (!o) clearDialog();
         }}
       >
-        <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Edit permissions</DialogTitle>
             {editing ? (

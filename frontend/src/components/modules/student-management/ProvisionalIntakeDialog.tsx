@@ -14,8 +14,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import type { ModuleActionCaps } from "@/lib/permissions";
-import { fetchAcademyClasses, registerProvisionalStudent } from "@/lib/studentManagementApi";
-import { formatDate } from "./studentDisplayUtils";
+import { fetchAcademyClasses, fetchFeeStructureByClass, registerProvisionalStudent } from "@/lib/studentManagementApi";
+import { formatDate, formatPkr } from "./studentDisplayUtils";
 
 const emptyForm = {
   studentName: "",
@@ -46,6 +46,14 @@ export default function ProvisionalIntakeDialog({
     queryFn: () => fetchAcademyClasses({ status: "active", sessionId: sessionId || undefined }),
     enabled: open && Boolean(sessionId),
   });
+
+  const { data: feeStructure, isLoading: feeLoading } = useQuery({
+    queryKey: ["academy-fee-structure", form.classId],
+    queryFn: () => fetchFeeStructureByClass(form.classId),
+    enabled: open && Boolean(form.classId),
+  });
+
+  const selectedClass = classes.find((c) => c._id === form.classId);
 
   useEffect(() => {
     if (!open) setForm(emptyForm);
@@ -100,7 +108,7 @@ export default function ProvisionalIntakeDialog({
             <Label htmlFor="intake-student-name">Student name</Label>
             <Input
               id="intake-student-name"
-              value={form.studentName}
+              placeholder="Enter student's full name"              value={form.studentName}
               onChange={(e) => setForm((f) => ({ ...f, studentName: e.target.value }))}
             />
           </div>
@@ -108,6 +116,7 @@ export default function ProvisionalIntakeDialog({
             <Label htmlFor="intake-father-name">Father name</Label>
             <Input
               id="intake-father-name"
+              placeholder="Enter father's full name"
               value={form.fatherName}
               onChange={(e) => setForm((f) => ({ ...f, fatherName: e.target.value }))}
             />
@@ -145,6 +154,39 @@ export default function ProvisionalIntakeDialog({
               ))}
             </select>
           </div>
+
+          {form.classId && (
+            <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+              <p className="text-xs font-semibold text-primary uppercase tracking-wide">
+                Fee structure{selectedClass ? ` · ${selectedClass.className}` : ""}
+              </p>
+              {feeLoading && (
+                <p className="text-sm text-muted-foreground">Loading fees…</p>
+              )}
+              {!feeLoading && !feeStructure && (
+                <p className="text-sm text-amber-800 dark:text-amber-200">
+                  No fee structure configured for this class yet. Set it up under Fees structure before activation.
+                </p>
+              )}
+              {!feeLoading && feeStructure && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Per subject (monthly)</p>
+                    <p className="font-semibold">{formatPkr(feeStructure.perSubjectFee)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">All subjects (monthly)</p>
+                    <p className="font-semibold">{formatPkr(feeStructure.fullPackageFee)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Admission fee</p>
+                    <p className="font-semibold">{formatPkr(feeStructure.admissionFee)}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="space-y-1.5">
             <Label htmlFor="intake-description">Description</Label>
             <Textarea

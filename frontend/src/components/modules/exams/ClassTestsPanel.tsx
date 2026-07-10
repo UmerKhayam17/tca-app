@@ -334,7 +334,7 @@ export default function ClassTestsPanel({ caps }: { caps: ModuleActionCaps }) {
       </Card>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-w-md max-h-[92vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Schedule class test</DialogTitle>
           </DialogHeader>

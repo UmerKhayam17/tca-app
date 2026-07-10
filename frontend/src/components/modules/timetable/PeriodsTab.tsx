@@ -118,7 +118,7 @@ export default function PeriodsTab({ sessionId, caps }: { sessionId: string; cap
       ))}
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader><DialogTitle>New period template</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
             <div>

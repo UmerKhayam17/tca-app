@@ -529,7 +529,7 @@ export default function RegisterStudentPage({
     if (asDialog) {
       return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="sm:max-w-lg">
             <p className="py-8 text-center text-muted-foreground">Loading student…</p>
           </DialogContent>
         </Dialog>
@@ -1293,7 +1293,7 @@ export default function RegisterStudentPage({
     return (
       <>
         <Dialog open={open} onOpenChange={onOpenChange}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-4xl">
             <DialogHeader>
               <DialogTitle>Complete admission & activate</DialogTitle>
               {isActivate && (existingStudent?.rollNumber || existingStudent?.registrationNumber) && (

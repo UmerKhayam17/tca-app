@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, CalendarRange, CheckCircle2, Download, Layers, PlayCircle, Users, GraduationCap } from "lucide-react";
+import { ArrowLeft, CalendarRange, CheckCircle2, Download, Layers, Users, GraduationCap } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +10,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import type { ModuleActionCaps } from "@/lib/permissions";
 import {
-  activateSession,
   completeSession,
   fetchSessionHistory,
   shiftSessionConfiguration,
@@ -83,15 +82,6 @@ export default function SessionDetailPage({
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
-  const reactivateMut = useMutation({
-    mutationFn: () => activateSession(sessionId),
-    onSuccess: () => {
-      invalidate();
-      toast({ title: "Session reactivated", description: "This is now the active academic session." });
-    },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
-  });
-
   const importMut = useMutation({
     mutationFn: async () => {
       const importError = validateSessionImportForm(importForm);
@@ -144,23 +134,12 @@ export default function SessionDetailPage({
   const handleClose = () => {
     if (
       !confirm(
-        "Close this session? It will be marked completed and draft timetables will be archived. You can reactivate it later.",
+        "Close this session? It will be marked completed and draft timetables will be archived.",
       )
     ) {
       return;
     }
     closeMut.mutate();
-  };
-
-  const handleReactivate = () => {
-    if (
-      !confirm(
-        "Reactivate this session? It will become the active session and other sessions will be marked completed.",
-      )
-    ) {
-      return;
-    }
-    reactivateMut.mutate();
   };
 
   const stats = [
@@ -201,17 +180,6 @@ export default function SessionDetailPage({
                 onClick={handleClose}
               >
                 <CheckCircle2 className="h-4 w-4" /> Close session
-              </Button>
-            )}
-            {(status === "completed" || (!session.isActive && status !== "archived")) && (
-              <Button
-                variant="hero"
-                size="sm"
-                className="gap-1"
-                disabled={reactivateMut.isPending}
-                onClick={handleReactivate}
-              >
-                <PlayCircle className="h-4 w-4" /> Reactivate session
               </Button>
             )}
           </div>

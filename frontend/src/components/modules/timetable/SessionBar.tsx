@@ -6,6 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   ALL_SESSIONS_ID,
   activateSession,
+  canActivateSession,
   fetchSessions,
   isAllSessions,
   isSessionScopeWritable,
@@ -102,7 +103,6 @@ export default function SessionBar({
 
   const selected = !isAllSessions(sessionId) ? sessions.find((s) => s._id === sessionId) : undefined;
   const selectedWritable = selected ? isSessionWritable(selected) : false;
-  const selectedStatus = selected ? sessionStatus(selected) : null;
   const browsingPastOrAll =
     Boolean(sessionId) && (isAllSessions(sessionId) || (selected && !selectedWritable));
 
@@ -142,7 +142,7 @@ export default function SessionBar({
           </select>
         </div>
 
-        {sessionId && selected && !selectedWritable && selectedStatus !== "archived" && (
+        {sessionId && selected && canActivateSession(selected) && (
           <Button
             type="button"
             size="sm"
@@ -162,7 +162,7 @@ export default function SessionBar({
           <p className="text-xs text-amber-800 dark:text-amber-200 bg-amber-500/10 border border-amber-500/20 rounded-md px-3 py-2">
             {isAllSessions(sessionId)
               ? "Viewing all sessions — search and browse only. Create and edit stay on the active session. Refresh returns to the active session."
-              : `Viewing ${selected?.name ?? "past session"} (read-only). Create and edit are disabled. Refresh returns to the active session.`}
+              : `Viewing ${selected?.name ?? "past session"} (read-only). Completed sessions cannot be reactivated — create a new session instead. Refresh returns to the active session.`}
           </p>
         </div>
       )}

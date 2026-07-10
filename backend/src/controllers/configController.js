@@ -85,6 +85,10 @@ const patchSession = catchAsync(async (req, res) => {
     throw new ApiError(400, 'Use session lifecycle endpoints to complete or archive a session');
   }
   if (updates.isActive || updates.status === 'active') {
+    const currentStatus = resolveSessionStatus(session);
+    if (currentStatus === 'completed' || currentStatus === 'archived') {
+      throw new ApiError(400, 'Completed sessions cannot be reactivated. Create a new session instead.');
+    }
     await Session.updateMany(
       { _id: { $ne: req.params.id } },
       { $set: { isActive: false, status: 'completed', isClosed: true } }

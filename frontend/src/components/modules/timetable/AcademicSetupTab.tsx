@@ -11,7 +11,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import type { ModuleActionCaps } from "@/lib/permissions";
 import {
-  activateSession,
   completeSession,
   createSession,
   fetchSessions,
@@ -143,26 +142,12 @@ export default function AcademicSetupTab({
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
-  const reactivateMut = useMutation({
-    mutationFn: activateSession,
-    onSuccess: () => {
-      invalidate();
-      toast({ title: "Session reactivated" });
-    },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
-  });
-
   const handleClose = (id: string) => {
     if (!confirm("Close this session? It will be marked completed.")) return;
     closeMut.mutate(id);
   };
 
-  const handleReactivate = (id: string) => {
-    if (!confirm("Reactivate this session? It will become the active session.")) return;
-    reactivateMut.mutate(id);
-  };
-
-  const actionPending = closeMut.isPending || reactivateMut.isPending;
+  const actionPending = closeMut.isPending;
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-6">
@@ -282,17 +267,6 @@ export default function AcademicSetupTab({
                               onClick={() => handleClose(s._id)}
                             >
                               Close
-                            </Button>
-                          )}
-                          {caps.canEdit && status !== "active" && status !== "archived" && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 text-xs"
-                              disabled={actionPending}
-                              onClick={() => handleReactivate(s._id)}
-                            >
-                              Reactivate
                             </Button>
                           )}
                         </div>

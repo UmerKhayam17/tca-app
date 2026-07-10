@@ -150,6 +150,9 @@ async function activateSession(sessionId, userId) {
   if (session.status === 'archived') {
     throw new ApiError(400, 'Archived sessions cannot be reactivated. Create a new session instead.');
   }
+  if (session.status === 'completed' || session.isClosed) {
+    throw new ApiError(400, 'Completed sessions cannot be reactivated. Create a new session or shift configuration from session history.');
+  }
 
   await Session.updateMany({ _id: { $ne: sessionId } }, { $set: { isActive: false, status: 'completed', isClosed: true } });
 

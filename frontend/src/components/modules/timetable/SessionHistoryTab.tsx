@@ -6,13 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Archive, CheckCircle2, Copy, History, PlayCircle } from "lucide-react";
+import { Archive, CheckCircle2, Copy, History } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { ModuleActionCaps } from "@/lib/permissions";
 import PanelSearchBar from "@/components/modules/PanelSearchBar";
 import { usePanelListSearch } from "@/hooks/usePanelListSearch";
 import {
-  activateSession,
   archiveSession,
   cloneSessionStructure,
   completeSession,
@@ -80,15 +79,6 @@ export default function SessionHistoryTab({ caps }: { caps: ModuleActionCaps }) 
     onSuccess: () => {
       invalidate();
       toast({ title: "Session archived" });
-    },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
-  });
-
-  const activateMut = useMutation({
-    mutationFn: activateSession,
-    onSuccess: () => {
-      invalidate();
-      toast({ title: "Session activated" });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -202,11 +192,6 @@ export default function SessionHistoryTab({ caps }: { caps: ModuleActionCaps }) 
                         onClick={() => confirm("Archive this session? All data becomes read-only.") && archiveMut.mutate(selectedId)}
                       >
                         <Archive className="h-4 w-4" /> Archive
-                      </Button>
-                    )}
-                    {status !== "active" && status !== "archived" && (
-                      <Button size="sm" variant="outline" className="gap-1" onClick={() => activateMut.mutate(selectedId)}>
-                        <PlayCircle className="h-4 w-4" /> Set active
                       </Button>
                     )}
                     <Button

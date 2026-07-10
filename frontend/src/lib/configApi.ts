@@ -122,6 +122,12 @@ export function isSessionWritable(s: AcademicSession): boolean {
   return s.writable ?? sessionStatus(s) === "active";
 }
 
+/** Completed and archived sessions cannot be made active again. */
+export function canActivateSession(s: AcademicSession): boolean {
+  const st = sessionStatus(s);
+  return st !== "active" && st !== "completed" && st !== "archived";
+}
+
 /** Sentinel for the session bar “All sessions” option (not persisted across refresh). */
 export const ALL_SESSIONS_ID = "__all__";
 

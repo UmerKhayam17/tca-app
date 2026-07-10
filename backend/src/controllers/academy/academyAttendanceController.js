@@ -10,6 +10,8 @@ const list = catchAsync(async (req, res) => {
   const data = await attendanceService.listByDate({
     date,
     classId: req.query.classId,
+    sectionId: req.query.sectionId,
+    sessionId: req.query.sessionId,
   });
   res.json({ success: true, data });
 });

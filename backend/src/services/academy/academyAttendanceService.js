@@ -1,6 +1,7 @@
 const ApiError = require('../../utils/ApiError');
 const AcademyStudent = require('../../models/academy/AcademyStudent');
 const AcademyAttendance = require('../../models/academy/AcademyAttendance');
+const AcademyClass = require('../../models/academy/AcademyClass');
 
 function dayRange(dateStr) {
   const day = new Date(dateStr);
@@ -11,14 +12,21 @@ function dayRange(dateStr) {
   return { start: day, end };
 }
 
-async function listByDate({ date, classId }) {
+async function listByDate({ date, classId, sectionId, sessionId }) {
   const { start, end } = dayRange(date);
   const studentQ = { status: 'active' };
-  if (classId) studentQ.classId = classId;
+  if (classId) {
+    studentQ.classId = classId;
+  } else if (sessionId) {
+    const classes = await AcademyClass.find({ sessionId }).select('_id');
+    studentQ.classId = { $in: classes.map((c) => c._id) };
+  }
+  if (sectionId) studentQ.sectionId = sectionId;
 
   const [students, records] = await Promise.all([
     AcademyStudent.find(studentQ)
-      .populate('classId', 'className classCode')
+      .populate('classId', 'className classCode sessionId')
+      .populate('sectionId', 'sectionName')
       .sort({ studentName: 1 })
       .lean(),
     AcademyAttendance.find({ date: { $gte: start, $lte: end } }).lean(),

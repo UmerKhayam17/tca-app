@@ -1059,9 +1059,16 @@ export interface AcademyAttendanceMonthSummary {
   leave: number;
 }
 
-export const fetchAcademyAttendanceDay = (params: { date: string; classId?: string }) => {
+export const fetchAcademyAttendanceDay = (params: {
+  date: string;
+  classId?: string;
+  sectionId?: string;
+  sessionId?: string;
+}) => {
   const q = new URLSearchParams({ date: params.date });
   if (params.classId) q.set("classId", params.classId);
+  if (params.sectionId) q.set("sectionId", params.sectionId);
+  if (params.sessionId) q.set("sessionId", params.sessionId);
   return api<AcademyAttendanceDay>(`/attendance?${q}`);
 };
 

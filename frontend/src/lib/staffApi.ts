@@ -99,6 +99,30 @@ export function staffRolesOnly(roles: RoleOption[]): RoleOption[] {
   return roles.filter((r) => allow.has(String(r.name).toLowerCase()));
 }
 
+/** Roles offered on the Users (all) create form. */
+export function userCreateRoles(roles: RoleOption[]): RoleOption[] {
+  const allow = new Set(["student", "parent", "teacher", "accountant", "admin"]);
+  return roles.filter((r) => allow.has(String(r.name).toLowerCase()));
+}
+
+export function roleDisplayLabel(name: string): string {
+  const n = String(name || "").toLowerCase();
+  if (n === "accountant") return "Staff";
+  if (n === "admin") return "Admin";
+  return n ? n.charAt(0).toUpperCase() + n.slice(1) : name;
+}
+
+/** Default module grants for a new parent account (matches seeded parent role). */
+export const PARENT_DEFAULT_MODULE_PERMISSIONS: Record<string, string[]> = {
+  student: ["view"],
+  attendance: ["view"],
+  exam: ["view"],
+  timetable: ["view"],
+  chat: ["view", "create", "participate"],
+  fee: ["view"],
+  announcement: ["view"],
+};
+
 export async function fetchParentStudents(parentUserId: string): Promise<LinkedStudentSummary[]> {
   const res = await authedFetch(`/users/${parentUserId}/parent-students`);
   const body = await parseJson<{ success?: boolean; data?: LinkedStudentSummary[]; message?: string }>(res);

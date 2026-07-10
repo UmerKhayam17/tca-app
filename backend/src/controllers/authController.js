@@ -36,11 +36,6 @@ function hasExplicitModulePermissions(plain) {
 function collectSessionModulePermissions(user) {
   const userModulePermissions = toPlainModulePermissions(user.modulePermissions);
   const roleModulePermissions = toPlainModulePermissions(user.role?.modulePermissions);
-  const roleName = String(user.role?.name || '').toLowerCase();
-  // Parent access is fixed by role baseline; do not allow per-user overrides.
-  if (roleName === 'parent') {
-    return roleModulePermissions;
-  }
   if (hasExplicitModulePermissions(userModulePermissions)) {
     return userModulePermissions;
   }

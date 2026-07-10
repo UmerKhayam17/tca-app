@@ -71,6 +71,7 @@ const list = catchAsync(async (req, res) => {
     limit: Number(req.query.limit) || 20,
     search: req.query.search,
     classId: req.query.classId,
+    sectionId: req.query.sectionId,
     status: req.query.status,
     sessionId: req.query.sessionId,
     sort: req.query.sort,

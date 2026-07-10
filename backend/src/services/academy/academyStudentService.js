@@ -314,6 +314,7 @@ async function listStudents({
   limit = 20,
   search,
   classId,
+  sectionId,
   status,
   guardianEmail,
   sessionId,
@@ -321,6 +322,7 @@ async function listStudents({
 }) {
   const q = {};
   if (status) q.status = status;
+  if (sectionId) q.sectionId = sectionId;
   if (guardianEmail) {
     const escaped = String(guardianEmail).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     q.guardianEmail = { $regex: `^${escaped}$`, $options: 'i' };

@@ -334,14 +334,10 @@ export default function ClassTestsPanel({ caps }: { caps: ModuleActionCaps }) {
       </Card>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-w-md max-h-[92vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Schedule class test</DialogTitle>
           </DialogHeader>
-          <p className="text-xs text-muted-foreground">
-            Set the test name, when it happens (date and time), and optionally create a repeating series (daily,
-            weekly, or monthly). The first date is usually tomorrow or the day you held the test.
-          </p>
           <div className="grid gap-3 py-2">
             <div className="space-y-1">
               <Label>
@@ -464,9 +460,6 @@ export default function ClassTestsPanel({ caps }: { caps: ModuleActionCaps }) {
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-[11px] text-muted-foreground">
-                {RECURRENCE_OPTIONS.find((o) => o.value === form.recurrence)?.hint}
-              </p>
             </div>
             {isSeries && (
               <div className="space-y-1">
@@ -478,11 +471,6 @@ export default function ClassTestsPanel({ caps }: { caps: ModuleActionCaps }) {
                   value={form.seriesCount}
                   onChange={(e) => setForm((f) => ({ ...f, seriesCount: e.target.value }))}
                 />
-                <p className="text-[11px] text-muted-foreground">
-                  Dates are generated automatically from the first test date (
-                  {form.recurrence === "daily" ? "each day" : form.recurrence === "weekly" ? "every 7 days" : "each month"}
-                  ).
-                </p>
               </div>
             )}
             <div className="space-y-1">

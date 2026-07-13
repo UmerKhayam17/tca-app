@@ -6,13 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Archive, CheckCircle2, Copy, History, PlayCircle } from "lucide-react";
+import { Archive, CheckCircle2, Copy, History } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { ModuleActionCaps } from "@/lib/permissions";
 import PanelSearchBar from "@/components/modules/PanelSearchBar";
 import { usePanelListSearch } from "@/hooks/usePanelListSearch";
 import {
-  activateSession,
   archiveSession,
   cloneSessionStructure,
   completeSession,
@@ -84,15 +83,6 @@ export default function SessionHistoryTab({ caps }: { caps: ModuleActionCaps }) 
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
-  const activateMut = useMutation({
-    mutationFn: activateSession,
-    onSuccess: () => {
-      invalidate();
-      toast({ title: "Session activated" });
-    },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
-  });
-
   const cloneMut = useMutation({
     mutationFn: () => cloneSessionStructure(selectedId, cloneForm),
     onSuccess: (data) => {
@@ -100,8 +90,8 @@ export default function SessionHistoryTab({ caps }: { caps: ModuleActionCaps }) 
       setCloneOpen(false);
       setSelectedId(data.session._id);
       toast({
-        title: "Structure cloned",
-        description: `New session "${data.session.name}" — timetables were not copied.`,
+        title: "Next session created",
+        description: `Configuration shifted to "${data.session.name}".`,
       });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -123,10 +113,6 @@ export default function SessionHistoryTab({ caps }: { caps: ModuleActionCaps }) 
         <History className="h-8 w-8 text-primary shrink-0 mt-1" />
         <div>
           <h2 className="font-semibold text-lg text-primary">Session history</h2>
-          <p className="text-sm text-muted-foreground max-w-2xl">
-            Sessions are never deleted. Complete or archive past years, then clone class structure into a new session.
-            Timetables use versions — old data stays for reports.
-          </p>
         </div>
       </div>
 
@@ -173,9 +159,7 @@ export default function SessionHistoryTab({ caps }: { caps: ModuleActionCaps }) 
         </Card>
 
         <Card className="lg:col-span-2 p-4">
-          {!selectedId && (
-            <p className="text-sm text-muted-foreground py-8 text-center">Select a session to view history</p>
-          )}
+          {!selectedId && <div className="min-h-[8rem]" />}
           {selectedId && isLoading && <p className="text-sm text-muted-foreground">Loading history…</p>}
           {selectedId && history && (
             <div className="space-y-4">
@@ -210,11 +194,6 @@ export default function SessionHistoryTab({ caps }: { caps: ModuleActionCaps }) 
                         <Archive className="h-4 w-4" /> Archive
                       </Button>
                     )}
-                    {status !== "active" && status !== "archived" && (
-                      <Button size="sm" variant="outline" className="gap-1" onClick={() => activateMut.mutate(selectedId)}>
-                        <PlayCircle className="h-4 w-4" /> Set active
-                      </Button>
-                    )}
                     <Button
                       size="sm"
                       className="gap-1"
@@ -229,7 +208,7 @@ export default function SessionHistoryTab({ caps }: { caps: ModuleActionCaps }) 
                         setCloneOpen(true);
                       }}
                     >
-                      <Copy className="h-4 w-4" /> Clone structure
+                      <Copy className="h-4 w-4" /> Shift to next session
                     </Button>
                   </div>
                 )}
@@ -305,11 +284,8 @@ export default function SessionHistoryTab({ caps }: { caps: ModuleActionCaps }) 
       <Dialog open={cloneOpen} onOpenChange={setCloneOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Clone structure to new session</DialogTitle>
+            <DialogTitle>Shift configuration to new session</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Copies classes, sections, subjects, teachers, periods & rooms. Does not copy timetables or students.
-          </p>
           <div className="space-y-3 py-2">
             <div>
               <Label>New session name</Label>
@@ -340,7 +316,7 @@ export default function SessionHistoryTab({ caps }: { caps: ModuleActionCaps }) 
               disabled={!cloneForm.name || !cloneForm.startDate || !cloneForm.endDate || cloneMut.isPending}
               onClick={() => cloneMut.mutate()}
             >
-              Clone
+              Shift configuration
             </Button>
           </DialogFooter>
         </DialogContent>

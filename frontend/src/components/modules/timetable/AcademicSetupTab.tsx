@@ -11,15 +11,13 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import type { ModuleActionCaps } from "@/lib/permissions";
 import {
-  activateSession,
   completeSession,
   createSession,
   fetchSessions,
-  importSessionEnrollment,
+  shiftSessionConfiguration,
   sessionStatus,
   type AcademicSession,
 } from "@/lib/configApi";
-import { studentManagementHref } from "@/lib/studentManagementMenus";
 import { sessionDetailHref } from "@/lib/systemConfigMenus";
 import PanelSearchBar from "@/components/modules/PanelSearchBar";
 import { matchesPanelSearch } from "@/lib/panelSearch";
@@ -92,32 +90,47 @@ export default function AcademicSetupTab({
       });
 
       if (importForm.enabled && importForm.sourceSessionId && session._id) {
-        const importResult = await importSessionEnrollment(
-          session._id,
-          buildSessionImportPayload(importForm),
-        );
-        return { session, importResult };
+        try {
+          const shiftResult = await shiftSessionConfiguration(
+            session._id,
+            buildSessionImportPayload(importForm),
+          );
+          return { session, shiftResult };
+        } catch (shiftErr) {
+          const shiftMessage = shiftErr instanceof Error ? shiftErr.message : "Shift failed";
+          const err = new Error(
+            `Session "${form.name}" was created, but shifting configuration failed: ${shiftMessage}. Open the session and use Shift configuration to retry.`,
+          ) as Error & { sessionId?: string };
+          err.sessionId = session._id;
+          throw err;
+        }
       }
-      return { session, importResult: null };
+      return { session, shiftResult: null };
     },
-    onSuccess: ({ session, importResult }) => {
+    onSuccess: ({ session, shiftResult }) => {
       invalidate();
       qc.invalidateQueries({ queryKey: ["academy-classes"] });
       if (session?._id) onSessionCreated?.(session._id);
       setOpen(false);
       setForm({ name: "", startDate: "", endDate: "" });
       setImportForm(defaultSessionImportForm());
-      if (importResult) {
-        const skipped = importResult.skipped?.length ?? 0;
+      if (shiftResult) {
+        const e = shiftResult.enrollment;
+        const skipped = e.skipped?.length ?? 0;
         toast({
-          title: "Session created & enrollment imported",
-          description: `${importResult.classes} classes, ${importResult.sections} sections, ${importResult.subjects} subjects copied.${skipped ? ` ${skipped} skipped (already exist).` : ""}`,
+          title: "Session created & configuration shifted",
+          description: `${e.sections} sections, ${e.feeStructures} fee structures, timetable setup copied.${skipped ? ` ${skipped} class(es) skipped.` : ""}`,
         });
       } else {
-        toast({ title: "Session created" });
+        toast({ title: "Session created", description: "Default classes and subjects are ready." });
       }
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error & { sessionId?: string }) => {
+      invalidate();
+      qc.invalidateQueries({ queryKey: ["academy-classes"] });
+      if (e.sessionId) onSessionCreated?.(e.sessionId);
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    },
   });
 
   const closeMut = useMutation({
@@ -129,40 +142,15 @@ export default function AcademicSetupTab({
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
-  const reactivateMut = useMutation({
-    mutationFn: activateSession,
-    onSuccess: () => {
-      invalidate();
-      toast({ title: "Session reactivated" });
-    },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
-  });
-
   const handleClose = (id: string) => {
     if (!confirm("Close this session? It will be marked completed.")) return;
     closeMut.mutate(id);
   };
 
-  const handleReactivate = (id: string) => {
-    if (!confirm("Reactivate this session? It will become the active session.")) return;
-    reactivateMut.mutate(id);
-  };
-
-  const actionPending = closeMut.isPending || reactivateMut.isPending;
+  const actionPending = closeMut.isPending;
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-      <Card className="p-4 border-dashed bg-secondary/10">
-        <p className="text-sm text-muted-foreground">
-          Manage academic years here only. After selecting a session in the bar above, add{" "}
-          <strong className="text-foreground">classes, sections, and students</strong> under{" "}
-          <Link to={studentManagementHref(role, "classes")} className="text-accent underline-offset-2 hover:underline">
-            Enrollment → Classes
-          </Link>
-          . Click a session name or <strong>View detail</strong> for the full summary.
-        </p>
-      </Card>
-
       <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
         <PanelSearchBar
           value={search}
@@ -189,7 +177,6 @@ export default function AcademicSetupTab({
         <Card className="p-4 border-accent/30 bg-accent/5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <div className="text-xs text-muted-foreground mb-1">Selected in session bar</div>
               <div className="font-semibold text-primary">{selected.name}</div>
               <div className="text-sm text-muted-foreground mt-1">
                 {formatDate(selected.startDate)} – {formatDate(selected.endDate)}
@@ -214,7 +201,7 @@ export default function AcademicSetupTab({
           <p className="p-8 text-center text-sm text-muted-foreground">Loading sessions…</p>
         ) : filtered.length === 0 ? (
           <p className="p-8 text-center text-sm text-muted-foreground">
-            {sessions.length === 0 ? "No sessions yet. Click New session to create one." : "No sessions match your search."}
+            {sessions.length === 0 ? "No sessions yet." : "No sessions match your search."}
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -280,17 +267,6 @@ export default function AcademicSetupTab({
                               onClick={() => handleClose(s._id)}
                             >
                               Close
-                            </Button>
-                          )}
-                          {caps.canEdit && status !== "active" && status !== "archived" && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 text-xs"
-                              disabled={actionPending}
-                              onClick={() => handleReactivate(s._id)}
-                            >
-                              Reactivate
                             </Button>
                           )}
                         </div>

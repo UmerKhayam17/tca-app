@@ -13,7 +13,6 @@ const ModuleHeader = ({ module, role, right }: { module: ModuleDef; role: Role; 
         <div className="min-w-0 flex-1">
           <div className="text-[10px] tracking-widest uppercase text-accent/90 capitalize">{role} portal</div>
           <h1 className="font-display text-xl sm:text-2xl font-bold leading-tight">{module.label}</h1>
-          <p className="text-primary-foreground/75 text-xs mt-0.5 line-clamp-1">{module.desc}</p>
         </div>
         {right && <div className="hidden sm:block">{right}</div>}
       </div>

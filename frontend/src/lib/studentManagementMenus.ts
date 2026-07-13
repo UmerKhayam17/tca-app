@@ -46,8 +46,10 @@ export function studentManagementHref(
 export type AcademyStudentRoutes = {
   list: string;
   new: string;
+  register: string;
   detail: (studentId: string) => string;
   edit: (studentId: string) => string;
+  activate: (studentId: string) => string;
 };
 
 export function academyStudentRoutes(
@@ -59,16 +61,20 @@ export function academyStudentRoutes(
     return {
       list: root,
       new: `${root}/new`,
+      register: `${root}/register`,
       detail: (studentId) => `${root}/${studentId}`,
       edit: (studentId) => `${root}/${studentId}/edit`,
+      activate: (studentId) => `${root}/${studentId}/activate`,
     };
   }
   const root = `/panel/${role}/student-management/registration`;
   return {
     list: root,
     new: `${root}/new`,
+    register: `${root}/register`,
     detail: (studentId) => `${root}/${studentId}`,
     edit: (studentId) => `${root}/${studentId}/edit`,
+    activate: (studentId) => `${root}/${studentId}/activate`,
   };
 }
 

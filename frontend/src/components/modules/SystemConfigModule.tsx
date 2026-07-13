@@ -7,7 +7,7 @@ import {
   isSessionMongoId,
   type SystemConfigSection,
 } from "@/lib/systemConfigMenus";
-import SessionBar, { useActiveSessionId } from "@/components/modules/timetable/SessionBar";
+import SessionBar, { useActiveSessionId, useSessionScope } from "@/components/modules/timetable/SessionBar";
 import AcademicSetupTab from "@/components/modules/timetable/AcademicSetupTab";
 import SectionsTab from "@/components/modules/timetable/SectionsTab";
 import PeriodsTab from "@/components/modules/timetable/PeriodsTab";
@@ -31,6 +31,7 @@ const SystemConfigModule = ({
   const isDetailView = sectionParam === "academic" && action && isSessionMongoId(action);
   const [sessionId, setSessionId] = useState(isDetailView ? action : "");
   useActiveSessionId(sessionId, setSessionId);
+  const { isAll, writable } = useSessionScope(sessionId);
 
   if (!caps.canView) {
     return (
@@ -41,7 +42,7 @@ const SystemConfigModule = ({
   if (isDetailView) {
     return (
       <div>
-        <SessionBar sessionId={sessionId} onSessionChange={setSessionId} />
+        <SessionBar sessionId={sessionId} onSessionChange={setSessionId} allowAllSessions={false} />
         <SessionDetailPage sessionId={action} caps={caps} />
       </div>
     );
@@ -56,21 +57,33 @@ const SystemConfigModule = ({
   }
 
   const needsSession = section !== "history";
+  /** Edit caps only when the selected session is writable (active). */
+  const editCaps: ModuleActionCaps = writable
+    ? caps
+    : { ...caps, canCreate: false, canEdit: false, canDelete: false };
 
   return (
     <div>
       {needsSession && <SessionBar sessionId={sessionId} onSessionChange={setSessionId} />}
-      {section === "academic" && (
-        <AcademicSetupTab sessionId={sessionId} caps={caps} onSessionCreated={setSessionId} />
+      {needsSession && isAll && section !== "academic" ? (
+        <p className="px-4 sm:px-6 lg:px-8 py-8 text-sm text-muted-foreground">
+          Pick a specific academic session to manage timetable setup. Use Student Management or Fees with “All sessions” to search across years.
+        </p>
+      ) : (
+        <>
+          {section === "academic" && (
+            <AcademicSetupTab sessionId={isAll ? "" : sessionId} caps={caps} onSessionCreated={setSessionId} />
+          )}
+          {section === "sections" && <SectionsTab sessionId={sessionId} caps={editCaps} />}
+          {section === "periods" && <PeriodsTab sessionId={sessionId} caps={editCaps} />}
+          {section === "rooms" && <RoomsTab sessionId={sessionId} caps={editCaps} />}
+          {section === "teachers" && <TeacherProfilesTab sessionId={sessionId} caps={editCaps} />}
+          {section === "teacher-assignments" && <AssignmentsTab sessionId={sessionId} caps={editCaps} />}
+          {section === "requirements" && <RequirementsTab sessionId={sessionId} caps={editCaps} />}
+          {section === "timetable-rules" && <TimetableSettingsTab sessionId={sessionId} caps={editCaps} />}
+          {section === "history" && <SessionHistoryTab caps={caps} />}
+        </>
       )}
-      {section === "sections" && <SectionsTab sessionId={sessionId} caps={caps} />}
-      {section === "periods" && <PeriodsTab sessionId={sessionId} caps={caps} />}
-      {section === "rooms" && <RoomsTab sessionId={sessionId} caps={caps} />}
-      {section === "teachers" && <TeacherProfilesTab sessionId={sessionId} caps={caps} />}
-      {section === "teacher-assignments" && <AssignmentsTab sessionId={sessionId} caps={caps} />}
-      {section === "requirements" && <RequirementsTab sessionId={sessionId} caps={caps} />}
-      {section === "timetable-rules" && <TimetableSettingsTab sessionId={sessionId} caps={caps} />}
-      {section === "history" && <SessionHistoryTab caps={caps} />}
     </div>
   );
 };

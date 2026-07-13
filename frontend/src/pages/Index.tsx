@@ -44,8 +44,8 @@ const Index = () => {
   return (
     <>
       <SEO
-        title="The Concept Educational System — School · College · Academy in Islamabad"
-        description="The Concept Educational System brings together a trusted School, College, and Academy under one brand — nurturing students from foundation years to MDCAT, ECAT, O/A Levels and CSS success."
+        title="The Concept Academy"
+        description="The Concept Academy — focused coaching for MDCAT, ECAT, O/A Levels and CSS in Islamabad."
       />
       <HeroSlider />
 

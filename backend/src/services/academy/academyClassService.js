@@ -11,7 +11,10 @@ async function listClasses({ status, search, sessionId }) {
   if (search) {
     q.className = { $regex: search.trim(), $options: 'i' };
   }
-  return AcademyClass.find(q).populate('createdBy', 'name email').sort({ className: 1 });
+  return AcademyClass.find(q)
+    .populate('createdBy', 'name email')
+    .populate('sessionId', 'name status isActive isClosed')
+    .sort({ className: 1 });
 }
 
 async function createClass(payload, userId) {
@@ -21,12 +24,15 @@ async function createClass(payload, userId) {
   const className = payload.className.trim();
   const exists = await AcademyClass.findOne({ sessionId, className });
   if (exists) throw new ApiError(409, 'Class name already exists for this session');
-  return AcademyClass.create({
+  const doc = await AcademyClass.create({
     ...payload,
     sessionId,
     className,
     createdBy: userId,
   });
+  const { syncAcademyToTimetableStructure } = require('./academyDefaultStructureService');
+  await syncAcademyToTimetableStructure(sessionId, userId);
+  return doc;
 }
 
 async function updateClass(id, payload) {
@@ -44,6 +50,10 @@ async function updateClass(id, payload) {
   if (payload.totalSubjects !== undefined) doc.totalSubjects = payload.totalSubjects;
   if (payload.status) doc.status = payload.status;
   await doc.save();
+  if (doc.sessionId) {
+    const { syncAcademyToTimetableStructure } = require('./academyDefaultStructureService');
+    await syncAcademyToTimetableStructure(doc.sessionId, doc.createdBy);
+  }
   return doc;
 }
 

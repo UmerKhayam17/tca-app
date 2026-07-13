@@ -1,5 +1,6 @@
 const catchAsync = require('../../utils/catchAsync');
 const subjectService = require('../../services/academy/academySubjectService');
+const rt = require('../../services/realtime/academyRealtime');
 
 const listByClass = catchAsync(async (req, res) => {
   const data = await subjectService.listByClass(req.params.classId, {
@@ -11,16 +12,19 @@ const listByClass = catchAsync(async (req, res) => {
 
 const create = catchAsync(async (req, res) => {
   const data = await subjectService.createSubject(req.body, req.user._id);
+  rt.subjectCrud('created', data._id);
   res.status(201).json({ success: true, data });
 });
 
 const update = catchAsync(async (req, res) => {
   const data = await subjectService.updateSubject(req.params.id, req.body, req.user._id);
+  rt.subjectCrud('updated', data._id);
   res.json({ success: true, data });
 });
 
 const remove = catchAsync(async (req, res) => {
   await subjectService.deleteSubject(req.params.id);
+  rt.subjectCrud('deleted', req.params.id);
   res.json({ success: true, data: { deleted: true } });
 });
 

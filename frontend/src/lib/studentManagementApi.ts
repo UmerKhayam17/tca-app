@@ -1,19 +1,8 @@
 import { getApiRoot, parseJson, resolveUploadUrl } from "@/lib/api";
 
 export { resolveUploadUrl };
-import { getAccessToken } from "@/lib/auth";
+import { authedFetch } from "@/lib/auth";
 import type { CreatedByUser } from "@/lib/createdBy";
-
-async function authedFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  const token = getAccessToken();
-  const url = `${getApiRoot()}${path.startsWith("/") ? path : `/${path}`}`;
-  const headers: Record<string, string> = { ...(init.headers as Record<string, string>) };
-  if (token) headers.Authorization = `Bearer ${token}`;
-  if (!(init.body instanceof FormData) && init.method !== "GET" && init.method !== "HEAD") {
-    headers["Content-Type"] = headers["Content-Type"] || "application/json";
-  }
-  return fetch(url, { ...init, credentials: "include", headers });
-}
 
 export interface Pagination {
   page: number;
@@ -24,7 +13,7 @@ export interface Pagination {
 
 export interface AcademyClass {
   _id: string;
-  sessionId?: string;
+  sessionId?: string | { _id: string; name?: string; status?: string };
   className: string;
   totalSubjects: number;
   status: "active" | "inactive";
@@ -92,6 +81,17 @@ export interface AcademicRecord {
   year?: string;
 }
 
+export type AcademyStudentStatus = "pending_fee" | "active" | "inactive" | "suspended";
+
+export interface AcademyStudentProvisionalBody {
+  studentName: string;
+  fatherName: string;
+  phone: string;
+  dateOfBirth: string;
+  classId: string;
+  description?: string;
+}
+
 export interface AcademyStudentRegisterBody {
   studentName: string;
   fatherName: string;
@@ -122,9 +122,38 @@ export interface AcademyStudentRegisterBody {
   admissionFeeDiscount?: number;
 }
 
+export interface AcademyStudentActivateBody extends AcademyStudentRegisterBody {
+  parentPassword?: string;
+  studentPassword?: string;
+  paymentMethod?: "cash" | "bank_transfer" | "online" | "other";
+  receiptNumber?: string;
+  paymentDate?: string;
+}
+
+export type AcademyStudentDirectRegisterBody = AcademyStudentActivateBody & {
+  studentName: string;
+  fatherName: string;
+  dateOfBirth: string;
+  classId: string;
+  sectionId: string;
+};
+
+export interface AcademyStudentActivateResult {
+  student: AcademyStudent;
+  credentials: {
+    studentId: string;
+    rollNumber: string;
+    studentEmail: string;
+    studentPassword: string;
+    parentEmail?: string;
+  };
+}
+
 export interface AcademyStudent {
   _id: string;
-  studentId: string;
+  studentId?: string;
+  registrationNumber?: string;
+  rollNumber?: string;
   studentName: string;
   photoImage?: string;
   fatherName: string;
@@ -139,11 +168,12 @@ export interface AcademyStudent {
   studentEmail?: string;
   postalAddress?: string;
   contactPhoneRes?: string;
-  phone: string;
+  phone?: string;
+  intakeNotes?: string;
   permanentAddress?: string;
   currentSchoolCollege?: string;
   academicHistory?: AcademicRecord[];
-  gender: "male" | "female" | "other";
+  gender?: "male" | "female" | "other";
   address?: string;
   classId: string | AcademyClass;
   sectionId?: string | AcademySection;
@@ -155,7 +185,9 @@ export interface AcademyStudent {
   admissionFeeDiscount?: number;
   discountAmount?: number;
   totalFee: number;
-  status: string;
+  status: AcademyStudentStatus;
+  createdAt?: string;
+  activatedAt?: string;
   createdBy?: CreatedByUser | string;
 }
 
@@ -384,12 +416,19 @@ export const fetchSectionsByClass = (classId: string, params?: { status?: string
 
 export interface AcademySectionWithClass extends AcademySection {
   className?: string | null;
+  sessionName?: string | null;
+  sessionId?: string | { _id: string; name?: string } | null;
 }
 
-export const fetchAcademySectionsBySession = (sessionId: string, params?: { status?: string }) => {
-  const q = new URLSearchParams({ sessionId });
+export const fetchAcademySectionsBySession = (
+  sessionId?: string,
+  params?: { status?: string }
+) => {
+  const q = new URLSearchParams();
+  if (sessionId) q.set("sessionId", sessionId);
   if (params?.status) q.set("status", params.status);
-  return api<AcademySectionWithClass[]>(`/sections?${q.toString()}`);
+  const qs = q.toString();
+  return api<AcademySectionWithClass[]>(`/sections${qs ? `?${qs}` : ""}`);
 };
 
 export const createAcademySection = (body: {
@@ -509,14 +548,18 @@ export const fetchAcademyStudents = async (params?: {
   limit?: number;
   search?: string;
   classId?: string;
+  sectionId?: string;
   status?: string;
+  sessionId?: string;
 }) => {
   const q = new URLSearchParams();
   if (params?.page) q.set("page", String(params.page));
   if (params?.limit) q.set("limit", String(params.limit));
   if (params?.search) q.set("search", params.search);
   if (params?.classId) q.set("classId", params.classId);
+  if (params?.sectionId) q.set("sectionId", params.sectionId);
   if (params?.status) q.set("status", params.status);
+  if (params?.sessionId) q.set("sessionId", params.sessionId);
   const res = await authedFetch(`/student-management/students?${q}`);
   const body = await parseJson<{
     success?: boolean;
@@ -530,6 +573,41 @@ export const fetchAcademyStudents = async (params?: {
 
 export const registerAcademyStudent = (body: AcademyStudentRegisterBody) =>
   api<AcademyStudent>("/students", { method: "POST", body: JSON.stringify(body) });
+
+export const registerProvisionalStudent = (body: AcademyStudentProvisionalBody) =>
+  api<AcademyStudent>("/students/provisional", { method: "POST", body: JSON.stringify(body) });
+
+export async function registerDirectAcademyStudent(body: AcademyStudentDirectRegisterBody) {
+  const res = await authedFetch("/student-management/students/direct", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const parsed = await parseJson<{
+    success?: boolean;
+    data?: AcademyStudent;
+    credentials?: AcademyStudentActivateResult["credentials"];
+    message?: string;
+  }>(res);
+  if (!res.ok) throw new Error(parsed.message || `Registration failed (${res.status})`);
+  return { student: parsed.data!, credentials: parsed.credentials! };
+}
+
+export async function activateAcademyStudent(id: string, body: AcademyStudentActivateBody) {
+  const res = await authedFetch(`/student-management/students/${id}/activate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const parsed = await parseJson<{
+    success?: boolean;
+    data?: AcademyStudent;
+    credentials?: AcademyStudentActivateResult["credentials"];
+    message?: string;
+  }>(res);
+  if (!res.ok) throw new Error(parsed.message || `Activation failed (${res.status})`);
+  return { student: parsed.data!, credentials: parsed.credentials! };
+}
 
 export const updateAcademyStudent = (id: string, body: Record<string, unknown>) =>
   api<AcademyStudent>(`/students/${id}`, { method: "PATCH", body: JSON.stringify(body) });
@@ -555,16 +633,18 @@ export const getAcademyStudentRecord = (id: string) =>
 export const deleteAcademyStudent = (id: string) =>
   api<{ deleted: boolean; studentId?: string }>(`/students/${id}`, { method: "DELETE" });
 
-export const exportStudentsCsv = async (params?: { search?: string; classId?: string }) => {
+export const exportStudentsCsv = async (params?: {
+  search?: string;
+  classId?: string;
+  status?: string;
+  sessionId?: string;
+}) => {
   const q = new URLSearchParams();
   if (params?.search) q.set("search", params.search);
   if (params?.classId) q.set("classId", params.classId);
-  const token = getAccessToken();
-  const url = `${getApiRoot()}/student-management/students/export?${q}`;
-  const res = await fetch(url, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    credentials: "include",
-  });
+  if (params?.status) q.set("status", params.status);
+  if (params?.sessionId) q.set("sessionId", params.sessionId);
+  const res = await authedFetch(`/student-management/students/export?${q}`, { method: "GET" });
   if (!res.ok) throw new Error("Export failed");
   return res.blob();
 };
@@ -588,6 +668,7 @@ export const fetchAcademyFees = async (params?: {
   studentId?: string;
   month?: number;
   year?: number;
+  sessionId?: string;
 }) => {
   const q = new URLSearchParams();
   if (params?.page) q.set("page", String(params.page));
@@ -598,6 +679,7 @@ export const fetchAcademyFees = async (params?: {
   if (params?.studentId) q.set("studentId", params.studentId);
   if (params?.month) q.set("month", String(params.month));
   if (params?.year) q.set("year", String(params.year));
+  if (params?.sessionId) q.set("sessionId", params.sessionId);
   const res = await authedFetch(`/student-management/fees?${q}`);
   const body = await parseJson<{
     success?: boolean;
@@ -614,12 +696,14 @@ export const fetchAcademyFeeSummary = (params?: {
   year?: number;
   classId?: string;
   studentId?: string;
+  sessionId?: string;
 }) => {
   const q = new URLSearchParams();
   if (params?.month) q.set("month", String(params.month));
   if (params?.year) q.set("year", String(params.year));
   if (params?.classId) q.set("classId", params.classId);
   if (params?.studentId) q.set("studentId", params.studentId);
+  if (params?.sessionId) q.set("sessionId", params.sessionId);
   const qs = q.toString();
   return api<AcademyFeeSummary>(`/fees/summary${qs ? `?${qs}` : ""}`);
 };
@@ -740,6 +824,7 @@ export const fetchFeeDefaulters = async (params?: {
   month?: number;
   year?: number;
   search?: string;
+  sessionId?: string;
 }) => {
   const q = new URLSearchParams();
   if (params?.page) q.set("page", String(params.page));
@@ -748,6 +833,7 @@ export const fetchFeeDefaulters = async (params?: {
   if (params?.month) q.set("month", String(params.month));
   if (params?.year) q.set("year", String(params.year));
   if (params?.search) q.set("search", params.search);
+  if (params?.sessionId) q.set("sessionId", params.sessionId);
   const res = await authedFetch(`/student-management/fees/defaulters?${q}`);
   const body = await parseJson<{
     success?: boolean;
@@ -763,11 +849,13 @@ export const fetchFeeDefaultersSummary = (params?: {
   classId?: string;
   month?: number;
   year?: number;
+  sessionId?: string;
 }) => {
   const q = new URLSearchParams();
   if (params?.classId) q.set("classId", params.classId);
   if (params?.month) q.set("month", String(params.month));
   if (params?.year) q.set("year", String(params.year));
+  if (params?.sessionId) q.set("sessionId", params.sessionId);
   const qs = q.toString();
   return api<FeeDefaultersSummary>(`/fees/defaulters/summary${qs ? `?${qs}` : ""}`);
 };
@@ -777,18 +865,15 @@ export const exportFeeDefaultersCsv = async (params?: {
   month?: number;
   year?: number;
   search?: string;
+  sessionId?: string;
 }) => {
   const q = new URLSearchParams();
   if (params?.classId) q.set("classId", params.classId);
   if (params?.month) q.set("month", String(params.month));
   if (params?.year) q.set("year", String(params.year));
   if (params?.search) q.set("search", params.search);
-  const token = getAccessToken();
-  const url = `${getApiRoot()}/student-management/fees/defaulters/export?${q}`;
-  const res = await fetch(url, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    credentials: "include",
-  });
+  if (params?.sessionId) q.set("sessionId", params.sessionId);
+  const res = await authedFetch(`/student-management/fees/defaulters/export?${q}`, { method: "GET" });
   if (!res.ok) throw new Error("Export failed");
   return res.blob();
 };
@@ -1000,9 +1085,16 @@ export interface AcademyAttendanceMonthSummary {
   leave: number;
 }
 
-export const fetchAcademyAttendanceDay = (params: { date: string; classId?: string }) => {
+export const fetchAcademyAttendanceDay = (params: {
+  date: string;
+  classId?: string;
+  sectionId?: string;
+  sessionId?: string;
+}) => {
   const q = new URLSearchParams({ date: params.date });
   if (params.classId) q.set("classId", params.classId);
+  if (params.sectionId) q.set("sectionId", params.sectionId);
+  if (params.sessionId) q.set("sessionId", params.sessionId);
   return api<AcademyAttendanceDay>(`/attendance?${q}`);
 };
 

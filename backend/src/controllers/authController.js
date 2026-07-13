@@ -11,6 +11,7 @@ const {
   hashToken,
 } = require('../utils/tokenService');
 const env = require('../config/env');
+const { getRefreshCookieOptions } = require('../utils/authCookies');
 
 const otpStore = new Map();
 
@@ -35,11 +36,6 @@ function hasExplicitModulePermissions(plain) {
 function collectSessionModulePermissions(user) {
   const userModulePermissions = toPlainModulePermissions(user.modulePermissions);
   const roleModulePermissions = toPlainModulePermissions(user.role?.modulePermissions);
-  const roleName = String(user.role?.name || '').toLowerCase();
-  // Parent access is fixed by role baseline; do not allow per-user overrides.
-  if (roleName === 'parent') {
-    return roleModulePermissions;
-  }
   if (hasExplicitModulePermissions(userModulePermissions)) {
     return userModulePermissions;
   }
@@ -77,13 +73,7 @@ const login = catchAsync(async (req, res) => {
   user.lastLogin = new Date();
   await user.save();
 
-  const maxAge = 7 * 24 * 60 * 60 * 1000;
-  res.cookie('refreshToken', refreshToken, {
-    httpOnly: true,
-    secure: env.nodeEnv === 'production',
-    sameSite: 'lax',
-    maxAge,
-  });
+  res.cookie('refreshToken', refreshToken, getRefreshCookieOptions(req));
 
   const modulePermissions = collectSessionModulePermissions(user);
 
@@ -135,13 +125,7 @@ const refresh = catchAsync(async (req, res) => {
   const { accessToken, refreshToken } = issueTokens(user);
   user.refreshToken = hashToken(refreshToken);
   await user.save();
-  const maxAge = 7 * 24 * 60 * 60 * 1000;
-  res.cookie('refreshToken', refreshToken, {
-    httpOnly: true,
-    secure: env.nodeEnv === 'production',
-    sameSite: 'lax',
-    maxAge,
-  });
+  res.cookie('refreshToken', refreshToken, getRefreshCookieOptions(req));
   const modulePermissions = collectSessionModulePermissions(user);
   res.json({
     success: true,
@@ -166,7 +150,7 @@ const logout = catchAsync(async (req, res) => {
       /* ignore */
     }
   }
-  res.clearCookie('refreshToken');
+  res.clearCookie('refreshToken', { path: '/' });
   res.json({ success: true, message: 'Logged out' });
 });
 
@@ -204,13 +188,7 @@ const verifyOtp = catchAsync(async (req, res) => {
   const { accessToken, refreshToken } = issueTokens(user);
   user.refreshToken = hashToken(refreshToken);
   await user.save();
-  const maxAge = 7 * 24 * 60 * 60 * 1000;
-  res.cookie('refreshToken', refreshToken, {
-    httpOnly: true,
-    secure: env.nodeEnv === 'production',
-    sameSite: 'lax',
-    maxAge,
-  });
+  res.cookie('refreshToken', refreshToken, getRefreshCookieOptions(req));
   const modulePermissions = collectSessionModulePermissions(user);
   res.json({
     success: true,

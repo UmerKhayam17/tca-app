@@ -1,16 +1,5 @@
 import { getApiRoot, parseJson } from "@/lib/api";
-import { getAccessToken } from "@/lib/auth";
-
-async function authedFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  const token = getAccessToken();
-  const url = `${getApiRoot()}${path.startsWith("/") ? path : `/${path}`}`;
-  const headers: Record<string, string> = { ...(init.headers as Record<string, string>) };
-  if (token) headers.Authorization = `Bearer ${token}`;
-  if (!(init.body instanceof FormData) && init.method !== "GET" && init.method !== "HEAD") {
-    headers["Content-Type"] = headers["Content-Type"] || "application/json";
-  }
-  return fetch(url, { ...init, credentials: "include", headers });
-}
+import { authedFetch } from "@/lib/auth";
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await authedFetch(`/config${path}`, init);
@@ -133,6 +122,34 @@ export function isSessionWritable(s: AcademicSession): boolean {
   return s.writable ?? sessionStatus(s) === "active";
 }
 
+/** Completed and archived sessions cannot be made active again. */
+export function canActivateSession(s: AcademicSession): boolean {
+  const st = sessionStatus(s);
+  return st !== "active" && st !== "completed" && st !== "archived";
+}
+
+/** Sentinel for the session bar “All sessions” option (not persisted across refresh). */
+export const ALL_SESSIONS_ID = "__all__";
+
+export function isAllSessions(sessionId: string | undefined | null): boolean {
+  return sessionId === ALL_SESSIONS_ID;
+}
+
+/** Mongo session id for API queries, or undefined when browsing all sessions. */
+export function sessionQueryId(sessionId: string | undefined | null): string | undefined {
+  if (!sessionId || isAllSessions(sessionId)) return undefined;
+  return sessionId;
+}
+
+export function isSessionScopeWritable(
+  sessionId: string | undefined | null,
+  sessions: AcademicSession[]
+): boolean {
+  if (!sessionId || isAllSessions(sessionId)) return false;
+  const selected = sessions.find((s) => s._id === sessionId);
+  return selected ? isSessionWritable(selected) : false;
+}
+
 export const fetchSessions = (status?: SessionStatus) => {
   const q =
     status && typeof status === "string" && SESSION_STATUSES.includes(status as SessionStatus)
@@ -199,8 +216,27 @@ export type SessionEnrollmentImportResult = {
   importedClassNames: string[];
 };
 
+export type SessionShiftResult = {
+  defaults: { classesCreated: number; subjectsCreated: number };
+  enrollment: SessionEnrollmentImportResult;
+  timetable: {
+    periodTemplates: number;
+    classes: number;
+    sections: number;
+    subjects: number;
+  };
+  sourceSession: { _id: string; name: string };
+  targetSession: { _id: string; name: string };
+};
+
 export const importSessionEnrollment = (targetSessionId: string, body: SessionEnrollmentImportInput) =>
   api<SessionEnrollmentImportResult>(`/sessions/${targetSessionId}/import-enrollment`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+export const shiftSessionConfiguration = (targetSessionId: string, body: SessionEnrollmentImportInput) =>
+  api<SessionShiftResult>(`/sessions/${targetSessionId}/shift-configuration`, {
     method: "POST",
     body: JSON.stringify(body),
   });

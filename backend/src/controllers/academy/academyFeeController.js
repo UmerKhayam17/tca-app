@@ -2,6 +2,7 @@ const catchAsync = require('../../utils/catchAsync');
 const ApiError = require('../../utils/ApiError');
 const feeService = require('../../services/academy/academyFeeService');
 const AcademyStudent = require('../../models/academy/AcademyStudent');
+const rt = require('../../services/realtime/academyRealtime');
 
 async function assertParentOwnsStudent(req, studentId) {
   const roleName = req.user?.roleDoc?.name || req.user?.role?.name || req.user?.role;
@@ -54,17 +55,20 @@ const list = catchAsync(async (req, res) => {
     year: req.query.year,
     classId: req.query.classId,
     feeType: req.query.feeType,
+    sessionId: req.query.sessionId,
   });
   res.json({ success: true, data: result.items, pagination: result.pagination });
 });
 
 const generate = catchAsync(async (req, res) => {
   const data = await feeService.generateMonthlyFees(req.body, req.user._id);
+  rt.feeCrud('generated', data?._id || 'batch');
   res.status(201).json({ success: true, data });
 });
 
 const pay = catchAsync(async (req, res) => {
   const data = await feeService.recordPayment(req.params.id, req.body, req.user._id);
+  rt.feeCrud('updated', req.params.id);
   res.json({ success: true, data });
 });
 
@@ -102,6 +106,7 @@ const summary = catchAsync(async (req, res) => {
     classId: req.query.classId,
     studentId: studentId || undefined,
     studentIds,
+    sessionId: req.query.sessionId,
   });
   res.json({ success: true, data });
 });
@@ -114,6 +119,7 @@ const defaulters = catchAsync(async (req, res) => {
     month: req.query.month ? Number(req.query.month) : undefined,
     year: req.query.year ? Number(req.query.year) : undefined,
     search: req.query.search,
+    sessionId: req.query.sessionId,
   });
   res.json({ success: true, data: result.items, pagination: result.pagination });
 });
@@ -123,6 +129,7 @@ const defaultersSummary = catchAsync(async (req, res) => {
     classId: req.query.classId,
     month: req.query.month ? Number(req.query.month) : undefined,
     year: req.query.year ? Number(req.query.year) : undefined,
+    sessionId: req.query.sessionId,
   });
   res.json({ success: true, data });
 });
@@ -133,6 +140,7 @@ const exportDefaulters = catchAsync(async (req, res) => {
     month: req.query.month ? Number(req.query.month) : undefined,
     year: req.query.year ? Number(req.query.year) : undefined,
     search: req.query.search,
+    sessionId: req.query.sessionId,
   });
   res.setHeader('Content-Type', 'text/csv');
   res.setHeader('Content-Disposition', 'attachment; filename="fee-defaulters.csv"');

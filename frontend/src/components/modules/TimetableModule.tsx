@@ -9,7 +9,7 @@ import {
   getTimetableSections,
   type TimetableSection,
 } from "@/lib/timetableMenus";
-import SessionBar, { useActiveSessionId } from "@/components/modules/timetable/SessionBar";
+import SessionBar, { useActiveSessionId, useSessionScope } from "@/components/modules/timetable/SessionBar";
 import GridTab from "@/components/modules/timetable/GridTab";
 import MyScheduleTab from "@/components/modules/timetable/MyScheduleTab";
 import ViewScheduleTab from "@/components/modules/timetable/ViewScheduleTab";
@@ -26,8 +26,9 @@ const TimetableModule = ({
   const { user } = useAuth();
   const [sessionId, setSessionId] = useState("");
   useActiveSessionId(sessionId, setSessionId);
+  const { isAll, writable } = useSessionScope(sessionId);
 
-  const canManage = caps.canEdit || caps.canCreate;
+  const canManage = (caps.canEdit || caps.canCreate) && writable;
   const isTeacher = user?.role === "teacher";
   const section: TimetableSection = sectionParam
     ? findTimetableSection(sectionParam, { caps, role })
@@ -41,9 +42,24 @@ const TimetableModule = ({
   return (
     <>
       <SessionBar sessionId={sessionId} onSessionChange={setSessionId} />
-      {section === "builder" && canManage && <GridTab sessionId={sessionId} caps={caps} />}
-      {section === "view" && <ViewScheduleTab sessionId={sessionId} />}
-      {section === "mine" && (isTeacher || canManage) && <MyScheduleTab sessionId={sessionId} />}
+      {isAll ? (
+        <p className="px-4 sm:px-6 lg:px-8 py-8 text-sm text-muted-foreground">
+          Pick a specific academic session to view or edit timetables. “All sessions” is for searchable lists in Student Management and Fees.
+        </p>
+      ) : (
+        <>
+          {section === "builder" && canManage && <GridTab sessionId={sessionId} caps={caps} />}
+          {section === "builder" && !canManage && (
+            <p className="px-4 sm:px-6 lg:px-8 py-8 text-sm text-muted-foreground">
+              Timetable builder is available on the active session only. Switch to the active session to edit, or open View schedule to browse this session.
+            </p>
+          )}
+          {section === "view" && <ViewScheduleTab sessionId={sessionId} />}
+          {section === "mine" && (isTeacher || caps.canEdit || caps.canCreate) && (
+            <MyScheduleTab sessionId={sessionId} />
+          )}
+        </>
+      )}
     </>
   );
 };

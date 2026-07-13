@@ -57,7 +57,7 @@ export default function RoomsTab({ sessionId, caps }: { sessionId: string; caps:
   });
 
   if (!sessionId) {
-    return <p className="p-6 text-muted-foreground text-sm">Select an academic session above.</p>;
+    return null;
   }
 
   return (

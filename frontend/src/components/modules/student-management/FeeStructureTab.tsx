@@ -20,6 +20,8 @@ import {
 } from "@/lib/studentManagementApi";
 import PanelSearchBar from "@/components/modules/PanelSearchBar";
 import { matchesPanelSearch } from "@/lib/panelSearch";
+import { useSessionScope } from "@/components/modules/timetable/SessionBar";
+import { sessionLabelFromAcademyClass } from "./studentDisplayUtils";
 
 const FEE_STRUCTURES_KEY = ["academy-fee-structures"] as const;
 
@@ -52,39 +54,65 @@ export default function FeeStructureTab({ caps, sessionId }: { caps: ModuleActio
   const [editRow, setEditRow] = useState<AcademyFeeStructure | null>(null);
   const [modalForm, setModalForm] = useState(emptyModalForm);
   const [search, setSearch] = useState("");
+  const { apiSessionId, writable, hasScope, isAll } = useSessionScope(sessionId);
 
   const { data: classes = [] } = useQuery({
     queryKey: ["academy-classes", sessionId],
-    queryFn: () => fetchAcademyClasses({ status: "active", sessionId }),
-    enabled: Boolean(sessionId),
+    queryFn: () => fetchAcademyClasses({ status: "active", sessionId: apiSessionId }),
+    enabled: hasScope,
   });
+
+  const classIds = useMemo(() => new Set(classes.map((c) => c._id)), [classes]);
 
   const { data: allStructures = [], isLoading: listLoading } = useQuery({
-    queryKey: FEE_STRUCTURES_KEY,
+    queryKey: [...FEE_STRUCTURES_KEY, sessionId],
     queryFn: () => fetchAllFeeStructures(),
+    enabled: hasScope,
   });
 
+  const structuresForSession = useMemo(() => {
+    if (isAll) return allStructures;
+    return allStructures.filter((row) => classIds.has(resolveClassId(row.classId)));
+  }, [allStructures, classIds, isAll]);
+
   const structuresFiltered = useMemo(() => {
-    if (!search.trim()) return allStructures;
-    return allStructures.filter((row) =>
+    if (!search.trim()) return structuresForSession;
+    return structuresForSession.filter((row) =>
       matchesPanelSearch(
         search,
         classLabel(row.classId),
         row.perSubjectFee,
         row.fullPackageFee,
         row.admissionFee,
-        row.status
+        row.status,
+        typeof row.classId === "object" ? sessionLabelFromAcademyClass(row.classId as AcademyClass) : ""
       )
     );
-  }, [allStructures, search]);
+  }, [structuresForSession, search]);
 
   const openCreate = () => {
+    if (!writable) {
+      toast({
+        title: "Read-only session",
+        description: "Switch to the active session to create fee structures.",
+        variant: "destructive",
+      });
+      return;
+    }
     setEditRow(null);
     setModalForm(emptyModalForm());
     setOpen(true);
   };
 
   const openEdit = (row: AcademyFeeStructure) => {
+    if (!writable) {
+      toast({
+        title: "Read-only session",
+        description: "Switch to the active session to edit.",
+        variant: "destructive",
+      });
+      return;
+    }
     setEditRow(row);
     setModalForm({
       classId: resolveClassId(row.classId),
@@ -97,6 +125,7 @@ export default function FeeStructureTab({ caps, sessionId }: { caps: ModuleActio
 
   const saveMut = useMutation({
     mutationFn: async () => {
+      if (!writable) throw new Error("Switch to the active session to make changes.");
       const body = {
         perSubjectFee: Number(modalForm.perSubjectFee),
         fullPackageFee: Number(modalForm.fullPackageFee),
@@ -114,7 +143,7 @@ export default function FeeStructureTab({ caps, sessionId }: { caps: ModuleActio
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
-  const canSave = caps.canCreate || caps.canEdit;
+  const canSave = writable && (caps.canCreate || caps.canEdit);
   const selectedClass = classes.find((c) => c._id === modalForm.classId);
   const isEdit = Boolean(editRow);
 
@@ -128,10 +157,12 @@ export default function FeeStructureTab({ caps, sessionId }: { caps: ModuleActio
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-6">
       <Card className="overflow-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-4 py-3 border-b bg-muted/30">
-          <h3 className="font-medium text-sm">All fee structures</h3>
+          <h3 className="font-medium text-sm">
+            {isAll ? "Fee structures (all sessions)" : "Fee structures"}
+          </h3>
           <div className="flex flex-wrap items-center gap-2">
             <PanelSearchBar value={search} onChange={setSearch} placeholder="Search class or fees…" className="max-w-xs" />
-            {caps.canCreate && (
+            {caps.canCreate && writable && (
               <Button className="gap-2 shrink-0" onClick={openCreate}>
                 <Plus className="h-4 w-4" /> Create fee structure
               </Button>
@@ -143,6 +174,7 @@ export default function FeeStructureTab({ caps, sessionId }: { caps: ModuleActio
             <thead className="bg-muted/50 border-b">
               <tr>
                 <th className="text-left p-3 font-medium">Class</th>
+                {isAll && <th className="text-left p-3 font-medium">Session</th>}
                 <th className="text-left p-3 font-medium">Per subject</th>
                 <th className="text-left p-3 font-medium">Full package</th>
                 <th className="text-left p-3 font-medium">Admission</th>
@@ -153,29 +185,30 @@ export default function FeeStructureTab({ caps, sessionId }: { caps: ModuleActio
             <tbody>
               {listLoading && (
                 <tr>
-                  <td colSpan={canSave ? 6 : 5} className="p-8 text-center text-muted-foreground">
+                  <td colSpan={canSave ? 6 + (isAll ? 1 : 0) : 5 + (isAll ? 1 : 0)} className="p-8 text-center text-muted-foreground">
                     Loading…
                   </td>
                 </tr>
               )}
-              {!listLoading && allStructures.length === 0 && (
+              {!listLoading && structuresFiltered.length === 0 && (
                 <tr>
-                  <td colSpan={canSave ? 6 : 5} className="p-8 text-center text-muted-foreground">
-                    No fee structures yet.
-                    {caps.canCreate && " Click Create fee structure to add one."}
-                  </td>
-                </tr>
-              )}
-              {!listLoading && allStructures.length > 0 && structuresFiltered.length === 0 && (
-                <tr>
-                  <td colSpan={canSave ? 6 : 5} className="p-8 text-center text-muted-foreground">
-                    No fee structures match your search.
+                  <td colSpan={canSave ? 6 + (isAll ? 1 : 0) : 5 + (isAll ? 1 : 0)} className="p-8 text-center text-muted-foreground">
+                    {search.trim()
+                      ? "No fee structures match your search."
+                      : "No fee structures yet."}
                   </td>
                 </tr>
               )}
               {structuresFiltered.map((row) => (
                 <tr key={row._id} className="border-b last:border-0 hover:bg-muted/30">
                   <td className="p-3 font-medium">{classLabel(row.classId)}</td>
+                  {isAll && (
+                    <td className="p-3 text-muted-foreground text-xs">
+                      {typeof row.classId === "object"
+                        ? sessionLabelFromAcademyClass(row.classId as AcademyClass) || "—"
+                        : "—"}
+                    </td>
+                  )}
                   <td className="p-3">{formatFee(row.perSubjectFee)}</td>
                   <td className="p-3">{formatFee(row.fullPackageFee)}</td>
                   <td className="p-3">{formatFee(row.admissionFee)}</td>

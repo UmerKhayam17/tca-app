@@ -62,11 +62,8 @@ export default function NewGroupModal({ onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div
-        className="bg-white w-full max-w-[400px] rounded-[3px] shadow-2xl overflow-hidden flex flex-col"
-        style={{ maxHeight: "85vh" }}
-      >
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-4">
+      <div className="flex max-h-[90dvh] w-full max-w-[400px] flex-col overflow-hidden rounded-[3px] bg-white shadow-2xl">
         {/* Header */}
         <div
           className="flex items-center gap-3 px-5 py-4"

@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { io, type Socket } from "socket.io-client";
 import { useQueryClient } from "@tanstack/react-query";
-import { getAccessToken } from "@/lib/auth";
+import { ensureAccessToken } from "@/lib/auth";
 import { getSocketUrl } from "@/lib/api";
 
 /**
@@ -12,26 +12,34 @@ export function useStaffRealtime(enabled: boolean) {
 
   useEffect(() => {
     if (!enabled) return;
-    const token = getAccessToken();
-    if (!token) return;
+    let socket: Socket | null = null;
+    let cancelled = false;
 
-    const socket: Socket = io(getSocketUrl(), {
-      auth: { token },
-      transports: ["websocket", "polling"],
-    });
+    void (async () => {
+      const token = await ensureAccessToken();
+      if (!token || cancelled) return;
 
-    const onStaff = () => {
-      qc.invalidateQueries({ queryKey: ["staff"] });
-      qc.invalidateQueries({ queryKey: ["staffRoles"] });
-      qc.invalidateQueries({ queryKey: ["moduleRegistry"] });
-      qc.invalidateQueries({ queryKey: ["allUsers"] });
-      qc.invalidateQueries({ queryKey: ["permissionCatalog"] });
-    };
+      socket = io(getSocketUrl(), {
+        auth: (cb) => {
+          void ensureAccessToken().then((t) => cb({ token: t || "" }));
+        },
+        transports: ["websocket", "polling"],
+      });
 
-    socket.on("staff:update", onStaff);
+      const onStaff = () => {
+        qc.invalidateQueries({ queryKey: ["staff"] });
+        qc.invalidateQueries({ queryKey: ["staffRoles"] });
+        qc.invalidateQueries({ queryKey: ["moduleRegistry"] });
+        qc.invalidateQueries({ queryKey: ["allUsers"] });
+        qc.invalidateQueries({ queryKey: ["permissionCatalog"] });
+      };
+
+      socket.on("staff:update", onStaff);
+    })();
+
     return () => {
-      socket.off("staff:update", onStaff);
-      socket.disconnect();
+      cancelled = true;
+      socket?.disconnect();
     };
   }, [enabled, qc]);
 }

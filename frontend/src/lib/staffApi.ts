@@ -1,16 +1,5 @@
 import { getApiRoot, parseJson } from "@/lib/api";
-import { getAccessToken } from "@/lib/auth";
-
-async function authedFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  const token = getAccessToken();
-  const url = `${getApiRoot()}${path.startsWith("/") ? path : `/${path}`}`;
-  const headers: Record<string, string> = { ...(init.headers as Record<string, string>) };
-  if (token) headers.Authorization = `Bearer ${token}`;
-  if (!(init.body instanceof FormData) && init.method !== "GET" && init.method !== "HEAD") {
-    headers["Content-Type"] = headers["Content-Type"] || "application/json";
-  }
-  return fetch(url, { ...init, credentials: "include", headers });
-}
+import { authedFetch } from "@/lib/auth";
 
 export interface RoleOption {
   _id: string;
@@ -110,6 +99,30 @@ export function staffRolesOnly(roles: RoleOption[]): RoleOption[] {
   return roles.filter((r) => allow.has(String(r.name).toLowerCase()));
 }
 
+/** Roles offered on the Users (all) create form. */
+export function userCreateRoles(roles: RoleOption[]): RoleOption[] {
+  const allow = new Set(["student", "parent", "teacher", "accountant", "admin"]);
+  return roles.filter((r) => allow.has(String(r.name).toLowerCase()));
+}
+
+export function roleDisplayLabel(name: string): string {
+  const n = String(name || "").toLowerCase();
+  if (n === "accountant") return "Staff";
+  if (n === "admin") return "Admin";
+  return n ? n.charAt(0).toUpperCase() + n.slice(1) : name;
+}
+
+/** Default module grants for a new parent account (matches seeded parent role). */
+export const PARENT_DEFAULT_MODULE_PERMISSIONS: Record<string, string[]> = {
+  student: ["view"],
+  attendance: ["view"],
+  exam: ["view"],
+  timetable: ["view"],
+  chat: ["view", "create", "participate"],
+  fee: ["view"],
+  announcement: ["view"],
+};
+
 export async function fetchParentStudents(parentUserId: string): Promise<LinkedStudentSummary[]> {
   const res = await authedFetch(`/users/${parentUserId}/parent-students`);
   const body = await parseJson<{ success?: boolean; data?: LinkedStudentSummary[]; message?: string }>(res);
@@ -183,11 +196,7 @@ export async function patchUserPermissionIds(userId: string, permissionIds: stri
 export async function uploadStaffProfilePhoto(userId: string, file: File): Promise<StaffUser> {
   const fd = new FormData();
   fd.append("photo", file);
-  const token = getAccessToken();
-  const url = `${getApiRoot()}/users/${userId}/profile-photo`;
-  const headers: Record<string, string> = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(url, { method: "POST", credentials: "include", headers, body: fd });
+  const res = await authedFetch(`/users/${userId}/profile-photo`, { method: "POST", body: fd });
   const body = await parseJson<{ success?: boolean; message?: string; data?: StaffUser }>(res);
   if (!res.ok) throw new Error(body.message || "Upload failed");
   if (!body.data) throw new Error("Invalid response");

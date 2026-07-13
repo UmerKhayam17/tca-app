@@ -8,9 +8,9 @@ const Footer = () => {
       <div className="container py-16 grid gap-10 md:grid-cols-2 lg:grid-cols-4">
         <div>
           <div className="flex items-center gap-3 mb-4">
-            <img src={logo} alt="The Concept logo" className="h-12 w-auto bg-background/95 rounded p-1" width={120} height={48} loading="lazy" />
+            <img src={logo} alt="The Concept Academy logo" className="h-12 w-auto bg-background/95 rounded p-1" width={120} height={48} loading="lazy" />
             <div>
-              <div className="font-display text-xl font-bold">The Concept</div>
+              <div className="font-display text-xl font-bold">The Concept Academy</div>
               <div className="text-[10px] tracking-[0.2em] uppercase text-accent">Read | Rise | Radiate</div>
             </div>
           </div>
@@ -101,7 +101,7 @@ const Footer = () => {
 
       <div className="border-t border-primary-foreground/10">
         <div className="container py-5 flex flex-col sm:flex-row justify-between items-center gap-2 text-xs text-primary-foreground/60">
-          <p>© {new Date().getFullYear()} The Concept Educational System. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} The Concept Academy. All rights reserved.</p>
           <p>Read | Rise | Radiate</p>
         </div>
       </div>

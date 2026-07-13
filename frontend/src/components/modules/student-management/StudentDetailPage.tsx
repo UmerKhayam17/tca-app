@@ -14,6 +14,7 @@ import {
   Receipt,
   Trash2,
   User,
+  UserCheck,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import type { ModuleActionCaps } from "@/lib/permissions";
@@ -139,8 +140,10 @@ function DataTable({
 }
 
 function StatusBadge({ status }: { status: string }) {
+  const label = status === "pending_fee" ? "Pending fee" : status;
   const colors: Record<string, string> = {
     active: "bg-accent/15 text-accent",
+    pending_fee: "bg-amber-500/15 text-amber-800 dark:text-amber-200",
     present: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
     paid: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
     absent: "bg-destructive/15 text-destructive",
@@ -156,7 +159,7 @@ function StatusBadge({ status }: { status: string }) {
         colors[status] || "bg-muted text-muted-foreground"
       }`}
     >
-      {status}
+      {label}
     </span>
   );
 }
@@ -187,6 +190,10 @@ function ProfileTab({ student }: { student: AcademyStudent }) {
           <DetailRow label="Student name" value={student.studentName} />
           <DetailRow label="Father's name" value={student.fatherName} />
           <DetailRow label="Date of birth" value={formatDate(student.dateOfBirth)} />
+          <DetailRow label="Admission date" value={formatDate(student.createdAt)} />
+          {student.status === "active" && (
+            <DetailRow label="Activated" value={formatDate(student.activatedAt)} />
+          )}
           <DetailRow label="Nationality" value={student.nationality} />
           <DetailRow label="Gender" value={student.gender} />
           <DetailRow label="Student email" value={student.studentEmail} />
@@ -514,10 +521,6 @@ function TestsTab({
 
       <div>
         <SectionTitle>Term exam results (published)</SectionTitle>
-        <p className="text-xs text-muted-foreground mb-3">
-          Official multi-subject result cards from Exams → Term exams. Only published results appear here.
-          For bulk entry use Test And Exams management → Enter tests.
-        </p>
         {termResults.length === 0 ? (
           <EmptyBlock message="No published term exam results yet." />
         ) : (
@@ -594,6 +597,7 @@ export default function StudentDetailPage({
     routesProp ?? (user?.role ? academyStudentRoutes(user.role, "registration") : null);
   const listHref = routes?.list ?? "..";
   const editHref = routes ? routes.edit(studentId) : "#";
+  const activateHref = routes ? routes.activate(studentId) : "#";
   const listBackLabel = routes?.list.includes("/students")
     ? "Back to student records"
     : "Back to registration";
@@ -623,6 +627,7 @@ export default function StudentDetailPage({
   }
 
   const { student, enrollment, attendance, fees, assessments } = record;
+  const isPending = student.status === "pending_fee";
 
   return (
     <div className="w-full px-4 sm:px-6 lg:px-8 py-4 space-y-4">
@@ -639,19 +644,44 @@ export default function StudentDetailPage({
             </h2>
             <StatusBadge status={student.status} />
           </div>
-          <p className="text-xs text-muted-foreground font-mono">{student.studentId}</p>
+          <p className="text-xs text-muted-foreground font-mono">
+            {isPending
+              ? [student.rollNumber, student.registrationNumber].filter(Boolean).join(" · ") || "Pending admission"
+              : [student.rollNumber, student.studentId].filter(Boolean).join(" · ")}
+          </p>
+          {student.phone && (
+            <p className="text-xs text-muted-foreground">{student.phone}</p>
+          )}
+          <p className="text-xs text-muted-foreground">
+            Created {formatDate(student.createdAt)}
+            {!isPending && student.activatedAt ? ` · Activated ${formatDate(student.activatedAt)}` : null}
+          </p>
           <p className="text-xs text-muted-foreground">{classLabel(student.classId)}</p>
           <CreatedByLine createdBy={student.createdBy} className="text-xs" />
         </div>
         {caps.canEdit && (
-          <Button size="sm" className="gap-2 shrink-0" asChild>
-            <Link to={editHref}>
-              <Pencil className="h-4 w-4" /> Edit
-            </Link>
-          </Button>
+          isPending ? (
+            <Button size="sm" className="gap-2 shrink-0" asChild>
+              <Link to={activateHref}>
+                <UserCheck className="h-4 w-4" /> Complete & activate
+              </Link>
+            </Button>
+          ) : (
+            <Button size="sm" className="gap-2 shrink-0" asChild>
+              <Link to={editHref}>
+                <Pencil className="h-4 w-4" /> Edit
+              </Link>
+            </Button>
+          )
         )}
       </div>
 
+      {isPending ? (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-muted-foreground">
+          Admission intake only. Send the family to accounts to record the fee and complete enrollment
+          (section, subjects, roll number, and portal logins).
+        </div>
+      ) : (
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg border bg-muted/25 px-4 py-2.5">
         <QuickStat label="Subjects" value={enrollment.subjectCount} />
         <QuickStat
@@ -674,12 +704,15 @@ export default function StudentDetailPage({
           }
         />
       </div>
+      )}
 
       <Tabs defaultValue="profile" className="w-full">
         <TabsList className="w-full flex flex-wrap h-auto gap-0.5 p-0.5 bg-muted/40">
           <TabsTrigger value="profile" className="gap-1.5">
             <User className="h-3.5 w-3.5" /> Profile
           </TabsTrigger>
+          {!isPending && (
+          <>
           <TabsTrigger value="enrollment" className="gap-1.5">
             <BookOpen className="h-3.5 w-3.5" /> Enrollment ({enrollment.subjectCount})
           </TabsTrigger>
@@ -695,11 +728,15 @@ export default function StudentDetailPage({
           <TabsTrigger value="tests" className="gap-1.5">
             <GraduationCap className="h-3.5 w-3.5" /> Test reports
           </TabsTrigger>
+          </>
+          )}
         </TabsList>
 
         <TabsContent value="profile" className="mt-3 focus-visible:outline-none">
           <ProfileTab student={student} />
         </TabsContent>
+        {!isPending && (
+        <>
         <TabsContent value="enrollment" className="mt-3 focus-visible:outline-none">
           <EnrollmentTab record={record} />
         </TabsContent>
@@ -730,6 +767,8 @@ export default function StudentDetailPage({
             caps={caps}
           />
         </TabsContent>
+        </>
+        )}
       </Tabs>
     </div>
   );

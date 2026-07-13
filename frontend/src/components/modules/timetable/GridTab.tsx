@@ -1,5 +1,4 @@
-import { useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,11 +8,9 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { AlertCircle, Copy, GripVertical, Plus, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/useAuth";
 import type { ModuleActionCaps } from "@/lib/permissions";
 import type { Weekday } from "@/lib/configApi";
 import { fetchClasses, fetchSections, fetchSubjects } from "@/lib/configApi";
-import { systemConfigHref } from "@/lib/systemConfigMenus";
 import { fetchUsers } from "@/lib/usersApi";
 import {
   createTimetableVersion,
@@ -41,7 +38,6 @@ export default function GridTab({
   caps: ModuleActionCaps;
 }) {
   const { toast } = useToast();
-  const { user } = useAuth();
   const qc = useQueryClient();
   const [classId, setClassId] = useState("");
   const [sectionId, setSectionId] = useState("");
@@ -56,6 +52,12 @@ export default function GridTab({
   const [dropOver, setDropOver] = useState<{ day: Weekday; periodId: string } | null>(null);
   const skipClickRef = useRef(false);
 
+  useEffect(() => {
+    setClassId("");
+    setSectionId("");
+    setVersionId("");
+  }, [sessionId]);
+
   const { data: classes = [] } = useQuery({
     queryKey: ["config-classes", sessionId],
     queryFn: () => fetchClasses(sessionId),
@@ -63,8 +65,8 @@ export default function GridTab({
   });
 
   const { data: sections = [] } = useQuery({
-    queryKey: ["config-sections", classId],
-    queryFn: () => fetchSections({ classId }),
+    queryKey: ["config-sections", classId, sessionId],
+    queryFn: () => fetchSections({ classId, sessionId }),
     enabled: !!classId,
   });
 
@@ -280,13 +282,11 @@ export default function GridTab({
     setSlotDialog({ day, period, existing });
   };
 
-  const teachersHref = user ? systemConfigHref(user.role, "teachers") : "#";
-
   const sectionLabel = sections.find((s) => s._id === sectionId);
   const classLabel = classes.find((c) => c._id === classId);
 
   if (!sessionId) {
-    return <p className="p-6 text-muted-foreground text-sm">Select a session above.</p>;
+    return null;
   }
 
   return (
@@ -372,11 +372,6 @@ export default function GridTab({
               </Badge>
             ))}
           </div>
-          {canEditGrid && (
-            <p className="text-xs text-muted-foreground">
-              Drag a lesson to another cell to move it. Drop on an occupied cell to swap.
-            </p>
-          )}
 
           <Card className="overflow-x-auto">
             <table className="w-full text-sm min-w-[640px]">
@@ -463,47 +458,6 @@ export default function GridTab({
         </>
       )}
 
-      {sectionId && !activeVersionId && !isLoading && (
-        <p className="text-sm text-muted-foreground">
-          No timetable for this section. Click <strong>New draft</strong> to start building the grid.
-        </p>
-      )}
-
-      {sectionId && grid && activeVersion?.status === "published" && (
-        <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
-          Viewing a <strong>published</strong> timetable (read-only). Use <strong>Class view</strong> for the
-          live schedule, or create a <strong>New draft</strong> to make changes.
-        </p>
-      )}
-      {sectionId && grid && activeVersion?.status === "archived" && (
-        <p className="text-sm text-muted-foreground bg-muted/40 border rounded-md px-3 py-2">
-          Viewing an <strong>archived</strong> version (read-only). Click <strong>Publish</strong> to make it
-          the live timetable again, or <strong>Duplicate</strong> to edit as a new draft.
-        </p>
-      )}
-
-      {sectionId && classId && subjectOptions.length === 0 && (
-        <Card className="p-4 text-sm text-muted-foreground space-y-2">
-          <p className="font-medium text-foreground">Set up subjects first</p>
-          <ol className="list-decimal list-inside space-y-1">
-            <li>
-              <Link to={user ? systemConfigHref(user.role, "academic") : "#"} className="text-primary underline">
-                System Configuration → Academic
-              </Link>
-              : add classes and subjects for this class.
-            </li>
-            <li>
-              Ensure teacher accounts exist under Users. Optional:{" "}
-              <Link to={teachersHref} className="text-primary underline">
-                Teacher profiles
-              </Link>{" "}
-              for subjects they usually teach.
-            </li>
-            <li>Return here, create a <strong>New draft</strong>, then pick any teacher for each slot.</li>
-          </ol>
-        </Card>
-      )}
-
       <Dialog open={!!slotDialog} onOpenChange={(o) => !o && setSlotDialog(null)}>
         <DialogContent>
           <DialogHeader>
@@ -531,15 +485,6 @@ export default function GridTab({
                   <option key={s._id} value={s._id}>{s.name}</option>
                 ))}
               </select>
-              {subjectOptions.length === 0 && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  No subjects yet. Add them under{" "}
-                  <Link to={user ? systemConfigHref(user.role, "academic") : "#"} className="text-primary underline">
-                    Academic setup
-                  </Link>
-                  .
-                </p>
-              )}
             </div>
             <div>
               <Label>Teacher</Label>
@@ -554,11 +499,6 @@ export default function GridTab({
                   <option key={t._id} value={t._id}>{t.name}</option>
                 ))}
               </select>
-              {form.subjectId && panelTeachers.length === 0 && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  No teacher accounts found. Add users with the Teacher role first.
-                </p>
-              )}
             </div>
           </div>
           <DialogFooter className="gap-2 sm:gap-0">

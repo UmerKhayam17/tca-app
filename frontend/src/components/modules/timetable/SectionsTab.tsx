@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -50,6 +50,11 @@ export default function SectionsTab({
   const [open, setOpen] = useState(false);
   const [edit, setEdit] = useState<SchoolSection | null>(null);
   const [form, setForm] = useState<SectionForm>(emptyForm());
+
+  useEffect(() => {
+    setClassId("");
+    setViewAll(false);
+  }, [sessionId]);
 
   const { data: classes = [] } = useQuery({
     queryKey: ["config-classes", sessionId],
@@ -151,7 +156,7 @@ export default function SectionsTab({
   };
 
   if (!sessionId) {
-    return <p className="p-6 text-muted-foreground text-sm">Select an academic session above.</p>;
+    return null;
   }
 
   const selectedClass = classes.find((c) => c._id === classId);
@@ -318,10 +323,6 @@ export default function SectionsTab({
             </div>
           </Card>
         </>
-      )}
-
-      {!classId && !viewAll && (
-        <p className="text-sm text-muted-foreground">Select a class or enable “Show all sections in session”.</p>
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>

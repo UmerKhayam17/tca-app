@@ -32,17 +32,22 @@ import {
   fetchModuleRegistry,
   fetchStaffUsers,
   staffRolesOnly,
+  userCreateRoles,
+  roleDisplayLabel,
   assignParentStudents,
   updateStaffUser,
   uploadStaffProfilePhoto,
   normalizeModulePermissions,
-  type ModuleRegistryEntry,
   type RoleOption,
   type LinkedStudentSummary,
   type StaffUser,
 } from "@/lib/staffApi";
 import { useStaffRealtime } from "@/hooks/useStaffSocket";
 import ModuleAccessMatrix from "@/components/modules/ModuleAccessMatrix";
+import ParentUserCreateFields, {
+  emptyParentCreateSelection,
+  type ParentCreateSelection,
+} from "@/components/modules/ParentUserCreateFields";
 import PanelToolbar from "@/components/modules/PanelToolbar";
 import { usePanelListSearch } from "@/hooks/usePanelListSearch";
 import { fetchAcademyStudents, type AcademyStudent } from "@/lib/studentManagementApi";
@@ -87,7 +92,7 @@ function SchemaFieldControl({
         {field.optionsFrom === "roles" && <option value="">Select role…</option>}
         {selectOptions.map((o) => (
           <option key={o.value} value={o.value}>
-            {o.label}
+            {field.optionsFrom === "roles" ? roleDisplayLabel(o.label) : o.label}
           </option>
         ))}
       </select>
@@ -247,27 +252,28 @@ const UsersModule = ({
   const [form, setForm] = useState<UserFormValues>(() => emptyUserForm());
   const [modulePerms, setModulePerms] = useState<Record<string, string[]>>({});
   const [parentStudentIds, setParentStudentIds] = useState<string[]>([]);
+  const [parentCreate, setParentCreate] = useState<ParentCreateSelection>(() => emptyParentCreateSelection());
   const [editingWasParent, setEditingWasParent] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
   const roleOptions = useMemo(() => {
-    const base = staffRolesOnly(rolesRaw);
     if (scope === "staff") {
-      return base.filter((r) => String(r.name).toLowerCase() !== "parent");
+      return staffRolesOnly(rolesRaw).filter((r) => String(r.name).toLowerCase() !== "parent");
     }
-    return base;
+    return userCreateRoles(rolesRaw);
   }, [rolesRaw, scope]);
   const selectedRole = roleOptions.find((r) => r._id === form.role);
   const isParentRole = (selectedRole?.name || "").toLowerCase() === "parent";
+  const isParentCreate = open && mode === "create" && isParentRole;
 
   const { data: parentStudentChoices = [], isLoading: parentStudentChoicesLoading } = useQuery({
-    queryKey: ["academy-student-choices", isParentRole],
+    queryKey: ["academy-student-choices", isParentRole, mode],
     queryFn: async () => {
       const r = await fetchAcademyStudents({ page: 1, limit: 200, status: "active" });
       return r.students;
     },
-    enabled: open && isParentRole,
+    enabled: open && isParentRole && mode === "edit",
     retry: false,
   });
 
@@ -309,6 +315,31 @@ const UsersModule = ({
     mutationFn: async () => {
       if (mode === "create" && !caps.canCreate) throw new Error("You do not have permission to create staff.");
       if (mode === "edit" && !caps.canEdit) throw new Error("You do not have permission to edit staff.");
+
+      if (mode === "create" && isParentRole) {
+        if (!form.role) throw new Error("Select a role.");
+        if (!parentCreate.studentId) throw new Error("Select a student for this parent.");
+        if (!parentCreate.name.trim()) throw new Error("Selected student has no name.");
+        if (!parentCreate.email.trim()) {
+          throw new Error("Selected student has no email. Add an email on the student record first.");
+        }
+        if (!parentCreate.password || parentCreate.password.length < 8) {
+          throw new Error("Password must be at least 8 characters.");
+        }
+        const u = await createStaffUser({
+          name: parentCreate.name.trim(),
+          email: parentCreate.email.trim().toLowerCase(),
+          password: parentCreate.password,
+          phone: parentCreate.phone.trim() || "N/A",
+          role: form.role,
+          isActive: true,
+          salary: 0,
+          modulePermissions: parentCreate.modulePermissions,
+        });
+        await assignParentStudents(u._id, [parentCreate.studentId]);
+        return u;
+      }
+
       const fields = visibleFormFields(mode);
       for (const f of fields) {
         const v = (form[f.key] || "").trim();
@@ -324,7 +355,7 @@ const UsersModule = ({
       }
 
       const salaryNum = Math.max(0, Number(form.salary) || 0);
-      const permsPayload = isParentRole ? {} : { ...modulePerms };
+      const permsPayload = { ...modulePerms };
       if (isParentRole && parentStudentIds.length === 0) {
         throw new Error("Select at least one student for this parent.");
       }
@@ -342,7 +373,6 @@ const UsersModule = ({
           modulePermissions: permsPayload,
         });
         if (photoFile) await uploadStaffProfilePhoto(u._id, photoFile);
-        if (isParentRole) await assignParentStudents(u._id, parentStudentIds);
         return u;
       }
       if (!editingId) throw new Error("Missing user");
@@ -363,7 +393,11 @@ const UsersModule = ({
       return u;
     },
     onSuccess: () => {
-      toast({ title: mode === "create" ? "Staff member created" : "Staff member updated" });
+      toast({
+        title: mode === "create"
+          ? isParentRole ? "Parent user created" : "User created"
+          : "User updated",
+      });
       void qc.invalidateQueries({ queryKey: STAFF_QUERY });
       setOpen(false);
       clearFormState();
@@ -392,6 +426,7 @@ const UsersModule = ({
     setEditingId(null);
     setModulePerms({});
     setParentStudentIds([]);
+    setParentCreate(emptyParentCreateSelection());
     setEditingWasParent(false);
     setPhotoFile(null);
     setPhotoPreview((prev) => {
@@ -443,18 +478,6 @@ const UsersModule = ({
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-      <Card className="p-4 border-dashed">
-        <div className="text-sm font-semibold text-primary mb-1">
-          {scope === "staff" ? "Staff management" : "Users management"}
-        </div>
-        <p className="text-xs text-muted-foreground">
-          {scope === "staff"
-            ? "Manage only teachers and accountants: contact details, login, salary, profile photo (upload), status, and per-module actions."
-            : "Manage all users (including staff and parents): contact details, login, status, and per-module actions."}
-          {" "}Data loads via React Query and refreshes live when anyone updates users.
-        </p>
-      </Card>
-
       <PanelToolbar
         search={search}
         onSearchChange={setSearch}
@@ -474,7 +497,7 @@ const UsersModule = ({
                 if (!o) clearFormState();
               }}
             >
-              <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto">
+              <DialogContent className="sm:max-w-2xl">
                 <DialogHeader>
                   <DialogTitle>
                     {mode === "create"
@@ -483,94 +506,133 @@ const UsersModule = ({
                   </DialogTitle>
                 </DialogHeader>
                 <div className="grid grid-cols-2 gap-3 py-2">
-                  <div className="col-span-2 flex flex-col sm:flex-row gap-4 items-start">
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="h-24 w-24 rounded-full border-2 border-dashed border-border bg-muted flex items-center justify-center overflow-hidden">
-                        {photoPreview ? (
-                          <img src={photoPreview} alt="" className="h-full w-full object-cover" />
-                        ) : (
-                          <ImageIcon className="h-8 w-8 text-muted-foreground" />
-                        )}
+                  {!isParentCreate && (
+                    <div className="col-span-2 flex flex-col sm:flex-row gap-4 items-start">
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="h-24 w-24 rounded-full border-2 border-dashed border-border bg-muted flex items-center justify-center overflow-hidden">
+                          {photoPreview ? (
+                            <img src={photoPreview} alt="" className="h-full w-full object-cover" />
+                          ) : (
+                            <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                          )}
+                        </div>
+                        <input
+                          id="staff-photo-input"
+                          type="file"
+                          accept="image/jpeg,image/png,image/gif,image/webp"
+                          className="sr-only"
+                          onChange={onPickPhoto}
+                        />
+                        <Label htmlFor="staff-photo-input" className="cursor-pointer text-xs text-accent hover:underline">
+                          Upload photo
+                        </Label>
                       </div>
-                      <input
-                        id="staff-photo-input"
-                        type="file"
-                        accept="image/jpeg,image/png,image/gif,image/webp"
-                        className="sr-only"
-                        onChange={onPickPhoto}
-                      />
-                      <Label htmlFor="staff-photo-input" className="cursor-pointer text-xs text-accent hover:underline">
-                        Upload photo
-                      </Label>
-                    </div>
-                    <p className="text-[11px] text-muted-foreground flex-1">
-                      Profile picture is stored on the server (not a URL field). Optional — you can add or change it
-                      whenever you save.
-                    </p>
-                  </div>
-
-                  {visibleFormFields(mode).map((field) => (
-                    <div key={field.key} className={field.colSpan === 2 ? "col-span-2" : "col-span-2 sm:col-span-1"}>
-                      <Label className="mb-1.5 block">
-                        {field.label}
-                        {field.required && !(mode === "edit" && field.key === "password" && field.optionalOnEdit) ? (
-                          <span className="text-destructive"> *</span>
-                        ) : null}
-                      </Label>
-                      <SchemaFieldControl
-                        field={field}
-                        mode={mode}
-                        value={form[field.key]}
-                        onChange={(v) => setFormField(setForm, field.key, v)}
-                        roleOptions={roleOptions}
-                      />
-                    </div>
-                  ))}
-
-                  {isParentRole && (
-                    <div className="col-span-2 space-y-2">
-                      <Label className="mb-1.5 block">
-                        Parent students
-                        <span className="text-destructive"> *</span>
-                      </Label>
-                      <div className="rounded-lg border p-3 bg-secondary/10">
-                        {parentStudentChoicesLoading ? (
-                          <p className="text-sm text-muted-foreground">Loading students…</p>
-                        ) : parentStudentChoices.length === 0 ? (
-                          <p className="text-sm text-muted-foreground">No active students found.</p>
-                        ) : (
-                          <select
-                            multiple
-                            value={parentStudentIds}
-                            onChange={(e) => {
-                              const opts = Array.from(e.target.selectedOptions);
-                              setParentStudentIds(opts.map((o) => o.value));
-                            }}
-                            className="w-full h-40 rounded-md border border-input bg-background px-3 text-sm"
-                          >
-                            {parentStudentChoices.map((s: AcademyStudent) => (
-                              <option key={s._id} value={s._id}>
-                                {s.studentName} ({s.studentId})
-                              </option>
-                            ))}
-                          </select>
-                        )}
-                        <p className="text-xs text-muted-foreground mt-2">
-                          Only selected children&apos;s progress will be visible to this parent.
-                        </p>
-                      </div>
+                      <p className="text-[11px] text-muted-foreground flex-1">
+                        Profile picture is stored on the server (not a URL field). Optional — you can add or change it
+                        whenever you save.
+                      </p>
                     </div>
                   )}
 
-                  {modules.length > 0 && !isParentRole && (
-                    <ModuleAccessMatrix modules={modules} value={modulePerms} onChange={setModulePerms} />
+                  <div className="col-span-2 sm:col-span-1">
+                    <Label className="mb-1.5 block">
+                      Role <span className="text-destructive">*</span>
+                    </Label>
+                    <select
+                      className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                      value={form.role}
+                      onChange={(e) => {
+                        const nextRole = e.target.value;
+                        setFormField(setForm, "role", nextRole);
+                        const roleName = roleOptions.find((r) => r._id === nextRole)?.name?.toLowerCase() || "";
+                        if (roleName === "parent" && mode === "create") {
+                          setParentCreate(emptyParentCreateSelection());
+                        }
+                      }}
+                      required
+                    >
+                      <option value="">Select role…</option>
+                      {roleOptions.map((r) => (
+                        <option key={r._id} value={r._id}>
+                          {roleDisplayLabel(r.name)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {isParentCreate ? (
+                    form.role ? (
+                      <ParentUserCreateFields
+                        value={parentCreate}
+                        onChange={setParentCreate}
+                        modules={modules}
+                      />
+                    ) : null
+                  ) : (
+                    <>
+                      {visibleFormFields(mode)
+                        .filter((field) => field.key !== "role")
+                        .map((field) => (
+                          <div key={field.key} className={field.colSpan === 2 ? "col-span-2" : "col-span-2 sm:col-span-1"}>
+                            <Label className="mb-1.5 block">
+                              {field.label}
+                              {field.required && !(mode === "edit" && field.key === "password" && field.optionalOnEdit) ? (
+                                <span className="text-destructive"> *</span>
+                              ) : null}
+                            </Label>
+                            <SchemaFieldControl
+                              field={field}
+                              mode={mode}
+                              value={form[field.key]}
+                              onChange={(v) => setFormField(setForm, field.key, v)}
+                              roleOptions={roleOptions}
+                            />
+                          </div>
+                        ))}
+
+                      {isParentRole && mode === "edit" && (
+                        <div className="col-span-2 space-y-2">
+                          <Label className="mb-1.5 block">
+                            Parent students
+                            <span className="text-destructive"> *</span>
+                          </Label>
+                          <div className="rounded-lg border p-3 bg-secondary/10">
+                            {parentStudentChoicesLoading ? (
+                              <p className="text-sm text-muted-foreground">Loading students…</p>
+                            ) : parentStudentChoices.length === 0 ? (
+                              <p className="text-sm text-muted-foreground">No active students found.</p>
+                            ) : (
+                              <select
+                                multiple
+                                value={parentStudentIds}
+                                onChange={(e) => {
+                                  const opts = Array.from(e.target.selectedOptions);
+                                  setParentStudentIds(opts.map((o) => o.value));
+                                }}
+                                className="w-full h-40 rounded-md border border-input bg-background px-3 text-sm"
+                              >
+                                {parentStudentChoices.map((s: AcademyStudent) => (
+                                  <option key={s._id} value={s._id}>
+                                    {s.studentName} ({s.studentId})
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {modules.length > 0 && (
+                        <ModuleAccessMatrix modules={modules} value={modulePerms} onChange={setModulePerms} />
+                      )}
+                    </>
                   )}
                 </div>
                 <DialogFooter>
                   <Button
                     onClick={() => saveMutation.mutate()}
                     variant="hero"
-                    disabled={saveMutation.isPending}
+                    disabled={saveMutation.isPending || (mode === "create" && !form.role)}
                   >
                     {saveMutation.isPending ? "Saving…" : "Save"}
                   </Button>

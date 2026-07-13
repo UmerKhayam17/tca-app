@@ -12,6 +12,7 @@ const studentManagementRoutes = require('./studentManagementRoutes');
 const roleRoutes = require('./roleRoutes');
 const chatRoutes = require('./chatRoutes');
 const datasheetRoutes = require('./datasheetRoutes');
+const notificationRoutes = require('./notificationRoutes');
 
 const router = Router();
 
@@ -28,5 +29,6 @@ router.use('/timetable', timetableRoutes);
 router.use('/student-management', studentManagementRoutes);
 router.use('/chat', chatRoutes);
 router.use('/datasheets', datasheetRoutes);
+router.use('/notifications', notificationRoutes);
 
 module.exports = router;

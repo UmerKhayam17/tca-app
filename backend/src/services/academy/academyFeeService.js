@@ -27,9 +27,14 @@ function buildDefaulterFeeMatch({ classId, month, year, studentIds }) {
   return feeMatch;
 }
 
-async function resolveActiveStudentIds(classId) {
+async function resolveActiveStudentIds(classId, sessionId) {
   const studentQ = { status: 'active' };
-  if (classId) studentQ.classId = classId;
+  if (classId) {
+    studentQ.classId = classId;
+  } else if (sessionId) {
+    const classes = await AcademyClass.find({ sessionId }).select('_id');
+    studentQ.classId = { $in: classes.map((c) => c._id) };
+  }
   const students = await AcademyStudent.find(studentQ).select('_id').lean();
   return students.map((s) => s._id);
 }
@@ -121,7 +126,7 @@ function receiptNumber(studentDoc, month, year, feeType) {
   return `RCP-${sid}-${feeType === 'admission' ? 'ADM' : `${year}${String(month).padStart(2, '0')}`}`;
 }
 
-async function buildFeeQuery({ studentId, studentIds, status, month, year, classId, feeType }) {
+async function buildFeeQuery({ studentId, studentIds, status, month, year, classId, feeType, sessionId }) {
   const q = {};
   if (status) q.status = status;
   if (feeType) q.feeType = feeType;
@@ -137,6 +142,12 @@ async function buildFeeQuery({ studentId, studentIds, status, month, year, class
   }
   if (classId) {
     const students = await AcademyStudent.find({ classId }).select('_id');
+    q.studentId = { $in: students.map((s) => s._id) };
+    return q;
+  }
+  if (sessionId) {
+    const classes = await AcademyClass.find({ sessionId }).select('_id');
+    const students = await AcademyStudent.find({ classId: { $in: classes.map((c) => c._id) } }).select('_id');
     q.studentId = { $in: students.map((s) => s._id) };
   }
   return q;
@@ -167,10 +178,11 @@ async function listFeeRecords({
   year,
   classId,
   feeType,
+  sessionId,
 }) {
-  await syncOverdueFees({ studentId, studentIds, status, month, year, classId, feeType });
+  await syncOverdueFees({ studentId, studentIds, status, month, year, classId, feeType, sessionId });
 
-  const q = await buildFeeQuery({ studentId, studentIds, status, month, year, classId, feeType });
+  const q = await buildFeeQuery({ studentId, studentIds, status, month, year, classId, feeType, sessionId });
 
   const skip = (Math.max(1, page) - 1) * Math.min(100, Math.max(1, limit));
   const perPage = Math.min(100, Math.max(1, limit));
@@ -180,7 +192,11 @@ async function listFeeRecords({
       AcademyFeeRecord.find(q).populate({
         path: 'studentId',
         select: 'studentId studentName fatherName phone classId monthlyFee',
-        populate: { path: 'classId', select: 'className' },
+        populate: {
+          path: 'classId',
+          select: 'className sessionId',
+          populate: { path: 'sessionId', select: 'name status' },
+        },
       })
     )
       .sort({ year: -1, month: -1, createdAt: -1 })
@@ -257,9 +273,9 @@ async function getStudentFeeHistory(studentId) {
   return { student, records };
 }
 
-async function getFeeSummary({ month, year, classId, studentId, studentIds }) {
-  await syncOverdueFees({ month, year, classId, studentId, studentIds });
-  const q = await buildFeeQuery({ month, year, classId, studentId, studentIds });
+async function getFeeSummary({ month, year, classId, studentId, studentIds, sessionId }) {
+  await syncOverdueFees({ month, year, classId, studentId, studentIds, sessionId });
+  const q = await buildFeeQuery({ month, year, classId, studentId, studentIds, sessionId });
   const records = await AcademyFeeRecord.find(q).lean();
 
   const byStatus = { pending: 0, paid: 0, overdue: 0, waived: 0 };
@@ -275,7 +291,12 @@ async function getFeeSummary({ month, year, classId, studentId, studentIds }) {
   let activeStudents = 0;
   if (!studentId && !(studentIds?.length)) {
     const studentQ = { status: 'active' };
-    if (classId) studentQ.classId = classId;
+    if (classId) {
+      studentQ.classId = classId;
+    } else if (sessionId) {
+      const classes = await AcademyClass.find({ sessionId }).select('_id');
+      studentQ.classId = { $in: classes.map((c) => c._id) };
+    }
     activeStudents = await AcademyStudent.countDocuments(studentQ);
   } else if (studentIds?.length) {
     activeStudents = await AcademyStudent.countDocuments({ _id: { $in: studentIds }, status: 'active' });
@@ -299,12 +320,13 @@ async function listFeeDefaulters({
   month,
   year,
   search,
+  sessionId,
 }) {
-  await syncOverdueFees({ classId, month, year });
+  await syncOverdueFees({ classId, month, year, sessionId });
 
   let studentIds;
-  if (classId) {
-    studentIds = await resolveActiveStudentIds(classId);
+  if (classId || sessionId) {
+    studentIds = await resolveActiveStudentIds(classId, sessionId);
     if (!studentIds.length) {
       const perPage = Math.min(100, Math.max(1, limit));
       return {
@@ -364,12 +386,12 @@ async function listFeeDefaulters({
   };
 }
 
-async function getDefaultersSummary({ classId, month, year }) {
-  await syncOverdueFees({ classId, month, year });
+async function getDefaultersSummary({ classId, month, year, sessionId }) {
+  await syncOverdueFees({ classId, month, year, sessionId });
 
   let studentIds;
-  if (classId) {
-    studentIds = await resolveActiveStudentIds(classId);
+  if (classId || sessionId) {
+    studentIds = await resolveActiveStudentIds(classId, sessionId);
     if (!studentIds.length) {
       return {
         defaulterCount: 0,
@@ -429,7 +451,7 @@ function defaultersToCsv(items) {
   return [header, ...rows].map((r) => r.map(escapeCsvCell).join(',')).join('\n');
 }
 
-async function exportFeeDefaulters({ classId, month, year, search }) {
+async function exportFeeDefaulters({ classId, month, year, search, sessionId }) {
   const { items } = await listFeeDefaulters({
     page: 1,
     limit: 10000,
@@ -437,6 +459,7 @@ async function exportFeeDefaulters({ classId, month, year, search }) {
     month,
     year,
     search,
+    sessionId,
   });
   return defaultersToCsv(items);
 }

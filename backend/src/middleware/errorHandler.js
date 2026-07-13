@@ -17,6 +17,23 @@ function errorHandler(err, req, res, next) {
     }
   }
 
+  if (err.code === 11000 || err.code === 11001) {
+    statusCode = 409;
+    const match = String(err.message || '').match(/dup key:\s*\{([^}]+)\}/);
+    if (match) {
+      message = `Duplicate value: ${match[1].trim()}`;
+    } else {
+      message = 'A record with this value already exists';
+    }
+  }
+
+  if (err.name === 'ValidationError' && err.errors) {
+    statusCode = 400;
+    message = Object.values(err.errors)
+      .map((e) => e.message)
+      .join('; ');
+  }
+
   const payload = {
     success: false,
     message,

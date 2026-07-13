@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,12 @@ export default function RequirementsTab({ sessionId, caps }: { sessionId: string
   const [weekly, setWeekly] = useState(5);
   const [maxConsec, setMaxConsec] = useState(2);
 
+  useEffect(() => {
+    setClassId("");
+    setSectionId("");
+    setSubjectId("");
+  }, [sessionId]);
+
   const { data: classes = [] } = useQuery({
     queryKey: ["config-classes", sessionId],
     queryFn: () => fetchClasses(sessionId),
@@ -30,8 +36,8 @@ export default function RequirementsTab({ sessionId, caps }: { sessionId: string
   });
 
   const { data: sections = [] } = useQuery({
-    queryKey: ["config-sections", classId],
-    queryFn: () => fetchSections({ classId }),
+    queryKey: ["config-sections", classId, sessionId],
+    queryFn: () => fetchSections({ classId, sessionId }),
     enabled: !!classId,
   });
 
@@ -77,7 +83,7 @@ export default function RequirementsTab({ sessionId, caps }: { sessionId: string
     r.maxConsecutive,
   ]);
 
-  if (!sessionId) return <p className="p-6 text-muted-foreground text-sm">Select a session above.</p>;
+  if (!sessionId) return null;
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-4">

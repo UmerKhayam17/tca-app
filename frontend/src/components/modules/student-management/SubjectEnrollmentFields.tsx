@@ -126,9 +126,6 @@ export function SubjectEnrollmentConfig({
         />
         <div>
           <span className="text-sm font-medium">Group choice subject</span>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Students pick only one subject from this group (e.g. Computer or Biology).
-          </p>
         </div>
       </label>
 
@@ -175,9 +172,6 @@ export function SubjectEnrollmentConfig({
                 value={value.groupSubjectCount}
                 onChange={(e) => patch({ groupSubjectCount: e.target.value })}
               />
-              <p className="text-xs text-muted-foreground mt-1">
-                Enter 2–10. A name and code field appears for each subject.
-              </p>
             </div>
           )}
 
@@ -234,11 +228,6 @@ export function SubjectEnrollmentConfig({
             </p>
           )}
 
-          {bulkCreate && (
-            <p className="text-xs text-muted-foreground">
-              Each student may enroll in only one subject from this group during registration.
-            </p>
-          )}
         </div>
       )}
     </div>

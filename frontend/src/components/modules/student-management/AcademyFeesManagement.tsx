@@ -28,6 +28,7 @@ import {
 import { academyStudentRoutes } from "@/lib/studentManagementMenus";
 import PanelSearchBar from "@/components/modules/PanelSearchBar";
 import { matchesPanelSearch } from "@/lib/panelSearch";
+import { useSessionScope } from "@/components/modules/timetable/SessionBar";
 import { formatPkr, MONTH_NAMES } from "./studentDisplayUtils";
 
 function studentFromRecord(rec: AcademyFeeRecord) {
@@ -85,6 +86,7 @@ export default function AcademyFeesManagement({
   routes: routesProp,
   showGenerate = true,
   showFilters = true,
+  sessionId = "",
 }: {
   caps: ModuleActionCaps;
   /** When set, only this student's fee history is shown */
@@ -92,6 +94,8 @@ export default function AcademyFeesManagement({
   routes?: AcademyStudentRoutes;
   showGenerate?: boolean;
   showFilters?: boolean;
+  /** Academic session scope from SessionBar (ignored for parents / student detail). */
+  sessionId?: string;
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -99,6 +103,8 @@ export default function AcademyFeesManagement({
   const isParent = user?.role === "parent";
   const routes =
     routesProp ?? (user?.role ? academyStudentRoutes(user.role, "records") : null);
+  const { apiSessionId, writable, hasScope } = useSessionScope(sessionId || "");
+  const scopeEnabled = isParent || Boolean(studentId) || hasScope;
 
   const now = new Date();
   const [month, setMonth] = useState(String(now.getMonth() + 1));
@@ -127,13 +133,15 @@ export default function AcademyFeesManagement({
       year: effectiveStudentId ? undefined : Number(year),
       classId: effectiveStudentId || isParent ? undefined : classFilter || undefined,
       studentId: effectiveStudentId,
+      sessionId: effectiveStudentId || isParent ? undefined : apiSessionId,
     }),
-    [month, year, classFilter, effectiveStudentId, isParent]
+    [month, year, classFilter, effectiveStudentId, isParent, apiSessionId]
   );
 
   useEffect(() => {
     setPage(1);
-  }, [month, year, statusFilter, classFilter, feeTypeFilter, effectiveStudentId]);
+    setClassFilter("");
+  }, [month, year, statusFilter, feeTypeFilter, effectiveStudentId, sessionId]);
 
   useEffect(() => {
     if (!isParent) return;
@@ -166,14 +174,15 @@ export default function AcademyFeesManagement({
   }, [isParent, studentId, parentStudents, selectedParentStudentId]);
 
   const { data: classes = [] } = useQuery({
-    queryKey: ["academy-classes"],
-    queryFn: () => fetchAcademyClasses({ status: "active" }),
-    enabled: showFilters && !studentId,
+    queryKey: ["academy-classes", sessionId],
+    queryFn: () => fetchAcademyClasses({ status: "active", sessionId: apiSessionId }),
+    enabled: showFilters && !studentId && !isParent && hasScope,
   });
 
   const { data: summary, isLoading: summaryLoading } = useQuery({
     queryKey: ["academy-fees-summary", filterParams],
     queryFn: () => fetchAcademyFeeSummary(filterParams),
+    enabled: scopeEnabled,
   });
 
   const { data, isLoading } = useQuery({
@@ -186,15 +195,18 @@ export default function AcademyFeesManagement({
         feeType: feeTypeFilter || undefined,
         ...filterParams,
       }),
+    enabled: scopeEnabled,
   });
 
   const genMut = useMutation({
-    mutationFn: () =>
-      generateMonthlyFees({
+    mutationFn: () => {
+      if (!writable) throw new Error("Switch to the active session to generate fees.");
+      return generateMonthlyFees({
         month: Number(month),
         year: Number(year),
         classId: classFilter || undefined,
-      }),
+      });
+    },
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ["academy-fees"] });
       qc.invalidateQueries({ queryKey: ["academy-fees-summary"] });
@@ -248,7 +260,7 @@ export default function AcademyFeesManagement({
   }, [records, search]);
 
   const canPay = caps.canEdit || caps.canCreate;
-  const canGenerate = showGenerate && !studentId && (caps.canCreate || caps.canEdit);
+  const canGenerate = showGenerate && !studentId && writable && (caps.canCreate || caps.canEdit);
 
   return (
     <div className="space-y-3">
@@ -375,11 +387,6 @@ export default function AcademyFeesManagement({
               </Button>
             )}
           </div>
-          {summary && !studentId && (
-            <p className="text-xs text-muted-foreground mt-2">
-              {summary.activeStudents} active students in scope · {summary.byStatus.paid} paid vouchers
-            </p>
-          )}
         </Card>
       )}
 

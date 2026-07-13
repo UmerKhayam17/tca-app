@@ -248,11 +248,6 @@ export default function AcademySalaryManagement({ caps }: { caps: ModuleActionCa
             </Button>
           )}
         </div>
-        {summary && (
-          <p className="text-xs text-muted-foreground mt-2">
-            Set monthly salary in Staff management, then generate vouchers for each month.
-          </p>
-        )}
       </Card>
 
       <PanelSearchBar

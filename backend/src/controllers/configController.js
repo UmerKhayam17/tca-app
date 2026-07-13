@@ -4,6 +4,7 @@ const { getSystemModulesForApi } = require('../config/systemModules');
 const { logAudit } = require('../services/session/auditService');
 const { assertSessionWritable, syncSessionFlags, resolveSessionStatus, healSessionFlags } = require('../services/session/sessionGuard');
 const Session = require('../models/Session');
+const { ensureDefaultAcademyStructure, syncAcademyToTimetableStructure } = require('../services/academy/academyDefaultStructureService');
 const Class = require('../models/Class');
 const Section = require('../models/Section');
 const Subject = require('../models/Subject');
@@ -25,6 +26,14 @@ const listSessions = catchAsync(async (req, res) => {
 
 const createSession = catchAsync(async (req, res) => {
   const body = { ...req.body };
+  const name = body.name?.trim();
+  if (!name) throw new ApiError(400, 'Session name is required');
+
+  const duplicate = await Session.findOne({ name });
+  if (duplicate) {
+    throw new ApiError(409, `A session named "${name}" already exists`);
+  }
+
   const existingCount = await Session.countDocuments();
   const shouldActivate =
     existingCount === 0 ||
@@ -38,7 +47,7 @@ const createSession = catchAsync(async (req, res) => {
   }
 
   const session = await Session.create({
-    name: body.name,
+    name,
     startDate: body.startDate,
     endDate: body.endDate,
     workingDays: body.workingDays,
@@ -52,13 +61,16 @@ const createSession = catchAsync(async (req, res) => {
     syncSessionFlags(session, body.status || 'completed');
   }
   await session.save();
+
+  const defaultStructure = await ensureDefaultAcademyStructure(session._id, req.user._id);
+
   await logAudit({
     sessionId: session._id,
     action: 'SESSION_CREATED',
     userId: req.user._id,
-    details: { name: session.name },
+    details: { name: session.name, defaultStructure },
   });
-  res.status(201).json({ success: true, data: session });
+  res.status(201).json({ success: true, data: session, defaultStructure });
 });
 
 const patchSession = catchAsync(async (req, res) => {
@@ -73,6 +85,10 @@ const patchSession = catchAsync(async (req, res) => {
     throw new ApiError(400, 'Use session lifecycle endpoints to complete or archive a session');
   }
   if (updates.isActive || updates.status === 'active') {
+    const currentStatus = resolveSessionStatus(session);
+    if (currentStatus === 'completed' || currentStatus === 'archived') {
+      throw new ApiError(400, 'Completed sessions cannot be reactivated. Create a new session instead.');
+    }
     await Session.updateMany(
       { _id: { $ne: req.params.id } },
       { $set: { isActive: false, status: 'completed', isClosed: true } }
@@ -90,6 +106,9 @@ const patchSession = catchAsync(async (req, res) => {
 
 const listClasses = catchAsync(async (req, res) => {
   const { sessionId } = req.query;
+  if (sessionId) {
+    await syncAcademyToTimetableStructure(sessionId, req.user?._id);
+  }
   const q = sessionId ? { session: sessionId } : {};
   const classes = await Class.find(q).populate('sections').populate('subjects').populate('classTeacher');
   res.json({ success: true, data: classes });
@@ -163,6 +182,14 @@ const createSubject = catchAsync(async (req, res) => {
 
 const listSections = catchAsync(async (req, res) => {
   const { classId, sessionId } = req.query;
+  if (sessionId) {
+    await syncAcademyToTimetableStructure(sessionId, req.user?._id);
+  } else if (classId) {
+    const parent = await Class.findById(classId).select('session');
+    if (parent?.session) {
+      await syncAcademyToTimetableStructure(parent.session, req.user?._id);
+    }
+  }
   const q = {};
   if (classId) {
     q.class = classId;
@@ -194,6 +221,12 @@ const listSections = catchAsync(async (req, res) => {
 
 const listSubjects = catchAsync(async (req, res) => {
   const { classId } = req.query;
+  if (classId) {
+    const parent = await Class.findById(classId).select('session');
+    if (parent?.session) {
+      await syncAcademyToTimetableStructure(parent.session, req.user?._id);
+    }
+  }
   const q = classId ? { class: classId } : {};
   const subjects = await Subject.find(q).populate('teacher').populate('class');
   res.json({ success: true, data: subjects });

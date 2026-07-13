@@ -12,7 +12,6 @@ import {
 } from "@/lib/studentManagementMenus";
 import { useAuth } from "@/hooks/useAuth";
 import SessionBar, { useActiveSessionId } from "@/components/modules/timetable/SessionBar";
-import AcademySetupWorkflow from "@/components/modules/student-management/AcademySetupWorkflow";
 import ClassesTab from "@/components/modules/student-management/ClassesTab";
 import SectionsTab from "@/components/modules/student-management/SectionsTab";
 import SubjectsTab from "@/components/modules/student-management/SubjectsTab";
@@ -42,13 +41,6 @@ const StudentManagementModule = ({
   const registrationRoutes = user?.role ? academyStudentRoutes(user.role, "registration") : null;
   const registrationList = registrationRoutes?.list ?? "../registration";
 
-  const setupSection =
-    sectionParam === "registration" || (sectionParam && isAcademyStudentId(sectionParam))
-      ? "registration"
-      : sectionParam === "classes" || (sectionParam && isAcademyClassId(sectionParam))
-        ? "classes"
-        : sectionParam;
-
   const renderBody = () => {
     if (sectionParam === "fees" || sectionParam === "fee-defaulters") {
       return <Navigate to={`/panel/${role}/fees`} replace />;
@@ -56,10 +48,21 @@ const StudentManagementModule = ({
 
     if (sectionParam === "registration") {
       if (action === "new") {
-        if (!caps.canCreate) return <Navigate to={registrationList} replace />;
-        return <RegisterStudentPage caps={caps} routes={registrationRoutes ?? undefined} sessionId={sessionId} />;
+        return <Navigate to={`${registrationList}?intake=1`} replace />;
       }
       if (action && isAcademyStudentId(action)) {
+        if (subAction === "activate") {
+          if (!caps.canEdit) return <Navigate to={registrationRoutes?.detail(action) ?? registrationList} replace />;
+          return (
+            <RegisterStudentPage
+              caps={caps}
+              studentId={action}
+              mode="activate"
+              routes={registrationRoutes ?? undefined}
+              sessionId={sessionId}
+            />
+          );
+        }
         if (subAction === "edit") {
           if (!caps.canEdit) return <Navigate to={`../${action}`} replace />;
           return (
@@ -81,7 +84,7 @@ const StudentManagementModule = ({
         );
       }
       if (action) return <Navigate to={registrationList} replace />;
-      return <RegistrationTab caps={caps} routes={registrationRoutes ?? undefined} sessionId={sessionId} />;
+      return <RegistrationTab caps={caps} routes={registrationRoutes ?? undefined} sessionId={sessionId} enrollmentFlow="intake" />;
     }
 
     if (sectionParam === "classes") {
@@ -107,7 +110,7 @@ const StudentManagementModule = ({
     if (section === "subjects") return <SubjectsTab caps={caps} sessionId={sessionId} />;
     if (section === "fees-structure") return <FeeStructureTab caps={caps} sessionId={sessionId} />;
     if (section === "registration") {
-      return <RegistrationTab caps={caps} routes={registrationRoutes ?? undefined} sessionId={sessionId} />;
+      return <RegistrationTab caps={caps} routes={registrationRoutes ?? undefined} sessionId={sessionId} enrollmentFlow="intake" />;
     }
     return null;
   };
@@ -115,7 +118,6 @@ const StudentManagementModule = ({
   return (
     <div>
       <SessionBar sessionId={sessionId} onSessionChange={setSessionId} />
-      <AcademySetupWorkflow role={role} sessionId={sessionId} currentSection={setupSection} />
       {renderBody()}
     </div>
   );

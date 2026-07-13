@@ -7,12 +7,11 @@ import {
 } from "@/lib/studentManagementMenus";
 import { useAuth } from "@/hooks/useAuth";
 import SessionBar, { useActiveSessionId } from "@/components/modules/timetable/SessionBar";
-import AcademySetupWorkflow from "@/components/modules/student-management/AcademySetupWorkflow";
 import RegistrationTab from "@/components/modules/student-management/RegistrationTab";
 import RegisterStudentPage from "@/components/modules/student-management/RegisterStudentPage";
 import StudentDetailPage from "@/components/modules/student-management/StudentDetailPage";
 
-/** Student Records module — same academy enrollment UI as Registration, under `/panel/:role/students`. */
+/** Student Records module — accountant enrollment under `/panel/:role/students`. */
 const StudentsRecordsModule = ({
   caps,
   section,
@@ -32,12 +31,35 @@ const StudentsRecordsModule = ({
   const listHref = routes?.list ?? "..";
 
   const body = (() => {
+    if (section === "register") {
+      if (!caps.canEdit) return <Navigate to={listHref} replace />;
+      return (
+        <RegisterStudentPage
+          caps={caps}
+          routes={routes ?? undefined}
+          sessionId={sessionId}
+          mode="direct"
+        />
+      );
+    }
+
     if (section === "new") {
-      if (!caps.canCreate) return <Navigate to={listHref} replace />;
-      return <RegisterStudentPage caps={caps} routes={routes ?? undefined} sessionId={sessionId} />;
+      return <Navigate to={`${listHref}?intake=1`} replace />;
     }
 
     if (section && isAcademyStudentId(section)) {
+      if (action === "activate") {
+        if (!caps.canEdit) return <Navigate to={routes?.detail(section) ?? listHref} replace />;
+        return (
+          <RegisterStudentPage
+            caps={caps}
+            studentId={section}
+            mode="activate"
+            routes={routes ?? undefined}
+            sessionId={sessionId}
+          />
+        );
+      }
       if (action === "edit") {
         if (!caps.canEdit) return <Navigate to={routes?.detail(section) ?? listHref} replace />;
         return <RegisterStudentPage caps={caps} studentId={section} routes={routes ?? undefined} sessionId={sessionId} />;
@@ -54,7 +76,7 @@ const StudentsRecordsModule = ({
         routes={routes ?? undefined}
         sessionId={sessionId}
         showHeading={false}
-        registerLabel="Register student"
+        enrollmentFlow="both"
         emptyHint="No students on record yet."
       />
     );
@@ -63,7 +85,6 @@ const StudentsRecordsModule = ({
   return (
     <div>
       <SessionBar sessionId={sessionId} onSessionChange={setSessionId} />
-      <AcademySetupWorkflow role={role} sessionId={sessionId} currentSection="registration" />
       {body}
     </div>
   );

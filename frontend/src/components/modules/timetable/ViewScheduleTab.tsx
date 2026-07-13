@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -12,6 +12,11 @@ export default function ViewScheduleTab({ sessionId }: { sessionId: string }) {
   const [classId, setClassId] = useState("");
   const [sectionId, setSectionId] = useState("");
 
+  useEffect(() => {
+    setClassId("");
+    setSectionId("");
+  }, [sessionId]);
+
   const { data: classes = [] } = useQuery({
     queryKey: ["config-classes", sessionId],
     queryFn: () => fetchClasses(sessionId),
@@ -19,8 +24,8 @@ export default function ViewScheduleTab({ sessionId }: { sessionId: string }) {
   });
 
   const { data: sections = [] } = useQuery({
-    queryKey: ["config-sections", classId],
-    queryFn: () => fetchSections({ classId }),
+    queryKey: ["config-sections", classId, sessionId],
+    queryFn: () => fetchSections({ classId, sessionId }),
     enabled: !!classId,
   });
 
@@ -30,7 +35,7 @@ export default function ViewScheduleTab({ sessionId }: { sessionId: string }) {
     enabled: !!sessionId && !!sectionId,
   });
 
-  if (!sessionId) return <p className="p-6 text-muted-foreground text-sm">Select a session above.</p>;
+  if (!sessionId) return null;
 
   const workingDays = (grid?.workingDays || []) as Weekday[];
   const lecturePeriods = (grid?.periods || []).filter((p) => p.type === "lecture");
@@ -67,13 +72,6 @@ export default function ViewScheduleTab({ sessionId }: { sessionId: string }) {
       </div>
 
       {isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
-      {sectionId && !isLoading && !grid && (
-        <p className="text-sm text-muted-foreground">
-          No published timetable for this section. Publish a draft from{" "}
-          <strong>Timetable builder</strong> first (same session, class, and section).
-        </p>
-      )}
-
       {grid && (
         <>
           <div className="flex flex-wrap items-center gap-2 text-sm">

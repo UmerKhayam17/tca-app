@@ -14,9 +14,14 @@ const academicRecordSchema = new mongoose.Schema(
 
 const academyStudentSchema = new mongoose.Schema(
   {
-    studentId: { type: String, unique: true, trim: true },
+    /** Official academy ID (TCES-YYYY-XXXXXX) — assigned when admission is completed. */
+    studentId: { type: String, trim: true },
+    /** Temporary reference while status is pending_fee (admission office intake). */
+    registrationNumber: { type: String, trim: true },
+    /** Class roll number — temporary (TMP-…) at intake, official on activation. */
+    rollNumber: { type: String, trim: true },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     studentName: { type: String, required: true, trim: true },
-    /** URL path to student photo (e.g. /uploads/students/...). */
     photoImage: { type: String, trim: true },
     fatherName: { type: String, required: true, trim: true },
     dateOfBirth: { type: Date },
@@ -30,34 +35,34 @@ const academyStudentSchema = new mongoose.Schema(
     studentEmail: { type: String, trim: true },
     postalAddress: { type: String, trim: true },
     contactPhoneRes: { type: String, trim: true },
-    phone: { type: String, required: true, trim: true },
+    phone: { type: String, trim: true, default: '' },
+    /** Optional notes from admission office at provisional intake. */
+    intakeNotes: { type: String, trim: true, default: '' },
     permanentAddress: { type: String, trim: true },
     currentSchoolCollege: { type: String, trim: true },
     academicHistory: [academicRecordSchema],
-    gender: { type: String, enum: ['male', 'female', 'other'], required: true },
-    /** @deprecated use postalAddress */
+    gender: { type: String, enum: ['male', 'female', 'other'] },
     address: { type: String, trim: true },
     classId: { type: mongoose.Schema.Types.ObjectId, ref: 'AcademyClass', required: true, index: true },
     sectionId: { type: mongoose.Schema.Types.ObjectId, ref: 'AcademySection', index: true },
     selectedSubjects: [{ type: mongoose.Schema.Types.ObjectId, ref: 'AcademySubject' }],
     isFullPackage: { type: Boolean, default: false },
-    monthlyFee: { type: Number, required: true, min: 0 },
-    admissionFee: { type: Number, required: true, min: 0 },
-    /** One-time discount on monthly/subject fee (first payment). */
+    monthlyFee: { type: Number, default: 0, min: 0 },
+    admissionFee: { type: Number, default: 0, min: 0 },
     monthlyFeeDiscount: { type: Number, default: 0, min: 0 },
-    /** One-time discount on admission fee (first payment). */
     admissionFeeDiscount: { type: Number, default: 0, min: 0 },
-    /** Total discount applied (monthly + admission); kept for legacy records and summaries. */
     discountAmount: { type: Number, default: 0, min: 0 },
-    totalFee: { type: Number, required: true, min: 0 },
+    totalFee: { type: Number, default: 0, min: 0 },
     feeStructureId: { type: mongoose.Schema.Types.ObjectId, ref: 'AcademyFeeStructure' },
     status: {
       type: String,
-      enum: ['active', 'inactive', 'suspended'],
+      enum: ['pending_fee', 'active', 'inactive', 'suspended'],
       default: 'active',
       index: true,
     },
     enrolledAt: { type: Date, default: Date.now },
+    activatedAt: { type: Date },
+    activatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }
@@ -68,7 +73,32 @@ academyStudentSchema.index({
   fatherName: 'text',
   phone: 'text',
   studentId: 'text',
+  registrationNumber: 'text',
+  rollNumber: 'text',
   guardianName: 'text',
 });
+
+/** Partial unique indexes — omit pending students without IDs (avoids duplicate null). */
+academyStudentSchema.index(
+  { studentId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { studentId: { $type: 'string', $gt: '' } },
+  }
+);
+academyStudentSchema.index(
+  { registrationNumber: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { registrationNumber: { $type: 'string', $gt: '' } },
+  }
+);
+academyStudentSchema.index(
+  { rollNumber: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { rollNumber: { $type: 'string', $gt: '' } },
+  }
+);
 
 module.exports = mongoose.model('AcademyStudent', academyStudentSchema);

@@ -1,6 +1,7 @@
 const catchAsync = require('../../utils/catchAsync');
 const classService = require('../../services/academy/academyClassService');
 const classRecordService = require('../../services/academy/academyClassRecordService');
+const rt = require('../../services/realtime/academyRealtime');
 
 const list = catchAsync(async (req, res) => {
   const data = await classService.listClasses({
@@ -23,16 +24,19 @@ const getRecord = catchAsync(async (req, res) => {
 
 const create = catchAsync(async (req, res) => {
   const data = await classService.createClass(req.body, req.user._id);
+  rt.classCrud('created', data._id);
   res.status(201).json({ success: true, data });
 });
 
 const update = catchAsync(async (req, res) => {
   const data = await classService.updateClass(req.params.id, req.body);
+  rt.classCrud('updated', data._id);
   res.json({ success: true, data });
 });
 
 const remove = catchAsync(async (req, res) => {
   await classService.deleteClass(req.params.id);
+  rt.classCrud('deleted', req.params.id);
   res.json({ success: true, data: { deleted: true } });
 });
 

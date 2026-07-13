@@ -72,7 +72,7 @@ export default function PeriodsTab({ sessionId, caps }: { sessionId: string; cap
     ...t.slots.map((s) => [s.label, s.startTime, s.endTime, s.type].join(" ")),
   ]);
 
-  if (!sessionId) return <p className="p-6 text-muted-foreground text-sm">Select a session above.</p>;
+  if (!sessionId) return null;
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-4">
@@ -118,7 +118,7 @@ export default function PeriodsTab({ sessionId, caps }: { sessionId: string; cap
       ))}
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader><DialogTitle>New period template</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
             <div>

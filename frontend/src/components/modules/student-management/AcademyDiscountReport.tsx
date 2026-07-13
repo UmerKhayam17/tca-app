@@ -52,9 +52,6 @@ export default function AcademyDiscountReport() {
     <div className="space-y-4">
       <div>
         <h2 className="font-display text-lg font-semibold">Fee discount report</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Track monthly and admission fee discounts granted at registration, including who gave each discount.
-        </p>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3 flex-wrap">

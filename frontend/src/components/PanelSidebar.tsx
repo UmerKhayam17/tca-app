@@ -199,10 +199,10 @@ const PanelSidebar = ({ user }: { user: SessionUser }) => {
     <Sidebar collapsible="icon">
       <SidebarHeader className="border-b border-sidebar-border p-0">
         <Link to={rootPath} className="flex items-center gap-2.5 px-2 py-2.5">
-          <img src={logo} alt="The Concept" className="h-8 w-8 rounded bg-background p-0.5 shrink-0" />
+          <img src={logo} alt="The Concept Academy" className="h-8 w-8 rounded bg-background p-0.5 shrink-0" />
           {!collapsed && (
             <div className="leading-tight min-w-0">
-              <div className="font-display text-sm font-bold truncate">The Concept</div>
+              <div className="font-display text-sm font-bold truncate">The Concept Academy</div>
               <div className="text-[10px] uppercase tracking-wide text-sidebar-foreground/60 truncate">{head.title}</div>
             </div>
           )}

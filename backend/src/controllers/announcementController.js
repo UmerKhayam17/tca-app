@@ -1,9 +1,11 @@
 const catchAsync = require('../utils/catchAsync');
 const ApiError = require('../utils/ApiError');
 const Announcement = require('../models/Announcement');
+const rt = require('../services/realtime/academyRealtime');
 
 const create = catchAsync(async (req, res) => {
   const ann = await Announcement.create({ ...req.body, createdBy: req.user._id });
+  rt.announcementCrud('created', ann._id);
   res.status(201).json({ success: true, data: ann });
 });
 //  latest Code
@@ -24,6 +26,7 @@ const list = catchAsync(async (req, res) => {
 const remove = catchAsync(async (req, res) => {
   const ann = await Announcement.findByIdAndDelete(req.params.id);
   if (!ann) throw new ApiError(404, 'Announcement not found');
+  rt.announcementCrud('deleted', req.params.id);
   res.json({ success: true, data: { deleted: true } });
 });
 

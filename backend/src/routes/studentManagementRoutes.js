@@ -215,10 +215,22 @@ router.post(
   studentCtrl.previewFees
 );
 router.post(
+  '/students/provisional',
+  requireAnyPermission('temporary_register_student', 'manage_academy_students', 'activate_student'),
+  validate(schemas.academyStudentProvisional),
+  studentCtrl.registerProvisional
+);
+router.post(
   '/students',
   requirePermission('manage_academy_students'),
   validate(schemas.academyStudentRegister),
   studentCtrl.register
+);
+router.post(
+  '/students/direct',
+  requireAnyPermission('activate_student', 'manage_academy_students'),
+  validate(schemas.academyStudentDirectRegister),
+  studentCtrl.registerDirect
 );
 router.get(
   '/students/export',
@@ -301,6 +313,12 @@ router.delete(
   assessmentCtrl.remove
 );
 router.get('/students/:id', requirePermission('view_academy_students'), studentCtrl.getById);
+router.post(
+  '/students/:id/activate',
+  requireAnyPermission('activate_student', 'manage_academy_fees', 'manage_academy_students'),
+  validate(schemas.academyStudentActivate),
+  studentCtrl.activate
+);
 router.post(
   '/students/:id/photo',
   requirePermission('manage_academy_students'),

@@ -106,7 +106,7 @@ export default function TestPaperCapture({
       )}
 
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>Test paper</DialogTitle>
           </DialogHeader>

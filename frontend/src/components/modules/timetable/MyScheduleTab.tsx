@@ -11,7 +11,7 @@ export default function MyScheduleTab({ sessionId }: { sessionId: string }) {
     enabled: !!sessionId,
   });
 
-  if (!sessionId) return <p className="p-6 text-muted-foreground text-sm">Select a session above.</p>;
+  if (!sessionId) return null;
   if (isLoading) return <p className="p-6 text-muted-foreground text-sm">Loading schedule…</p>;
 
   const slots = data?.slots || [];

@@ -1,9 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { fetchPermissionCatalog, type PermissionDefinition } from "@/lib/staffApi";
-import { moduleHref } from "@/lib/panelMenus";
 import type { Role } from "@/lib/auth";
 import PanelSearchBar from "@/components/modules/PanelSearchBar";
 import { matchesPanelSearch } from "@/lib/panelSearch";
@@ -38,17 +36,6 @@ const PermissionCatalogModule = ({ role }: { role: Role }) => {
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-      <Card className="p-4 border-dashed">
-        <div className="text-sm font-semibold text-primary mb-1">All API permissions</div>
-        <p className="text-xs text-muted-foreground">
-          Complete list of permission records in the database (name, module, action). Assign these to users on the{" "}
-          <Link to={moduleHref(role, "permissions")} className="text-accent underline-offset-2 hover:underline">
-            Permissions
-          </Link>{" "}
-          page.
-        </p>
-      </Card>
-
       <PanelSearchBar
         value={search}
         onChange={setSearch}

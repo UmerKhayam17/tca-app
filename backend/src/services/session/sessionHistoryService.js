@@ -3,12 +3,6 @@ const Session = require('../../models/Session');
 const Class = require('../../models/Class');
 const Section = require('../../models/Section');
 const Subject = require('../../models/Subject');
-const Room = require('../../models/timetable/Room');
-const PeriodTemplate = require('../../models/timetable/PeriodTemplate');
-const TeacherProfile = require('../../models/timetable/TeacherProfile');
-const TeacherAssignment = require('../../models/timetable/TeacherAssignment');
-const SubjectRequirement = require('../../models/timetable/SubjectRequirement');
-const TimetableSettings = require('../../models/timetable/TimetableSettings');
 const TimetableVersion = require('../../models/timetable/TimetableVersion');
 const ScheduleSlot = require('../../models/timetable/ScheduleSlot');
 const Student = require('../../models/Student');
@@ -17,6 +11,7 @@ const AcademySection = require('../../models/academy/AcademySection');
 const AcademyStudent = require('../../models/academy/AcademyStudent');
 const { logAudit, listAuditLogs } = require('./auditService');
 const { getSessionOrThrow, syncSessionFlags } = require('./sessionGuard');
+const { shiftFullSessionConfiguration } = require('./sessionShiftService');
 
 async function getAcademySessionSummary(sessionId) {
   const classes = await AcademyClass.find({ sessionId }).sort({ className: 1 }).lean();
@@ -155,6 +150,9 @@ async function activateSession(sessionId, userId) {
   if (session.status === 'archived') {
     throw new ApiError(400, 'Archived sessions cannot be reactivated. Create a new session instead.');
   }
+  if (session.status === 'completed' || session.isClosed) {
+    throw new ApiError(400, 'Completed sessions cannot be reactivated. Create a new session or shift configuration from session history.');
+  }
 
   await Session.updateMany({ _id: { $ne: sessionId } }, { $set: { isActive: false, status: 'completed', isClosed: true } });
 
@@ -175,8 +173,15 @@ async function activateSession(sessionId, userId) {
 async function cloneSessionStructure(sourceSessionId, body, userId) {
   const source = await getSessionOrThrow(sourceSessionId);
 
+  const name = body.name?.trim();
+  if (!name) throw new ApiError(400, 'Session name is required');
+  const duplicate = await Session.findOne({ name });
+  if (duplicate) {
+    throw new ApiError(409, `A session named "${name}" already exists`);
+  }
+
   const newSession = await Session.create({
-    name: body.name,
+    name,
     startDate: body.startDate,
     endDate: body.endDate,
     workingDays: body.workingDays || source.workingDays,
@@ -186,182 +191,37 @@ async function cloneSessionStructure(sourceSessionId, body, userId) {
     isClosed: false,
     clonedFrom: source._id,
     createdBy: userId,
-    notes: body.notes || `Cloned structure from ${source.name}`,
+    notes: body.notes || `Shifted configuration from ${source.name}`,
   });
 
   if (body.activate) {
     await Session.updateMany({ _id: { $ne: newSession._id } }, { $set: { isActive: false, status: 'completed', isClosed: true } });
   }
 
-  const targetId = newSession._id;
-  const periodMap = new Map();
-  const classMap = new Map();
-  const sectionMap = new Map();
-  const subjectMap = new Map();
+  syncSessionFlags(newSession, body.activate ? 'active' : 'active');
+  await newSession.save();
 
-  const sourcePeriods = await PeriodTemplate.find({ session: sourceSessionId });
-  for (const tpl of sourcePeriods) {
-    const created = await PeriodTemplate.create({
-      session: targetId,
-      name: tpl.name,
-      slots: tpl.slots.map((s) => ({
-        order: s.order,
-        label: s.label,
-        startTime: s.startTime,
-        endTime: s.endTime,
-        type: s.type,
-      })),
-      isDefault: tpl.isDefault,
-      isActive: tpl.isActive,
-      createdBy: userId,
-    });
-    periodMap.set(String(tpl._id), created._id);
-  }
-
-  const sourceRooms = await Room.find({ session: sourceSessionId });
-  for (const room of sourceRooms) {
-    await Room.create({
-      session: targetId,
-      name: room.name,
-      code: `${room.code}-C${String(targetId).slice(-6)}`,
-      capacity: room.capacity,
-      type: room.type,
-      equipment: room.equipment,
-      isActive: room.isActive,
-      createdBy: userId,
-    });
-  }
-
-  const sourceClasses = await Class.find({ session: sourceSessionId });
-  for (const cls of sourceClasses) {
-    const newClass = await Class.create({
-      name: cls.name,
-      session: targetId,
-      order: cls.order,
-    });
-    classMap.set(String(cls._id), newClass._id);
-
-    const sections = await Section.find({ class: cls._id });
-    for (const sec of sections) {
-      const newSec = await Section.create({
-        name: sec.name,
-        class: newClass._id,
-        teacher: sec.teacher,
-        maxStudents: sec.maxStudents,
-      });
-      await Class.findByIdAndUpdate(newClass._id, { $addToSet: { sections: newSec._id } });
-      sectionMap.set(String(sec._id), newSec._id);
-    }
-
-    const subjects = await Subject.find({ class: cls._id });
-    for (const sub of subjects) {
-      const newSub = await Subject.create({
-        name: sub.name,
-        code: sub.code,
-        class: newClass._id,
-        teacher: sub.teacher,
-        totalMarks: sub.totalMarks,
-        passingMarks: sub.passingMarks,
-      });
-      await Class.findByIdAndUpdate(newClass._id, { $addToSet: { subjects: newSub._id } });
-      subjectMap.set(String(sub._id), newSub._id);
-    }
-  }
-
-  const sourceProfiles = await TeacherProfile.find({ session: sourceSessionId });
-  for (const profile of sourceProfiles) {
-    await TeacherProfile.create({
-      user: profile.user,
-      session: targetId,
-      subjects: profile.subjects.map((id) => subjectMap.get(String(id))).filter(Boolean),
-      maxLecturesPerDay: profile.maxLecturesPerDay,
-      maxLecturesPerWeek: profile.maxLecturesPerWeek,
-      availability: profile.availability,
-      isActive: profile.isActive,
-      createdBy: userId,
-    });
-  }
-
-  const sourceAssignments = await TeacherAssignment.find({ session: sourceSessionId, isActive: true });
-  for (const row of sourceAssignments) {
-    const newClassId = classMap.get(String(row.class));
-    const newSectionId = sectionMap.get(String(row.section));
-    const newSubjectId = subjectMap.get(String(row.subject));
-    if (!newClassId || !newSectionId || !newSubjectId) continue;
-    await TeacherAssignment.create({
-      session: targetId,
-      class: newClassId,
-      section: newSectionId,
-      subject: newSubjectId,
-      teacher: row.teacher,
-      isPrimary: row.isPrimary,
-      priority: row.priority,
-      isActive: true,
-      createdBy: userId,
-    });
-  }
-
-  const sourceReqs = await SubjectRequirement.find({ session: sourceSessionId, isActive: true });
-  for (const req of sourceReqs) {
-    const newClassId = classMap.get(String(req.class));
-    const newSectionId = sectionMap.get(String(req.section));
-    const newSubjectId = subjectMap.get(String(req.subject));
-    if (!newClassId || !newSectionId || !newSubjectId) continue;
-    await SubjectRequirement.create({
-      session: targetId,
-      class: newClassId,
-      section: newSectionId,
-      subject: newSubjectId,
-      weeklyPeriods: req.weeklyPeriods,
-      maxConsecutive: req.maxConsecutive,
-      minGapBetween: req.minGapBetween,
-      preferredDays: req.preferredDays,
-      avoidFirstPeriod: req.avoidFirstPeriod,
-      isLab: req.isLab,
-      requiresRoomType: req.requiresRoomType,
-      isActive: true,
-      createdBy: userId,
-    });
-  }
-
-  const sourceSettings = await TimetableSettings.findOne({ session: sourceSessionId });
-  if (sourceSettings) {
-    const defaultTpl = sourceSettings.defaultPeriodTemplate
-      ? periodMap.get(String(sourceSettings.defaultPeriodTemplate))
-      : null;
-    await TimetableSettings.create({
-      session: targetId,
-      defaultPeriodTemplate: defaultTpl,
-      defaultMaxTeacherPerDay: sourceSettings.defaultMaxTeacherPerDay,
-      defaultMaxConsecutive: sourceSettings.defaultMaxConsecutive,
-      allowDoublePeriods: sourceSettings.allowDoublePeriods,
-      autoAssignRooms: sourceSettings.autoAssignRooms,
-      conflictCheckOnDraft: sourceSettings.conflictCheckOnDraft,
-      publishRequiresCompleteQuotas: sourceSettings.publishRequiresCompleteQuotas,
-      gridStartDay: sourceSettings.gridStartDay,
-    });
-  }
+  const shift = await shiftFullSessionConfiguration(
+    newSession._id,
+    { sourceSessionId, includeFeeStructure: body.includeFeeStructure !== false },
+    userId
+  );
 
   await logAudit({
     sessionId: sourceSessionId,
     action: 'SESSION_STRUCTURE_CLONED',
     userId,
-    details: { targetSessionId: targetId, targetName: newSession.name },
-  });
-  await logAudit({
-    sessionId: targetId,
-    action: 'SESSION_CREATED',
-    userId,
-    details: { clonedFrom: sourceSessionId, sourceName: source.name },
+    details: { targetSessionId: newSession._id, targetName: newSession.name },
   });
 
   return {
     session: newSession,
+    shift,
     maps: {
-      classes: classMap.size,
-      sections: sectionMap.size,
-      subjects: subjectMap.size,
-      periodTemplates: periodMap.size,
+      classes: shift.timetable.classes,
+      sections: shift.timetable.sections,
+      subjects: shift.timetable.subjects,
+      periodTemplates: shift.timetable.periodTemplates,
     },
   };
 }
@@ -372,4 +232,5 @@ module.exports = {
   archiveSession,
   activateSession,
   cloneSessionStructure,
+  shiftFullSessionConfiguration,
 };

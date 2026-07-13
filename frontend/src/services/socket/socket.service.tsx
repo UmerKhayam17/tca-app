@@ -3,56 +3,49 @@
  * ──────────────────────────────────────────────────────────────
  * Global Socket.io client manager.
  * Manages /chat, /notifications, /presence namespaces.
- *
- * Usage:
- *   import socketService from "@/services/socket.service";
- *   socketService.connect(token);
- *   socketService.chat.on("message:new", handler);
- *   socketService.disconnect();
  */
 
-import { io } from "socket.io-client";
+import { io, type Socket } from "socket.io-client";
 import { getSocketUrl } from "@/lib/api";
+import { ensureAccessToken } from "@/lib/auth";
+
 class SocketService {
-  constructor() {
-    this.chat          = null;
-    this.notifications = null;
-    this.presence      = null;
-    this._token        = null;
-    this._connected    = false;
-  }
+  chat: Socket | null = null;
+  notifications: Socket | null = null;
+  presence: Socket | null = null;
+  staff: Socket | null = null;
+  private _connected = false;
+  private _panelConnected = false;
 
-  connect(token) {
-    if (this._connected) return;
-    this._token    = token;
-    this._connected = true;
-
-    const opts = {
-      auth:       { token },
-      transports: ["websocket", "polling"],
-      reconnection:      true,
+  private socketOptions() {
+    return {
+      auth: (cb: (data: { token: string }) => void) => {
+        void ensureAccessToken().then((token) => cb({ token: token || "" }));
+      },
+      transports: ["websocket", "polling"] as ("websocket" | "polling")[],
+      reconnection: true,
       reconnectionDelay: 1000,
       reconnectionAttempts: 10,
     };
+  }
 
-    this.chat = io(`${getSocketUrl()}/chat`, opts);
-    this.notifications = io(`${getSocketUrl()}/notifications`, opts);
-    this.presence      = io(`${getSocketUrl()}/presence`, opts);
+  connect(_token?: string) {
+    if (this._connected) return;
+    this._connected = true;
+
+    const opts = this.socketOptions();
+    const base = getSocketUrl();
+
+    this.chat = io(`${base}/chat`, opts);
+    this.notifications = io(`${base}/notifications`, opts);
+    this.presence = io(`${base}/presence`, opts);
 
     this.chat.on("connect", () => {
-      // console.log("✅ Chat socket connected");
-      // Auto-join all conversation rooms
-      this.chat.emit("conversation:join-all", {}, (res) => {
-        // if (res?.ok) console.log(`🏠 Joined ${res.joined} conversation rooms`);
-      });
+      this.chat?.emit("conversation:join-all", {}, () => {});
     });
 
     this.chat.on("connect_error", (err) => {
       console.error("Chat socket error:", err.message);
-    });
-
-    this.notifications.on("connect", () => {
-      // console.log("✅ Notifications socket connected");
     });
   }
 
@@ -60,54 +53,96 @@ class SocketService {
     this.chat?.disconnect();
     this.notifications?.disconnect();
     this.presence?.disconnect();
-    this.chat          = null;
+    this.staff?.disconnect();
+    this.chat = null;
     this.notifications = null;
-    this.presence      = null;
-    this._connected    = false;
+    this.presence = null;
+    this.staff = null;
+    this._connected = false;
+    this._panelConnected = false;
+  }
+
+  /** Panel-wide realtime: notifications namespace + staff updates on default namespace. */
+  connectPanel() {
+    if (this._panelConnected) return;
+    this._panelConnected = true;
+
+    const opts = this.socketOptions();
+    const base = getSocketUrl();
+
+    if (!this.notifications) {
+      this.notifications = io(`${base}/notifications`, opts);
+    }
+    if (!this.staff) {
+      this.staff = io(base, opts);
+    }
+  }
+
+  onModuleSync(handler: (event: unknown) => void) {
+    this.notifications?.on("module:sync", handler);
+  }
+
+  offModuleSync(handler: (event: unknown) => void) {
+    this.notifications?.off("module:sync", handler);
+  }
+
+  onNotificationNew(handler: (payload: unknown) => void) {
+    this.notifications?.on("notification:new", handler);
+  }
+
+  offNotificationNew(handler: (payload: unknown) => void) {
+    this.notifications?.off("notification:new", handler);
+  }
+
+  onStaffUpdate(handler: () => void) {
+    this.staff?.on("staff:update", handler);
+  }
+
+  offStaffUpdate(handler: () => void) {
+    this.staff?.off("staff:update", handler);
   }
 
   isConnected() {
-    return this._connected && this.chat?.connected;
+    return this._connected && Boolean(this.chat?.connected);
   }
 
-  // ── Convenience emitters ────────────────────────────────────
-  joinConversation(conversationId) {
+  joinConversation(conversationId: string) {
     this.chat?.emit("conversation:join", { conversationId });
   }
 
-  sendMessage(payload, cb) {
+  sendMessage(payload: unknown, cb?: (...args: unknown[]) => void) {
     this.chat?.emit("message:send", payload, cb);
   }
 
-  editMessage(payload, cb) {
+  editMessage(payload: unknown, cb?: (...args: unknown[]) => void) {
     this.chat?.emit("message:edit", payload, cb);
   }
 
-  deleteMessage(payload, cb) {
+  deleteMessage(payload: unknown, cb?: (...args: unknown[]) => void) {
     this.chat?.emit("message:delete", payload, cb);
   }
 
-  forwardMessage(payload, cb) {
+  forwardMessage(payload: unknown, cb?: (...args: unknown[]) => void) {
     this.chat?.emit("message:forward", payload, cb);
   }
 
-  markRead(conversationId, cb) {
+  markRead(conversationId: string, cb?: (...args: unknown[]) => void) {
     this.chat?.emit("message:read", { conversationId }, cb);
   }
 
-  startTyping(conversationId) {
+  startTyping(conversationId: string) {
     this.chat?.emit("typing:start", { conversationId });
   }
 
-  stopTyping(conversationId) {
+  stopTyping(conversationId: string) {
     this.chat?.emit("typing:stop", { conversationId });
   }
 
-  toggleReaction(payload, cb) {
+  toggleReaction(payload: unknown, cb?: (...args: unknown[]) => void) {
     this.chat?.emit("reaction:toggle", payload, cb);
   }
 
-  setPresenceStatus(status) {
+  setPresenceStatus(status: string) {
     this.presence?.emit("presence:set-status", status);
   }
 }

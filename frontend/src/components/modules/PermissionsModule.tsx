@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,7 +28,6 @@ import {
 } from "@/lib/staffApi";
 import { useStaffRealtime } from "@/hooks/useStaffSocket";
 import ModuleAccessMatrix from "@/components/modules/ModuleAccessMatrix";
-import { moduleHref } from "@/lib/panelMenus";
 import { useAuth } from "@/hooks/useAuth";
 import PanelSearchBar from "@/components/modules/PanelSearchBar";
 import { matchesPanelSearch } from "@/lib/panelSearch";
@@ -169,26 +167,8 @@ const PermissionsModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Modul
     },
   });
 
-  const catalogHref =
-    session?.role != null ? moduleHref(session.role, "permission-catalog") : "/panel/admin/permission-catalog";
-
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-      <Card className="p-4 border-dashed">
-        <div className="text-sm font-semibold text-primary mb-1">Permissions</div>
-        <p className="text-xs text-muted-foreground">
-          Every user in the system with their <strong>role</strong>, <strong>API permissions</strong> (fine-grained
-          actions from the database), and <strong>module access</strong> (which screens and operations they can use).
-          Open the{" "}
-          <Link to={catalogHref} className="text-accent underline-offset-2 hover:underline">
-            All API permissions
-          </Link>{" "}
-          page for the full definition table (no popup). Use <strong>Edit</strong> here to assign permissions to a
-          user; saving API checks requires the <code className="text-[11px]">manage_roles</code> grant on the server,
-          while module matrix updates use <code className="text-[11px]">manage_users</code>.
-        </p>
-      </Card>
-
       <PanelSearchBar
         value={search}
         onChange={setSearch}
@@ -260,7 +240,7 @@ const PermissionsModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Modul
           if (!o) clearDialog();
         }}
       >
-        <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Edit permissions</DialogTitle>
             {editing ? (
@@ -279,10 +259,7 @@ const PermissionsModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Modul
               {catalog.length > 0 ? (
                 <div>
                   <Label className="text-sm font-semibold text-primary">API permissions</Label>
-                  <p className="text-[11px] text-muted-foreground mt-1 mb-2">
-                    Toggles map to the Permission collection (e.g. manage_users, mark_attendance).
-                  </p>
-                  <ScrollArea className="h-[min(220px,35vh)] rounded-md border border-border p-3">
+                  <ScrollArea className="h-[min(220px,35vh)] rounded-md border border-border p-3 mt-2">
                     <div className="space-y-4 pr-2">
                       {Object.entries(catalogByModule).map(([mod, rows]) => (
                         <div key={mod}>

@@ -1,13 +1,10 @@
 const ApiError = require('../../utils/ApiError');
 const Session = require('../../models/Session');
-const Class = require('../../models/Class');
-const Section = require('../../models/Section');
-const Subject = require('../../models/Subject');
 const TimetableVersion = require('../../models/timetable/TimetableVersion');
 const ScheduleSlot = require('../../models/timetable/ScheduleSlot');
-const Student = require('../../models/Student');
 const AcademyClass = require('../../models/academy/AcademyClass');
 const AcademySection = require('../../models/academy/AcademySection');
+const AcademySubject = require('../../models/academy/AcademySubject');
 const AcademyStudent = require('../../models/academy/AcademyStudent');
 const { logAudit, listAuditLogs } = require('./auditService');
 const { getSessionOrThrow, syncSessionFlags } = require('./sessionGuard');
@@ -21,6 +18,11 @@ async function getAcademySessionSummary(sessionId) {
         .sort({ sectionName: 1 })
         .lean()
     : [];
+  const subjects = classIds.length
+    ? await AcademySubject.find({ classId: { $in: classIds } })
+        .sort({ subjectName: 1 })
+        .lean()
+    : [];
   const studentCount = classIds.length
     ? await AcademyStudent.countDocuments({ classId: { $in: classIds }, status: 'active' })
     : 0;
@@ -28,7 +30,20 @@ async function getAcademySessionSummary(sessionId) {
   const sectionsByClass = sections.reduce((acc, sec) => {
     const key = String(sec.classId);
     if (!acc[key]) acc[key] = [];
-    acc[key].push({ _id: sec._id, sectionName: sec.sectionName, status: sec.status });
+    acc[key].push({ _id: sec._id, sectionName: sec.sectionName, name: sec.sectionName, status: sec.status });
+    return acc;
+  }, {});
+
+  const subjectsByClass = subjects.reduce((acc, sub) => {
+    const key = String(sub.classId);
+    if (!acc[key]) acc[key] = [];
+    acc[key].push({
+      _id: sub._id,
+      name: sub.subjectName,
+      code: sub.subjectCode,
+      subjectName: sub.subjectName,
+      subjectCode: sub.subjectCode,
+    });
     return acc;
   }, {});
 
@@ -39,27 +54,26 @@ async function getAcademySessionSummary(sessionId) {
     classes: classes.map((c) => ({
       _id: c._id,
       className: c.className,
+      name: c.className,
       status: c.status,
       sections: sectionsByClass[String(c._id)] || [],
+      subjects: subjectsByClass[String(c._id)] || [],
     })),
   };
 }
 
 async function getSessionHistory(sessionId) {
   const session = await getSessionOrThrow(sessionId);
+  const academy = await getAcademySessionSummary(sessionId);
 
-  const [classes, versions, auditLogs, studentCount, academy] = await Promise.all([
-    Class.find({ session: sessionId }).populate('sections').populate('subjects'),
+  const [versions, auditLogs] = await Promise.all([
     TimetableVersion.find({ session: sessionId })
-      .populate('class', 'name')
-      .populate('section', 'name')
+      .populate('class', 'className')
+      .populate('section', 'sectionName')
       .sort({ section: 1, version: -1 }),
     listAuditLogs(sessionId, { limit: 200 }),
-    Student.countDocuments({ session: sessionId }),
-    getAcademySessionSummary(sessionId),
   ]);
 
-  const sectionCount = classes.reduce((n, c) => n + (c.sections?.length || 0), 0);
   const slotCount = await ScheduleSlot.countDocuments({
     timetableVersion: { $in: versions.map((v) => v._id) },
   });
@@ -72,19 +86,23 @@ async function getSessionHistory(sessionId) {
   return {
     session,
     summary: {
-      classCount: classes.length,
-      sectionCount,
-      studentCount,
+      classCount: academy.classCount,
+      sectionCount: academy.sectionCount,
+      studentCount: academy.studentCount,
       timetableVersions: versions.length,
       scheduleSlots: slotCount,
       versionsByStatus,
     },
     academy,
-    classes: classes.map((c) => ({
+    classes: academy.classes.map((c) => ({
       _id: c._id,
-      name: c.name,
-      sections: (c.sections || []).map((s) => ({ _id: s._id, name: s.name })),
-      subjects: (c.subjects || []).map((s) => ({ _id: s._id, name: s.name, code: s.code })),
+      name: c.className,
+      sections: (c.sections || []).map((s) => ({ _id: s._id, name: s.sectionName || s.name })),
+      subjects: (c.subjects || []).map((s) => ({
+        _id: s._id,
+        name: s.subjectName || s.name,
+        code: s.subjectCode || s.code,
+      })),
     })),
     timetableVersions: versions,
     auditLogs,

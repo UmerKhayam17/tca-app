@@ -65,7 +65,7 @@ const academyStudentSchema = new mongoose.Schema(
     activatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
-  { timestamps: true }
+  { timestamps: true, collection: 'students' }
 );
 
 academyStudentSchema.index({

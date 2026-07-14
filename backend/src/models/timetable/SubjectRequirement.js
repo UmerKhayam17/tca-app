@@ -4,9 +4,9 @@ const { WEEKDAYS } = require('./constants');
 const subjectRequirementSchema = new mongoose.Schema(
   {
     session: { type: mongoose.Schema.Types.ObjectId, ref: 'Session', required: true, index: true },
-    class: { type: mongoose.Schema.Types.ObjectId, ref: 'Class', required: true },
-    section: { type: mongoose.Schema.Types.ObjectId, ref: 'Section', required: true },
-    subject: { type: mongoose.Schema.Types.ObjectId, ref: 'Subject', required: true },
+    class: { type: mongoose.Schema.Types.ObjectId, ref: 'AcademyClass', required: true },
+    section: { type: mongoose.Schema.Types.ObjectId, ref: 'AcademySection', required: true },
+    subject: { type: mongoose.Schema.Types.ObjectId, ref: 'AcademySubject', required: true },
     weeklyPeriods: { type: Number, required: true, min: 1 },
     maxConsecutive: { type: Number, default: 2, min: 1 },
     minGapBetween: { type: Number, default: 0, min: 0 },

@@ -2,10 +2,28 @@ const TeacherAssignment = require('../../models/timetable/TeacherAssignment');
 const ApiError = require('../../utils/ApiError');
 const { assertSessionWritable } = require('../session/sessionGuard');
 
+function academyClassTransform(doc) {
+  if (!doc) return doc;
+  const o = typeof doc.toObject === 'function' ? doc.toObject() : doc;
+  return { ...o, name: o.className || o.name };
+}
+
+function academySectionTransform(doc) {
+  if (!doc) return doc;
+  const o = typeof doc.toObject === 'function' ? doc.toObject() : doc;
+  return { ...o, name: o.sectionName || o.name };
+}
+
+function academySubjectTransform(doc) {
+  if (!doc) return doc;
+  const o = typeof doc.toObject === 'function' ? doc.toObject() : doc;
+  return { ...o, name: o.subjectName || o.name, code: o.subjectCode || o.code };
+}
+
 const populateOpts = [
-  { path: 'class', select: 'name' },
-  { path: 'section', select: 'name' },
-  { path: 'subject', select: 'name code' },
+  { path: 'class', select: 'className', transform: academyClassTransform },
+  { path: 'section', select: 'sectionName', transform: academySectionTransform },
+  { path: 'subject', select: 'subjectName subjectCode', transform: academySubjectTransform },
   { path: 'teacher', select: 'name email' },
 ];
 

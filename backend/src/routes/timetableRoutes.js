@@ -70,22 +70,6 @@ router.patch(
 );
 router.delete('/setup/teacher-assignments/:id', canManage, setup.deleteTeacherAssignment);
 
-// ─── Setup: Subject requirements ────────────────────────────────
-router.get('/setup/subject-requirements', canView, setup.listSubjectRequirements);
-router.post(
-  '/setup/subject-requirements',
-  canManage,
-  validate(schemas.subjectRequirementBody),
-  setup.createSubjectRequirement
-);
-router.patch(
-  '/setup/subject-requirements/:id',
-  canManage,
-  validate(schemas.subjectRequirementPatch),
-  setup.updateSubjectRequirement
-);
-router.delete('/setup/subject-requirements/:id', canManage, setup.deleteSubjectRequirement);
-
 // ─── Setup: Timetable settings (per session) ──────────────────────
 router.get('/setup/settings/:sessionId', canView, setup.getSettings);
 router.put(

@@ -30,8 +30,6 @@ async function createClass(payload, userId) {
     className,
     createdBy: userId,
   });
-  const { syncAcademyToTimetableStructure } = require('./academyDefaultStructureService');
-  await syncAcademyToTimetableStructure(sessionId, userId);
   return doc;
 }
 
@@ -50,10 +48,6 @@ async function updateClass(id, payload) {
   if (payload.totalSubjects !== undefined) doc.totalSubjects = payload.totalSubjects;
   if (payload.status) doc.status = payload.status;
   await doc.save();
-  if (doc.sessionId) {
-    const { syncAcademyToTimetableStructure } = require('./academyDefaultStructureService');
-    await syncAcademyToTimetableStructure(doc.sessionId, doc.createdBy);
-  }
   return doc;
 }
 

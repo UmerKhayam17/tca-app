@@ -86,10 +86,6 @@ async function createSection(payload, userId) {
     status: payload.status || 'active',
     createdBy: userId,
   });
-  if (cls.sessionId) {
-    const { syncAcademyToTimetableStructure } = require('./academyDefaultStructureService');
-    await syncAcademyToTimetableStructure(cls.sessionId, userId);
-  }
   return doc.populate('subjectIds', 'subjectName subjectCode status');
 }
 

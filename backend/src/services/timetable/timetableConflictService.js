@@ -1,7 +1,6 @@
 const ScheduleSlot = require('../../models/timetable/ScheduleSlot');
 const TimetableVersion = require('../../models/timetable/TimetableVersion');
 const TeacherProfile = require('../../models/timetable/TeacherProfile');
-const SubjectRequirement = require('../../models/timetable/SubjectRequirement');
 const TimetableSettings = require('../../models/timetable/TimetableSettings');
 const Room = require('../../models/timetable/Room');
 const User = require('../../models/User');
@@ -72,7 +71,7 @@ async function validateSlot({
     session: sessionId,
     day,
     periodId,
-    teacher: teacherId,
+    $or: [{ teacher: teacherId }, { 'parallelEntries.teacher': teacherId }],
   };
   if (checkCrossVersion) {
     const publishedVersions = await TimetableVersion.find({
@@ -157,30 +156,13 @@ async function validateSlot({
     }
   }
 
-  // R9: Lab room type
-  const requirement = await SubjectRequirement.findOne({
-    session: sessionId,
-    section: sectionId,
-    subject: subjectId,
-    isActive: true,
-  });
-  if (requirement?.requiresRoomType && roomId) {
-    const room = await Room.findById(roomId);
-    if (room && room.type !== requirement.requiresRoomType) {
-      errors.push({
-        code: 'ROOM_TYPE_MISMATCH',
-        message: `Subject requires room type "${requirement.requiresRoomType}"`,
-      });
-    }
-  }
-
   // R4: Daily teacher limit
   if (profile?.maxLecturesPerDay) {
     const dayCount = await ScheduleSlot.countDocuments({
       timetableVersion: timetableVersionId,
-      teacher: teacherId,
       day,
       cancelled: { $ne: true },
+      $or: [{ teacher: teacherId }, { 'parallelEntries.teacher': teacherId }],
       ...(excludeSlotId ? { _id: { $ne: excludeSlotId } } : {}),
     });
     if (dayCount >= profile.maxLecturesPerDay) {
@@ -192,6 +174,14 @@ async function validateSlot({
   }
 
   return { valid: errors.length === 0, errors, warnings };
+}
+
+function slotSubjectIds(slot) {
+  const ids = [String(slot.subject)];
+  for (const e of slot.parallelEntries || []) {
+    if (e?.subject) ids.push(String(e.subject));
+  }
+  return ids;
 }
 
 async function validateVersion(timetableVersionId, { forPublish = false } = {}) {
@@ -210,66 +200,40 @@ async function validateVersion(timetableVersionId, { forPublish = false } = {}) 
 
   const settings = await TimetableSettings.findOne({ session: version.session });
 
-  // Per-slot validation
+  // Per-slot validation (every concurrent subject/teacher pair)
   for (const slot of slots) {
-    const result = await validateSlot({
-      sessionId: version.session,
-      timetableVersionId,
-      day: slot.day,
-      periodId: slot.periodId,
-      subjectId: slot.subject,
-      teacherId: slot.teacher,
-      roomId: slot.room,
-      sectionId: version.section,
-      excludeSlotId: slot._id,
-      strict: forPublish,
-    });
-    result.errors.forEach((e) =>
-      errors.push({ ...e, day: slot.day, periodId: slot.periodId, slotId: slot._id })
-    );
-  }
-
-  // R3: Subject weekly quota
-  const requirements = await SubjectRequirement.find({
-    session: version.session,
-    section: version.section,
-    isActive: true,
-  });
-
-  for (const req of requirements) {
-    const count = slots.filter((s) => String(s.subject) === String(req.subject)).length;
-    if (count > req.weeklyPeriods) {
-      errors.push({
-        code: 'SUBJECT_QUOTA_EXCEEDED',
-        message: `Subject exceeds weekly limit of ${req.weeklyPeriods} periods`,
-        subjectId: req.subject,
-        actual: count,
-        required: req.weeklyPeriods,
+    const entries = [
+      { subject: slot.subject, teacher: slot.teacher },
+      ...(slot.parallelEntries || []),
+    ];
+    for (const entry of entries) {
+      const result = await validateSlot({
+        sessionId: version.session,
+        timetableVersionId,
+        day: slot.day,
+        periodId: slot.periodId,
+        subjectId: entry.subject,
+        teacherId: entry.teacher,
+        roomId: slot.room,
+        sectionId: version.section,
+        excludeSlotId: slot._id,
+        strict: forPublish,
       });
-    } else if (count < req.weeklyPeriods) {
-      const entry = {
-        code: 'SUBJECT_QUOTA_INCOMPLETE',
-        message: `Subject has ${count}/${req.weeklyPeriods} weekly periods`,
-        subjectId: req.subject,
-        actual: count,
-        required: req.weeklyPeriods,
-      };
-      if (forPublish && settings?.publishRequiresCompleteQuotas !== false) {
-        errors.push(entry);
-      } else {
-        warnings.push(entry);
-      }
+      result.errors.forEach((e) =>
+        errors.push({ ...e, day: slot.day, periodId: slot.periodId, slotId: slot._id })
+      );
     }
   }
 
-  // R5: Consecutive subject limit per day
+  // Consecutive subject limit per day (session default)
   const template = version.periodTemplate;
   const lectureSlots = (template?.slots || [])
     .filter((s) => s.type === 'lecture')
     .sort((a, b) => a.order - b.order);
+  const maxConsecutive = settings?.defaultMaxConsecutive ?? 2;
+  const subjectIds = [...new Set(slots.flatMap((s) => slotSubjectIds(s)))];
 
-  for (const req of requirements) {
-    const maxConsecutive = req.maxConsecutive ?? settings?.defaultMaxConsecutive ?? 2;
+  for (const subjectId of subjectIds) {
     for (const day of [...new Set(slots.map((s) => s.day))]) {
       let run = 0;
       for (const period of lectureSlots) {
@@ -277,7 +241,7 @@ async function validateVersion(timetableVersionId, { forPublish = false } = {}) 
           (s) =>
             s.day === day &&
             String(s.periodId) === String(period._id) &&
-            String(s.subject) === String(req.subject)
+            slotSubjectIds(s).includes(subjectId)
         );
         if (hasSubject) {
           run += 1;
@@ -285,7 +249,7 @@ async function validateVersion(timetableVersionId, { forPublish = false } = {}) 
             errors.push({
               code: 'CONSECUTIVE_LIMIT',
               message: `More than ${maxConsecutive} consecutive periods for subject`,
-              subjectId: req.subject,
+              subjectId,
               day,
             });
             break;

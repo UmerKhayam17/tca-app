@@ -17,8 +17,7 @@ const academySubjectBody = Joi.object({
   subjectCode: Joi.string().trim().required(),
   status: Joi.string().valid('active', 'inactive').optional(),
   enrollmentType: Joi.string().valid('required', 'choice').default('required'),
-  choiceGroupId: objectId.optional(),
-  choiceGroupName: Joi.string().trim().optional(),
+  choiceGroupName: Joi.string().trim().optional().allow(''),
   pickCount: Joi.number().integer().min(1).default(1),
 });
 
@@ -27,27 +26,13 @@ const academySubjectPatch = Joi.object({
   subjectCode: Joi.string().trim(),
   status: Joi.string().valid('active', 'inactive'),
   enrollmentType: Joi.string().valid('required', 'choice'),
-  choiceGroupId: objectId.optional(),
-  choiceGroupName: Joi.string().trim().optional(),
+  choiceGroupName: Joi.string().trim().allow(''),
   pickCount: Joi.number().integer().min(1),
 }).min(1);
 
-const academySubjectChoiceGroupBody = Joi.object({
+const academySubjectBulkChoiceBody = Joi.object({
   groupName: Joi.string().trim().required(),
-  subjectIds: Joi.array().items(objectId).min(2).required(),
   pickCount: Joi.number().integer().min(1).default(1),
-  status: Joi.string().valid('active', 'inactive').optional(),
-});
-
-const academySubjectChoiceGroupPatch = Joi.object({
-  groupName: Joi.string().trim(),
-  subjectIds: Joi.array().items(objectId).min(2),
-  pickCount: Joi.number().integer().min(1),
-  status: Joi.string().valid('active', 'inactive'),
-}).min(1);
-
-const academySubjectChoiceGroupBulkBody = Joi.object({
-  groupName: Joi.string().trim().required(),
   subjects: Joi.array()
     .items(
       Joi.object({
@@ -58,7 +43,6 @@ const academySubjectChoiceGroupBulkBody = Joi.object({
     .min(2)
     .max(10)
     .required(),
-  pickCount: Joi.number().integer().min(1).default(1),
 });
 
 const academySectionBody = Joi.object({
@@ -443,9 +427,7 @@ module.exports = {
   academyClassPatch,
   academySubjectBody,
   academySubjectPatch,
-  academySubjectChoiceGroupBody,
-  academySubjectChoiceGroupPatch,
-  academySubjectChoiceGroupBulkBody,
+  academySubjectBulkChoiceBody,
   academySectionBody,
   academySectionPatch,
   academyFeeStructureBody,

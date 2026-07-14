@@ -13,7 +13,7 @@ const teacherProfileSchema = new mongoose.Schema(
   {
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     session: { type: mongoose.Schema.Types.ObjectId, ref: 'Session', required: true, index: true },
-    subjects: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Subject' }],
+    subjects: [{ type: mongoose.Schema.Types.ObjectId, ref: 'AcademySubject' }],
     maxLecturesPerDay: { type: Number, default: 6, min: 1 },
     maxLecturesPerWeek: { type: Number, default: 30, min: 1 },
     availability: { type: [availabilitySchema], default: [] },

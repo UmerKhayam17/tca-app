@@ -70,17 +70,29 @@ async function getPublishedTimetableSlots(sessionId, sectionId, enrolledIds) {
   return grid.slots
     .filter((slot) => {
       if (enrolledIds.size === 0) return true;
-      return enrolledIds.has(resolveSubjectId(slot.subject));
+      const ids = [
+        resolveSubjectId(slot.subject),
+        ...((slot.parallelEntries || []).map((e) => resolveSubjectId(e.subject))),
+      ].filter(Boolean);
+      return ids.some((id) => enrolledIds.has(id));
     })
     .map((slot) => {
       const period = periods.find((p) => String(p._id) === String(slot.periodId));
       const rawDay = String(slot.day || '').toLowerCase();
       const normalizedDayName = rawDay in WEEKDAY_INDEX ? rawDay : String(slot.day || '');
       const dayOfWeek = normalizedDayName in WEEKDAY_INDEX ? WEEKDAY_INDEX[normalizedDayName] : 0;
+
+      const candidates = [
+        { subject: slot.subject, teacher: slot.teacher },
+        ...((slot.parallelEntries || []).map((e) => ({ subject: e.subject, teacher: e.teacher }))),
+      ];
+      const matched =
+        candidates.find((c) => enrolledIds.has(resolveSubjectId(c.subject))) || candidates[0];
+
       return {
         _id: slot._id,
         classId: slot.class,
-        subjectId: normalizePublisherSubject(slot.subject),
+        subjectId: normalizePublisherSubject(matched.subject),
         dayOfWeek,
         dayName:
           normalizedDayName && typeof normalizedDayName === 'string'

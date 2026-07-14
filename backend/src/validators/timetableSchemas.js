@@ -98,25 +98,6 @@ const teacherAssignmentPatch = teacherAssignmentBody
   .fork(['session', 'class', 'section', 'subject', 'teacher'], (s) => s.optional())
   .min(1);
 
-const subjectRequirementBody = Joi.object({
-  session: objectId.required(),
-  class: objectId.required(),
-  section: objectId.required(),
-  subject: objectId.required(),
-  weeklyPeriods: Joi.number().integer().min(1).required(),
-  maxConsecutive: Joi.number().integer().min(1),
-  minGapBetween: Joi.number().integer().min(0),
-  preferredDays: Joi.array().items(Joi.string().valid(...WEEKDAYS)),
-  avoidFirstPeriod: Joi.boolean(),
-  isLab: Joi.boolean(),
-  requiresRoomType: Joi.string().valid(...ROOM_TYPES, null).allow(null),
-  isActive: Joi.boolean(),
-});
-
-const subjectRequirementPatch = subjectRequirementBody
-  .fork(['session', 'class', 'section', 'subject', 'weeklyPeriods'], (s) => s.optional())
-  .min(1);
-
 const timetableSettingsBody = Joi.object({
   defaultPeriodTemplate: objectId.allow(null),
   defaultMaxTeacherPerDay: Joi.number().integer().min(1),
@@ -140,18 +121,40 @@ const timetableVersionBody = Joi.object({
 const scheduleSlotBody = Joi.object({
   day: Joi.string().valid(...WEEKDAYS).required(),
   periodId: objectId.required(),
-  subject: objectId.required(),
-  teacher: objectId.required(),
+  /** Single-subject slots (legacy / simple). */
+  subject: objectId,
+  teacher: objectId,
+  /** Choice-group slots: concurrent subjects with a teacher each. */
+  entries: Joi.array()
+    .items(
+      Joi.object({
+        subject: objectId.required(),
+        teacher: objectId.required(),
+      })
+    )
+    .min(1)
+    .max(10),
   room: objectId.allow(null),
   locked: Joi.boolean(),
   source: Joi.string().valid(...SLOT_SOURCES),
-});
+})
+  .xor('entries', 'subject')
+  .and('subject', 'teacher');
 
 const scheduleSlotMove = Joi.object({
   day: Joi.string().valid(...WEEKDAYS),
   periodId: objectId,
   subject: objectId,
   teacher: objectId,
+  entries: Joi.array()
+    .items(
+      Joi.object({
+        subject: objectId.required(),
+        teacher: objectId.required(),
+      })
+    )
+    .min(1)
+    .max(10),
   room: objectId.allow(null),
 }).min(1);
 
@@ -182,8 +185,6 @@ module.exports = {
   teacherProfilePatch,
   teacherAssignmentBody,
   teacherAssignmentPatch,
-  subjectRequirementBody,
-  subjectRequirementPatch,
   timetableSettingsBody,
   timetableVersionBody,
   scheduleSlotBody,

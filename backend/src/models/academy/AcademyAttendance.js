@@ -19,7 +19,7 @@ const academyAttendanceSchema = new mongoose.Schema(
     markedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
-  { timestamps: true }
+  { timestamps: true, collection: 'attendances' }
 );
 
 academyAttendanceSchema.index({ studentId: 1, date: 1, subjectId: 1 }, { unique: true, sparse: true });

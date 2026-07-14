@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { fetchClasses, fetchSections } from "@/lib/configApi";
-import { fetchSectionSchedule } from "@/lib/timetableApi";
+import { fetchSectionSchedule, scheduleSlotEntries } from "@/lib/timetableApi";
 import { Badge } from "@/components/ui/badge";
 import { DAY_LABELS, normalizeWorkingDays, slotMatchesPeriod, subjectColor } from "./constants";
 import type { Weekday } from "@/lib/configApi";
@@ -101,10 +101,27 @@ export default function ViewScheduleTab({ sessionId }: { sessionId: string }) {
                       return (
                         <td key={day} className="p-2">
                           {slot ? (
-                            <div className={`rounded-md border p-2 ${subjectColor(slot.subject._id)}`}>
-                              <div className="font-semibold">{slot.subject.name}</div>
-                              <div className="text-xs opacity-80">{slot.teacher.name}</div>
-                            </div>
+                            (() => {
+                              const entries = scheduleSlotEntries(slot);
+                              return (
+                                <div className={`rounded-md border p-2 ${subjectColor(slot.subject._id)}`}>
+                                  <div className="font-semibold">
+                                    {entries.map((e) => e.subject.name).join(" / ")}
+                                  </div>
+                                  {entries.length > 1 ? (
+                                    <div className="mt-1 space-y-0.5">
+                                      {entries.map((e) => (
+                                        <div key={e.subject._id} className="text-xs opacity-80">
+                                          {e.subject.name}: {e.teacher.name}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div className="text-xs opacity-80">{slot.teacher.name}</div>
+                                  )}
+                                </div>
+                              );
+                            })()
                           ) : (
                             "—"
                           )}

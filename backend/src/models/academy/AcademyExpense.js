@@ -29,7 +29,7 @@ const academyExpenseSchema = new mongoose.Schema(
     recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
-  { timestamps: true }
+  { timestamps: true, collection: 'expenses' }
 );
 
 module.exports = mongoose.model('AcademyExpense', academyExpenseSchema);

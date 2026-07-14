@@ -1,6 +1,5 @@
 const TimetableVersion = require('../../models/timetable/TimetableVersion');
 const ScheduleSlot = require('../../models/timetable/ScheduleSlot');
-const SubjectRequirement = require('../../models/timetable/SubjectRequirement');
 const PeriodTemplate = require('../../models/timetable/PeriodTemplate');
 const Session = require('../../models/Session');
 const ApiError = require('../../utils/ApiError');
@@ -8,9 +7,27 @@ const { validateVersion } = require('./timetableConflictService');
 const { assertSessionWritable } = require('../session/sessionGuard');
 const { logAudit } = require('../session/auditService');
 
+function academyClassTransform(doc) {
+  if (!doc) return doc;
+  const o = typeof doc.toObject === 'function' ? doc.toObject() : doc;
+  return { ...o, name: o.className || o.name };
+}
+
+function academySectionTransform(doc) {
+  if (!doc) return doc;
+  const o = typeof doc.toObject === 'function' ? doc.toObject() : doc;
+  return { ...o, name: o.sectionName || o.name };
+}
+
+function academySubjectTransform(doc) {
+  if (!doc) return doc;
+  const o = typeof doc.toObject === 'function' ? doc.toObject() : doc;
+  return { ...o, name: o.subjectName || o.name, code: o.subjectCode || o.code };
+}
+
 const versionPopulate = [
-  { path: 'class', select: 'name' },
-  { path: 'section', select: 'name' },
+  { path: 'class', select: 'className', transform: academyClassTransform },
+  { path: 'section', select: 'sectionName', transform: academySectionTransform },
   { path: 'session', select: 'name workingDays' },
   { path: 'periodTemplate' },
   { path: 'publishedBy', select: 'name' },
@@ -92,6 +109,10 @@ async function duplicateVersion(id, userId) {
         periodId: s.periodId,
         subject: s.subject,
         teacher: s.teacher,
+        parallelEntries: (s.parallelEntries || []).map((e) => ({
+          subject: e.subject,
+          teacher: e.teacher,
+        })),
         room: s.room,
         source: s.source,
         locked: s.locked,
@@ -105,25 +126,19 @@ async function duplicateVersion(id, userId) {
 async function getVersionGrid(id) {
   const version = await getVersion(id);
   const slots = await ScheduleSlot.find({ timetableVersion: id, cancelled: { $ne: true } })
-    .populate('subject', 'name code')
+    .populate({
+      path: 'subject',
+      select: 'subjectName subjectCode enrollmentType choiceGroupName',
+      transform: academySubjectTransform,
+    })
     .populate('teacher', 'name email')
+    .populate({
+      path: 'parallelEntries.subject',
+      select: 'subjectName subjectCode enrollmentType choiceGroupName',
+      transform: academySubjectTransform,
+    })
+    .populate('parallelEntries.teacher', 'name email')
     .populate('room', 'name code type');
-
-  const requirements = await SubjectRequirement.find({
-    session: version.session._id || version.session,
-    section: version.section._id || version.section,
-    isActive: true,
-  }).populate('subject', 'name code');
-
-  const quotaProgress = requirements.map((req) => {
-    const actual = slots.filter((s) => String(s.subject._id || s.subject) === String(req.subject._id || req.subject)).length;
-    return {
-      subject: req.subject,
-      required: req.weeklyPeriods,
-      actual,
-      complete: actual >= req.weeklyPeriods,
-    };
-  });
 
   const session = await Session.findById(version.session._id || version.session);
   const template = version.periodTemplate;
@@ -133,7 +148,6 @@ async function getVersionGrid(id) {
     workingDays: session?.workingDays?.length ? session.workingDays : ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'],
     periods: template?.slots || [],
     slots,
-    quotaProgress,
   };
 }
 

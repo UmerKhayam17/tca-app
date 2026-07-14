@@ -63,8 +63,7 @@ import {
   buildEnrollmentPayload,
   choiceGroupValid,
   defaultSubjectEnrollmentForm,
-  enrollmentFromGroup,
-  findGroupForSubject,
+  enrollmentFromSubject,
   SubjectEnrollmentConfig,
   type SubjectEnrollmentForm,
 } from "@/components/modules/student-management/SubjectEnrollmentFields";
@@ -145,7 +144,7 @@ export default function ClassDetailPage({
   );
 
   const { data: choiceGroups = [] } = useQuery({
-    queryKey: ["subject-choice-groups", classId],
+    queryKey: ["choice-groups", classId],
     queryFn: () => fetchSubjectChoiceGroups(classId),
   });
 
@@ -193,7 +192,7 @@ export default function ClassDetailPage({
     onSuccess: () => {
       invalidate();
       qc.invalidateQueries({ queryKey: ["academy-classes"] });
-      qc.invalidateQueries({ queryKey: ["subject-choice-groups", classId] });
+      qc.invalidateQueries({ queryKey: ["choice-groups", classId] });
       qc.invalidateQueries({ queryKey: ["enrollment-subjects"] });
       setSubjectOpen(false);
       toast({ title: editSubject ? "Subject updated" : "Subject added" });
@@ -206,6 +205,7 @@ export default function ClassDetailPage({
     onSuccess: () => {
       invalidate();
       qc.invalidateQueries({ queryKey: ["academy-classes"] });
+      qc.invalidateQueries({ queryKey: ["choice-groups", classId] });
       toast({ title: "Subject removed" });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -301,8 +301,7 @@ export default function ClassDetailPage({
       subjectCode: s.subjectCode,
       status: s.status,
     });
-    const group = findGroupForSubject(choiceGroups, s._id);
-    setSubjectEnrollmentForm(group ? enrollmentFromGroup(group) : defaultSubjectEnrollmentForm());
+    setSubjectEnrollmentForm(enrollmentFromSubject(s, choiceGroups));
     setSubjectOpen(true);
   };
 
@@ -478,6 +477,7 @@ export default function ClassDetailPage({
                 <tr>
                   <th className="text-left p-3 font-medium">Subject</th>
                   <th className="text-left p-3 font-medium">Code</th>
+                  <th className="text-left p-3 font-medium">Enrollment</th>
                   <th className="text-left p-3 font-medium">Status</th>
                   {(caps.canEdit || caps.canDelete) && (
                     <th className="text-right p-3 font-medium">Actions</th>
@@ -487,7 +487,7 @@ export default function ClassDetailPage({
               <tbody>
                 {record.subjects.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="p-8 text-center text-muted-foreground">
+                    <td colSpan={5} className="p-8 text-center text-muted-foreground">
                       No subjects yet
                     </td>
                   </tr>
@@ -496,6 +496,12 @@ export default function ClassDetailPage({
                   <tr key={s._id} className="border-b last:border-0">
                     <td className="p-3 font-medium">{s.subjectName}</td>
                     <td className="p-3">{s.subjectCode}</td>
+                    <td className="p-3 text-muted-foreground">
+                      {s.enrollmentType === "choice" && s.choiceGroupName
+                        ? `Choice: ${s.choiceGroupName}${s.pickCount && s.pickCount > 1 ? ` (pick ${s.pickCount})` : ""
+                        }`
+                        : "Standard"}
+                    </td>
                     <td className="p-3">
                       <StatusBadge status={s.status} />
                     </td>

@@ -1,17 +1,16 @@
-const Class = require('../../models/Class');
-const Section = require('../../models/Section');
-const Subject = require('../../models/Subject');
+const AcademyClass = require('../../models/academy/AcademyClass');
+const AcademySection = require('../../models/academy/AcademySection');
+const AcademySubject = require('../../models/academy/AcademySubject');
 const Room = require('../../models/timetable/Room');
 const PeriodTemplate = require('../../models/timetable/PeriodTemplate');
 const TeacherProfile = require('../../models/timetable/TeacherProfile');
 const TeacherAssignment = require('../../models/timetable/TeacherAssignment');
-const SubjectRequirement = require('../../models/timetable/SubjectRequirement');
 const TimetableSettings = require('../../models/timetable/TimetableSettings');
 const { assertSessionWritable } = require('./sessionGuard');
 
 /**
- * Copy timetable setup (periods, rooms, legacy classes/sections/subjects,
- * teacher profiles, assignments, requirements, settings) between sessions.
+ * Copy timetable setup (periods, rooms, academy classes/sections/subjects,
+ * teacher profiles, assignments, settings) between sessions.
  */
 async function copyTimetableSetupBetweenSessions(sourceSessionId, targetSessionId, userId) {
   await assertSessionWritable(targetSessionId);
@@ -61,49 +60,60 @@ async function copyTimetableSetupBetweenSessions(sourceSessionId, targetSessionI
     });
   }
 
-  const sourceClasses = await Class.find({ session: sourceSessionId });
+  const sourceClasses = await AcademyClass.find({ sessionId: sourceSessionId });
   for (const cls of sourceClasses) {
-    let newClass = await Class.findOne({ session: targetSessionId, name: cls.name });
+    let newClass = await AcademyClass.findOne({ sessionId: targetSessionId, className: cls.className });
     if (!newClass) {
-      newClass = await Class.create({
-        name: cls.name,
-        session: targetSessionId,
-        order: cls.order,
+      newClass = await AcademyClass.create({
+        className: cls.className,
+        sessionId: targetSessionId,
+        totalSubjects: cls.totalSubjects,
+        status: cls.status || 'active',
         createdBy: userId,
       });
     }
     classMap.set(String(cls._id), newClass._id);
 
-    const sections = await Section.find({ class: cls._id });
+    const sections = await AcademySection.find({ classId: cls._id });
     for (const sec of sections) {
-      let newSec = await Section.findOne({ class: newClass._id, name: sec.name });
+      let newSec = await AcademySection.findOne({ classId: newClass._id, sectionName: sec.sectionName });
       if (!newSec) {
-        newSec = await Section.create({
-          name: sec.name,
-          class: newClass._id,
-          teacher: sec.teacher,
-          maxStudents: sec.maxStudents,
+        newSec = await AcademySection.create({
+          sectionName: sec.sectionName,
+          classId: newClass._id,
+          useClassSubjects: sec.useClassSubjects !== false,
+          subjectIds: [],
+          status: sec.status || 'active',
+          createdBy: userId,
         });
-        await Class.findByIdAndUpdate(newClass._id, { $addToSet: { sections: newSec._id } });
       }
       sectionMap.set(String(sec._id), newSec._id);
     }
 
-    const subjects = await Subject.find({ class: cls._id });
+    const subjects = await AcademySubject.find({ classId: cls._id });
     for (const sub of subjects) {
-      let newSub = await Subject.findOne({ class: newClass._id, code: sub.code });
+      let newSub = await AcademySubject.findOne({ classId: newClass._id, subjectCode: sub.subjectCode });
       if (!newSub) {
-        newSub = await Subject.create({
-          name: sub.name,
-          code: sub.code,
-          class: newClass._id,
-          teacher: sub.teacher,
-          totalMarks: sub.totalMarks,
-          passingMarks: sub.passingMarks,
+        newSub = await AcademySubject.create({
+          subjectName: sub.subjectName,
+          subjectCode: sub.subjectCode,
+          classId: newClass._id,
+          status: sub.status || 'active',
+          createdBy: userId,
         });
-        await Class.findByIdAndUpdate(newClass._id, { $addToSet: { subjects: newSub._id } });
       }
       subjectMap.set(String(sub._id), newSub._id);
+    }
+
+    // Remap section subject overrides after subjects exist
+    for (const sec of sections) {
+      const newSecId = sectionMap.get(String(sec._id));
+      if (!newSecId || sec.useClassSubjects !== false) continue;
+      const mappedIds = (sec.subjectIds || []).map((id) => subjectMap.get(String(id))).filter(Boolean);
+      await AcademySection.findByIdAndUpdate(newSecId, {
+        useClassSubjects: false,
+        subjectIds: mappedIds,
+      });
     }
   }
 
@@ -158,37 +168,6 @@ async function copyTimetableSetupBetweenSessions(sourceSessionId, targetSessionI
       teacher: row.teacher,
       isPrimary: row.isPrimary,
       priority: row.priority,
-      isActive: true,
-      createdBy: userId,
-    });
-  }
-
-  const sourceReqs = await SubjectRequirement.find({ session: sourceSessionId, isActive: true });
-  for (const req of sourceReqs) {
-    const newClassId = classMap.get(String(req.class));
-    const newSectionId = sectionMap.get(String(req.section));
-    const newSubjectId = subjectMap.get(String(req.subject));
-    if (!newClassId || !newSectionId || !newSubjectId) continue;
-
-    const dup = await SubjectRequirement.findOne({
-      session: targetSessionId,
-      section: newSectionId,
-      subject: newSubjectId,
-    });
-    if (dup) continue;
-
-    await SubjectRequirement.create({
-      session: targetSessionId,
-      class: newClassId,
-      section: newSectionId,
-      subject: newSubjectId,
-      weeklyPeriods: req.weeklyPeriods,
-      maxConsecutive: req.maxConsecutive,
-      minGapBetween: req.minGapBetween,
-      preferredDays: req.preferredDays,
-      avoidFirstPeriod: req.avoidFirstPeriod,
-      isLab: req.isLab,
-      requiresRoomType: req.requiresRoomType,
       isActive: true,
       createdBy: userId,
     });

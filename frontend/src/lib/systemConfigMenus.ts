@@ -6,7 +6,6 @@ import {
   History,
   Layers,
   Link2,
-  ListChecks,
   SlidersHorizontal,
   UserCircle,
 } from "lucide-react";
@@ -20,7 +19,6 @@ export type SystemConfigSection =
   | "rooms"
   | "teachers"
   | "teacher-assignments"
-  | "requirements"
   | "timetable-rules"
   | "history";
 
@@ -35,7 +33,6 @@ export const SYSTEM_CONFIG_SECTIONS: {
     { key: "rooms", label: "Rooms", icon: DoorOpen },
     { key: "teachers", label: "Teachers", icon: UserCircle },
     { key: "teacher-assignments", label: "Teacher assignments", icon: Link2 },
-    { key: "requirements", label: "Weekly requirements", icon: ListChecks },
     { key: "timetable-rules", label: "Timetable rules", icon: SlidersHorizontal },
     { key: "history", label: "Session history", icon: History },
   ];
@@ -44,7 +41,7 @@ export const SYSTEM_CONFIG_SIDEBAR_GROUPS = buildSidebarSubmenuGroups(SYSTEM_CON
   { label: "Academic year", keys: ["academic", "history"] },
   {
     label: "Timetable setup",
-    keys: ["sections", "periods", "rooms", "teachers", "teacher-assignments", "requirements", "timetable-rules"],
+    keys: ["sections", "periods", "rooms", "teachers", "teacher-assignments", "timetable-rules"],
   },
 ]);
 

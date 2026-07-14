@@ -10,7 +10,7 @@ const academyFeeStructureSchema = new mongoose.Schema(
     effectiveDate: { type: Date, default: Date.now },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
-  { timestamps: true }
+  { timestamps: true, collection: 'feestructures' }
 );
 
 academyFeeStructureSchema.index({ classId: 1, effectiveDate: -1 });

@@ -80,17 +80,6 @@ export interface TeacherAssignment {
   priority: number;
 }
 
-export interface SubjectRequirement {
-  _id: string;
-  session: string;
-  class: { _id: string; name: string };
-  section: { _id: string; name: string };
-  subject: { _id: string; name: string; code: string };
-  weeklyPeriods: number;
-  maxConsecutive: number;
-  isLab: boolean;
-}
-
 export interface TimetableSettings {
   _id: string;
   session: string;
@@ -117,12 +106,19 @@ export interface TimetableVersion {
   notes?: string;
 }
 
+export interface ScheduleSlotEntry {
+  subject: { _id: string; name: string; code: string; choiceGroupName?: string };
+  teacher: { _id: string; name: string; email?: string };
+}
+
 export interface ScheduleSlot {
   _id: string;
   day: Weekday;
   periodId: string;
-  subject: { _id: string; name: string; code: string };
+  subject: { _id: string; name: string; code: string; choiceGroupName?: string };
   teacher: { _id: string; name: string; email?: string };
+  /** Extra concurrent subjects for a choice group (same period, different teachers). */
+  parallelEntries?: ScheduleSlotEntry[];
   room?: { _id: string; name: string; code: string } | null;
   class?: { _id: string; name: string };
   section?: { _id: string; name: string };
@@ -130,11 +126,11 @@ export interface ScheduleSlot {
   source?: string;
 }
 
-export interface QuotaProgress {
-  subject: { _id: string; name: string; code: string };
-  required: number;
-  actual: number;
-  complete: boolean;
+export function scheduleSlotEntries(slot: ScheduleSlot): ScheduleSlotEntry[] {
+  return [
+    { subject: slot.subject, teacher: slot.teacher },
+    ...(slot.parallelEntries || []),
+  ];
 }
 
 export interface TimetableGrid {
@@ -142,7 +138,6 @@ export interface TimetableGrid {
   workingDays: Weekday[];
   periods: PeriodSlot[];
   slots: ScheduleSlot[];
-  quotaProgress: QuotaProgress[];
 }
 
 export interface ValidationResult {
@@ -230,34 +225,6 @@ export const createTeacherAssignment = (body: {
 export const deleteTeacherAssignment = (id: string) =>
   api<{ deleted: boolean }>(`/setup/teacher-assignments/${id}`, { method: "DELETE" });
 
-// Requirements
-export const fetchSubjectRequirements = (params: {
-  sessionId: string;
-  sectionId?: string;
-  classId?: string;
-}) => {
-  const q = new URLSearchParams({ sessionId: params.sessionId });
-  if (params.sectionId) q.set("sectionId", params.sectionId);
-  if (params.classId) q.set("classId", params.classId);
-  return api<SubjectRequirement[]>(`/setup/subject-requirements?${q}`);
-};
-
-export const createSubjectRequirement = (body: {
-  session: string;
-  class: string;
-  section: string;
-  subject: string;
-  weeklyPeriods: number;
-  maxConsecutive?: number;
-  isLab?: boolean;
-}) => api<SubjectRequirement>("/setup/subject-requirements", { method: "POST", body: JSON.stringify(body) });
-
-export const updateSubjectRequirement = (id: string, body: Partial<SubjectRequirement>) =>
-  api<SubjectRequirement>(`/setup/subject-requirements/${id}`, { method: "PATCH", body: JSON.stringify(body) });
-
-export const deleteSubjectRequirement = (id: string) =>
-  api<{ deleted: boolean }>(`/setup/subject-requirements/${id}`, { method: "DELETE" });
-
 // Settings
 export const fetchTimetableSettings = (sessionId: string) =>
   api<TimetableSettings>(`/setup/settings/${sessionId}`);
@@ -303,8 +270,9 @@ export const upsertScheduleSlot = (
   body: {
     day: Weekday;
     periodId: string;
-    subject: string;
-    teacher: string;
+    subject?: string;
+    teacher?: string;
+    entries?: { subject: string; teacher: string }[];
     room?: string | null;
   }
 ) => api<ScheduleSlot>(`/versions/${versionId}/slots`, { method: "POST", body: JSON.stringify(body) });

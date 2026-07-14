@@ -343,11 +343,94 @@ async function syncBuiltInRolePermissions() {
   }
 }
 
+/** Rename old `academy*` collections to clean names; drop leftover junk. */
+async function dropLegacyDuplicateCollections() {
+  const mongoose = require('mongoose');
+  const db = mongoose.connection.db;
+  if (!db) return;
+
+  const renames = [
+    ['academystudents', 'students'],
+    ['academyclasses', 'classes'],
+    ['academysections', 'sections'],
+    ['academysubjects', 'subjects'],
+    ['academyfeestructures', 'feestructures'],
+    ['academyfeerecords', 'feerecords'],
+    ['academyattendances', 'attendances'],
+    ['academyassessments', 'assessments'],
+    ['academyclasstests', 'classtests'],
+    ['academyexpenses', 'expenses'],
+    ['academysalaryrecords', 'salaryrecords'],
+  ];
+
+  const dropOnly = [
+    'feevouchers',
+    'timetables',
+    'academyclasstimetables',
+    'subjectrequirements',
+  ];
+
+  const existing = await db.listCollections().toArray();
+  const names = new Set(existing.map((c) => c.name));
+
+  for (const [from, to] of renames) {
+    if (!names.has(from)) continue;
+    if (names.has(to)) {
+      await db.dropCollection(from);
+      // eslint-disable-next-line no-console
+      console.log(`[seed] Dropped duplicate old collection: ${from} (kept ${to})`);
+    } else {
+      await db.renameCollection(from, to);
+      names.delete(from);
+      names.add(to);
+      // eslint-disable-next-line no-console
+      console.log(`[seed] Renamed collection ${from} → ${to}`);
+    }
+  }
+
+  // Flatten legacy choice-group docs onto subjects, then drop those collections.
+  for (const collName of ['subjectchoicegroups', 'academysubjectchoicegroups']) {
+    if (!names.has(collName)) continue;
+    const groups = await db.collection(collName).find({}).toArray();
+    let stamped = 0;
+    for (const grp of groups) {
+      const subjectIds = grp.subjectIds || [];
+      if (!subjectIds.length || !grp.groupName) continue;
+      const pickCount = Math.max(1, Number(grp.pickCount) || 1);
+      const result = await db.collection('subjects').updateMany(
+        { _id: { $in: subjectIds } },
+        {
+          $set: {
+            enrollmentType: 'choice',
+            choiceGroupName: String(grp.groupName).trim(),
+            pickCount,
+          },
+        }
+      );
+      stamped += result.modifiedCount || 0;
+    }
+    await db.dropCollection(collName);
+    names.delete(collName);
+    // eslint-disable-next-line no-console
+    console.log(
+      `[seed] Migrated ${groups.length} choice group(s) → subjects (${stamped} updated), dropped ${collName}`
+    );
+  }
+
+  for (const name of dropOnly) {
+    if (!names.has(name)) continue;
+    await db.dropCollection(name);
+    // eslint-disable-next-line no-console
+    console.log(`[seed] Dropped legacy collection: ${name}`);
+  }
+}
+
 async function seedPermissionsAndRoles() {
   const { ensureAcademyClassIndexes } = require('./academy/academySessionImportService');
   const { ensureDefaultAcademyStructure } = require('./academy/academyDefaultStructureService');
   const Session = require('../models/Session');
   await ensureAcademyClassIndexes();
+  await dropLegacyDuplicateCollections();
   await upsertAllPermissions();
   const rolesCreated = await ensureDefaultRoles();
   await syncBuiltInRolePermissions();
@@ -368,4 +451,4 @@ async function seedPermissionsAndRoles() {
   }
 }
 
-module.exports = { seedPermissionsAndRoles, ensureDefaultAdmin };
+module.exports = { seedPermissionsAndRoles, ensureDefaultAdmin, dropLegacyDuplicateCollections };

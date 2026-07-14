@@ -27,17 +27,21 @@ export interface AcademySubject {
   subjectCode: string;
   classId: string;
   status: "active" | "inactive";
+  /** required = core; choice = elective sharing choiceGroupName with siblings */
+  enrollmentType?: "required" | "choice";
+  choiceGroupName?: string;
+  pickCount?: number;
   createdBy?: CreatedByUser | string;
 }
 
+/** Virtual group derived from subjects that share choiceGroupName (not a DB collection). */
 export interface AcademySubjectChoiceGroup {
   _id: string;
-  classId: string;
+  classId?: string;
   groupName: string;
   subjectIds: AcademySubject[] | string[];
   pickCount: number;
-  status: "active" | "inactive";
-  createdBy?: CreatedByUser | string;
+  status?: "active" | "inactive";
 }
 
 export interface EnrollmentSubjectLayout {
@@ -370,35 +374,12 @@ export const fetchEnrollmentSubjects = (classId: string, sectionId?: string) => 
   return api<EnrollmentSubjectLayout>(`/classes/${classId}/enrollment-subjects${q}`);
 };
 
+/** Derived choice groups from subjects (same choiceGroupName within a class). */
 export const fetchSubjectChoiceGroups = (classId: string) =>
-  api<AcademySubjectChoiceGroup[]>(`/classes/${classId}/subject-choice-groups`);
+  api<AcademySubjectChoiceGroup[]>(`/classes/${classId}/choice-groups`);
 
-export const createSubjectChoiceGroup = (classId: string, body: {
-  groupName: string;
-  subjectIds: string[];
-  pickCount?: number;
-  status?: string;
-}) =>
-  api<AcademySubjectChoiceGroup>(`/classes/${classId}/subject-choice-groups`, {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
-
-export const updateSubjectChoiceGroup = (id: string, body: Partial<{
-  groupName: string;
-  subjectIds: string[];
-  pickCount: number;
-  status: string;
-}>) =>
-  api<AcademySubjectChoiceGroup>(`/subject-choice-groups/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify(body),
-  });
-
-export const deleteSubjectChoiceGroup = (id: string) =>
-  api<{ deleted: boolean }>(`/subject-choice-groups/${id}`, { method: "DELETE" });
-
-export const createSubjectChoiceGroupBulk = (
+/** Create several choice subjects at once under one group name. */
+export const createBulkChoiceSubjects = (
   classId: string,
   body: {
     groupName: string;
@@ -406,10 +387,13 @@ export const createSubjectChoiceGroupBulk = (
     pickCount?: number;
   },
 ) =>
-  api<AcademySubjectChoiceGroup>(`/classes/${classId}/subject-choice-groups/bulk`, {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
+  api<{ groupName: string; pickCount: number; subjects: AcademySubject[] }>(
+    `/classes/${classId}/subjects/bulk-choice`,
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+    },
+  );
 
 export const fetchSectionsByClass = (classId: string, params?: { status?: string }) => {
   const q = params?.status ? `?status=${params.status}` : "";
@@ -453,7 +437,6 @@ export const createAcademySubject = (body: {
   subjectCode: string;
   status?: string;
   enrollmentType?: "required" | "choice";
-  choiceGroupId?: string;
   choiceGroupName?: string;
   pickCount?: number;
 }) => api<AcademySubject>("/subjects", { method: "POST", body: JSON.stringify(body) });
@@ -462,7 +445,6 @@ export const updateAcademySubject = (
   id: string,
   body: Partial<AcademySubject> & {
     enrollmentType?: "required" | "choice";
-    choiceGroupId?: string;
     choiceGroupName?: string;
     pickCount?: number;
   },

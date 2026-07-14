@@ -15,7 +15,6 @@ import {
 import {
   ArrowLeft,
   BookOpen,
-  Calendar,
   ClipboardList,
   GraduationCap,
   Pencil,
@@ -31,11 +30,9 @@ import type { ModuleActionCaps } from "@/lib/permissions";
 import {
   ASSESSMENT_TYPE_LABELS,
   createAcademySubject,
-  createClassTimetableSlot,
   createFeeStructure,
   deleteAcademyClass,
   deleteAcademySubject,
-  deleteClassTimetableSlot,
   deleteClassTest,
   deleteFeeStructure,
   fetchSubjectChoiceGroups,
@@ -43,7 +40,6 @@ import {
   getAcademyClassRecord,
   updateAcademyClass,
   updateAcademySubject,
-  updateClassTimetableSlot,
   updateFeeStructure,
   type AcademyClassTest,
   type AcademyFeeStructure,
@@ -58,7 +54,7 @@ import {
   classTestMarksHref,
   classTestSeriesHref,
 } from "@/lib/testExamsMenus";
-import { formatDate, formatPkr, WEEKDAY_NAMES } from "./studentDisplayUtils";
+import { formatDate, formatPkr } from "./studentDisplayUtils";
 import {
   generateSubjectCode,
   subjectCodePlaceholder,
@@ -85,9 +81,8 @@ function StatusBadge({ status }: { status: string }) {
   };
   return (
     <span
-      className={`inline-flex text-xs font-semibold rounded-full px-2 py-0.5 capitalize ${
-        colors[status] || "bg-muted text-muted-foreground"
-      }`}
+      className={`inline-flex text-xs font-semibold rounded-full px-2 py-0.5 capitalize ${colors[status] || "bg-muted text-muted-foreground"
+        }`}
     >
       {status}
     </span>
@@ -109,11 +104,6 @@ function subjectLabel(subjectId: AcademyClassTest["subjectId"] | AcademyTimetabl
     return subjectId.subjectName;
   }
   return "—";
-}
-
-function subjectIdOf(subjectId: AcademyTimetableSlot["subjectId"]): string {
-  if (typeof subjectId === "string") return subjectId;
-  return subjectId?._id ?? "";
 }
 
 export default function ClassDetailPage({
@@ -170,16 +160,6 @@ export default function ClassDetailPage({
   });
 
   // Timetable dialog
-  const [slotOpen, setSlotOpen] = useState(false);
-  const [editSlot, setEditSlot] = useState<AcademyTimetableSlot | null>(null);
-  const [slotForm, setSlotForm] = useState({
-    subjectId: "",
-    dayOfWeek: "1",
-    startTime: "09:00",
-    endTime: "10:00",
-    room: "",
-  });
-
   const [tab, setTab] = useState("overview");
 
   const classMut = useMutation({
@@ -261,35 +241,6 @@ export default function ClassDetailPage({
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
-  const slotMut = useMutation({
-    mutationFn: async () => {
-      const body = {
-        classId,
-        subjectId: slotForm.subjectId,
-        dayOfWeek: Number(slotForm.dayOfWeek),
-        startTime: slotForm.startTime,
-        endTime: slotForm.endTime,
-        room: slotForm.room,
-      };
-      if (editSlot) return updateClassTimetableSlot(classId, editSlot._id, body);
-      return createClassTimetableSlot(classId, body);
-    },
-    onSuccess: () => {
-      invalidate();
-      setSlotOpen(false);
-      toast({ title: editSlot ? "Slot updated" : "Slot added" });
-    },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
-  });
-
-  const deleteSlotMut = useMutation({
-    mutationFn: (slotId: string) => deleteClassTimetableSlot(classId, slotId),
-    onSuccess: () => {
-      invalidate();
-      toast({ title: "Timetable slot removed" });
-    },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
-  });
 
   const deleteTestMut = useMutation({
     mutationFn: ({ testId, series }: { testId: string; series?: boolean }) =>
@@ -377,29 +328,6 @@ export default function ClassDetailPage({
     setFeeOpen(true);
   };
 
-  const openSlotCreate = () => {
-    setEditSlot(null);
-    setSlotForm({
-      subjectId: activeSubjects[0]?._id ?? "",
-      dayOfWeek: "1",
-      startTime: "09:00",
-      endTime: "10:00",
-      room: "",
-    });
-    setSlotOpen(true);
-  };
-
-  const openSlotEdit = (slot: AcademyTimetableSlot) => {
-    setEditSlot(slot);
-    setSlotForm({
-      subjectId: subjectIdOf(slot.subjectId),
-      dayOfWeek: String(slot.dayOfWeek),
-      startTime: slot.startTime,
-      endTime: slot.endTime,
-      room: slot.room ?? "",
-    });
-    setSlotOpen(true);
-  };
 
   const testHref = (test: AcademyClassTest) => {
     if (test.seriesId && test.occurrenceCount && test.occurrenceCount > 1) {
@@ -477,9 +405,6 @@ export default function ClassDetailPage({
           </TabsTrigger>
           <TabsTrigger value="tests" className="gap-1">
             <ClipboardList className="h-3.5 w-3.5" /> Tests
-          </TabsTrigger>
-          <TabsTrigger value="timetable" className="gap-1">
-            <Calendar className="h-3.5 w-3.5" /> Timetable
           </TabsTrigger>
         </TabsList>
 
@@ -783,76 +708,6 @@ export default function ClassDetailPage({
           </div>
         </TabsContent>
 
-        <TabsContent value="timetable" className="mt-6 space-y-4">
-          <div className="flex justify-between items-center">
-            {caps.canCreate && activeSubjects.length > 0 && (
-              <Button size="sm" className="gap-2" onClick={openSlotCreate}>
-                <Plus className="h-4 w-4" /> Add slot
-              </Button>
-            )}
-            {caps.canCreate && activeSubjects.length === 0 && (
-              <p className="text-xs text-amber-600">Add subjects before scheduling</p>
-            )}
-          </div>
-          <div className="overflow-x-auto border rounded-md">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 border-b">
-                <tr>
-                  <th className="text-left p-3 font-medium">Day</th>
-                  <th className="text-left p-3 font-medium">Time</th>
-                  <th className="text-left p-3 font-medium">Subject</th>
-                  <th className="text-left p-3 font-medium">Room</th>
-                  {(caps.canEdit || caps.canDelete) && (
-                    <th className="text-right p-3 font-medium">Actions</th>
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {record.timetable.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="p-8 text-center text-muted-foreground">
-                      No timetable slots
-                    </td>
-                  </tr>
-                )}
-                {record.timetable.map((slot) => (
-                  <tr key={slot._id} className="border-b last:border-0">
-                    <td className="p-3">
-                      {slot.dayName ?? WEEKDAY_NAMES[slot.dayOfWeek] ?? slot.dayOfWeek}
-                    </td>
-                    <td className="p-3">
-                      {slot.startTime} – {slot.endTime}
-                    </td>
-                    <td className="p-3">{subjectLabel(slot.subjectId)}</td>
-                    <td className="p-3">{slot.room || "—"}</td>
-                    {(caps.canEdit || caps.canDelete) && (
-                      <td className="p-3 text-right space-x-1">
-                        {caps.canEdit && (
-                          <Button variant="ghost" size="icon" onClick={() => openSlotEdit(slot)}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                        )}
-                        {caps.canDelete && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              if (confirm("Remove this timetable slot?")) {
-                                deleteSlotMut.mutate(slot._id);
-                              }
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        )}
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </TabsContent>
       </Tabs>
 
       <Dialog open={classOpen} onOpenChange={setClassOpen}>
@@ -1031,79 +886,6 @@ export default function ClassDetailPage({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={slotOpen} onOpenChange={setSlotOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{editSlot ? "Edit timetable slot" : "Add timetable slot"}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div>
-              <Label>Subject</Label>
-              <select
-                className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-                value={slotForm.subjectId}
-                onChange={(e) => setSlotForm((f) => ({ ...f, subjectId: e.target.value }))}
-              >
-                {activeSubjects.map((s) => (
-                  <option key={s._id} value={s._id}>
-                    {s.subjectName}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <Label>Day</Label>
-              <select
-                className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-                value={slotForm.dayOfWeek}
-                onChange={(e) => setSlotForm((f) => ({ ...f, dayOfWeek: e.target.value }))}
-              >
-                {WEEKDAY_NAMES.map((name, i) => (
-                  <option key={i} value={String(i)}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Start</Label>
-                <Input
-                  type="time"
-                  value={slotForm.startTime}
-                  onChange={(e) => setSlotForm((f) => ({ ...f, startTime: e.target.value }))}
-                />
-              </div>
-              <div>
-                <Label>End</Label>
-                <Input
-                  type="time"
-                  value={slotForm.endTime}
-                  onChange={(e) => setSlotForm((f) => ({ ...f, endTime: e.target.value }))}
-                />
-              </div>
-            </div>
-            <div>
-              <Label>Room (optional)</Label>
-              <Input
-                value={slotForm.room}
-                onChange={(e) => setSlotForm((f) => ({ ...f, room: e.target.value }))}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSlotOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              disabled={!slotForm.subjectId || slotMut.isPending}
-              onClick={() => slotMut.mutate()}
-            >
-              Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

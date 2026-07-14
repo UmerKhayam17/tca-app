@@ -176,7 +176,7 @@ const AttendanceModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Module
     );
   };
 
-  const colSpan = canMark ? 5 : 4;
+  const colSpan = canMark ? 6 : 5;
 
   return (
     <div>
@@ -291,6 +291,7 @@ const AttendanceModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Module
                   <th className="text-left px-4 py-3">Class</th>
                   <th className="text-left px-4 py-3">Section</th>
                   <th className="text-left px-4 py-3">Status</th>
+                  <th className="text-left px-4 py-3">Time</th>
                   {canMark && <th className="text-right px-4 py-3">Mark</th>}
                 </tr>
               </thead>
@@ -320,6 +321,10 @@ const AttendanceModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Module
                 )}
                 {studentsFiltered.map((s) => {
                   const cur = recordMap.get(s._id)?.status;
+                  const record = recordMap.get(s._id);
+                  const markedTime = record?.createdAt
+                    ? new Date(record.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                    : "—";
                   return (
                     <tr key={s._id} className="border-t border-border">
                       <td className="px-4 py-3 font-medium text-primary">{s.studentName}</td>
@@ -327,19 +332,19 @@ const AttendanceModule = ({ perm: _perm, caps }: { perm: PermLevel; caps: Module
                       <td className="px-4 py-3">{sectionLabel(s)}</td>
                       <td className="px-4 py-3">
                         <span
-                          className={`text-xs font-semibold rounded-full px-2 py-0.5 ${
-                            cur === "present"
+                          className={`text-xs font-semibold rounded-full px-2 py-0.5 ${cur === "present"
                               ? "bg-accent/15 text-accent"
                               : cur === "absent"
                                 ? "bg-destructive/15 text-destructive"
                                 : cur === "leave" || cur === "late"
                                   ? "bg-primary/15 text-primary"
                                   : "bg-muted text-muted-foreground"
-                          }`}
+                            }`}
                         >
                           {cur || "unmarked"}
                         </span>
                       </td>
+                      <td className="px-4 py-3 text-sm text-muted-foreground">{markedTime}</td>
                       {canMark && (
                         <td className="px-4 py-3 text-right whitespace-nowrap space-x-1">
                           <Button

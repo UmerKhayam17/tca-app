@@ -57,7 +57,4 @@ router.get('/subjects', requireAnyPermission('manage_classes', 'view_timetables'
 router.post('/subjects', requirePermission('manage_classes'), validate(schemas.subjectBody), ctrl.createSubject);
 router.patch('/subjects/:id', requirePermission('manage_classes'), validate(schemas.subjectPatch), ctrl.patchSubject);
 
-router.get('/timetables', requirePermission('view_timetables'), ctrl.listTimetables);
-router.post('/timetables', requirePermission('manage_timetables'), validate(schemas.timetableBody), ctrl.createTimetable);
-
 module.exports = router;

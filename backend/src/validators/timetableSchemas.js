@@ -11,6 +11,18 @@ const periodSlotBody = Joi.object({
   type: Joi.string().valid(...PERIOD_TYPES).default('lecture'),
 });
 
+const periodBreakBody = Joi.object({
+  breakName: Joi.string().required().trim(),
+  startTime: Joi.string()
+    .pattern(/^([01]\d|2[0-3]):[0-5]\d$/)
+    .required()
+    .trim(),
+  endTime: Joi.string()
+    .pattern(/^([01]\d|2[0-3]):[0-5]\d$/)
+    .required()
+    .trim(),
+});
+
 const roomBody = Joi.object({
   session: objectId.required(),
   name: Joi.string().required().trim(),
@@ -25,14 +37,27 @@ const roomPatch = roomBody.fork(['session', 'name', 'code'], (s) => s.optional()
 
 const periodTemplateBody = Joi.object({
   session: objectId.required(),
-  name: Joi.string().required().trim(),
-  slots: Joi.array().items(periodSlotBody).min(1).required(),
+  name: Joi.string().trim().allow(''),
+  academyStartTime: Joi.string()
+    .pattern(/^([01]\d|2[0-3]):[0-5]\d$/)
+    .required()
+    .trim(),
+  academyEndTime: Joi.string()
+    .pattern(/^([01]\d|2[0-3]):[0-5]\d$/)
+    .required()
+    .trim(),
+  periodDurationMinutes: Joi.number().integer().min(1).required(),
+  breaks: Joi.array().items(periodBreakBody).default([]),
   isDefault: Joi.boolean(),
   isActive: Joi.boolean(),
 });
 
 const periodTemplatePatch = Joi.object({
-  name: Joi.string().trim(),
+  name: Joi.string().trim().allow(''),
+  academyStartTime: Joi.string().pattern(/^([01]\d|2[0-3]):[0-5]\d$/).trim(),
+  academyEndTime: Joi.string().pattern(/^([01]\d|2[0-3]):[0-5]\d$/).trim(),
+  periodDurationMinutes: Joi.number().integer().min(1),
+  breaks: Joi.array().items(periodBreakBody),
   slots: Joi.array().items(periodSlotBody).min(1),
   isDefault: Joi.boolean(),
   isActive: Joi.boolean(),

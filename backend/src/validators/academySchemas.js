@@ -93,23 +93,6 @@ const academyFeeStructurePatch = Joi.object({
   effectiveDate: Joi.date(),
 }).min(1);
 
-const academyTimetableSlotBody = Joi.object({
-  classId: objectId.required(),
-  subjectId: objectId.required(),
-  dayOfWeek: Joi.number().integer().min(0).max(6).required(),
-  startTime: Joi.string().trim().required(),
-  endTime: Joi.string().trim().required(),
-  room: Joi.string().allow('').trim(),
-});
-
-const academyTimetableSlotPatch = Joi.object({
-  subjectId: objectId,
-  dayOfWeek: Joi.number().integer().min(0).max(6),
-  startTime: Joi.string().trim(),
-  endTime: Joi.string().trim(),
-  room: Joi.string().allow('').trim(),
-}).min(1);
-
 const academicRecord = Joi.object({
   institutionName: Joi.string().allow('').trim(),
   className: Joi.string().allow('').trim(),
@@ -487,8 +470,6 @@ module.exports = {
   academyAssessmentBulkBody,
   academyClassTestBody,
   academyClassTestMarksBody,
-  academyTimetableSlotBody,
-  academyTimetableSlotPatch,
   academyAttendanceMark,
   academySessionImportBody,
 };

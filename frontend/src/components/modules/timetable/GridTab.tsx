@@ -27,7 +27,7 @@ import {
   type PeriodSlot,
   type ScheduleSlot,
 } from "@/lib/timetableApi";
-import { DAY_LABELS, DAY_ORDER, slotMatchesPeriod } from "./constants";
+import { DAY_LABELS, DAY_ORDER, normalizeWorkingDays, slotMatchesPeriod } from "./constants";
 import TimetableSlotCard from "./TimetableSlotCard";
 
 export default function GridTab({
@@ -111,7 +111,7 @@ export default function GridTab({
   const createVersionMut = useMutation({
     mutationFn: () => {
       const tpl = templates.find((t) => t.isDefault) || templates[0];
-      if (!tpl) throw new Error("Create a period template in Setup first");
+      if (!tpl) throw new Error("Create an academy time configuration in Setup first");
       return createTimetableVersion({
         session: sessionId,
         class: classId,
@@ -196,7 +196,7 @@ export default function GridTab({
     },
   });
 
-  const workingDays = (grid?.workingDays?.length ? grid.workingDays : DAY_ORDER.slice(0, 5)) as Weekday[];
+  const workingDays = normalizeWorkingDays(grid?.workingDays);
   const lecturePeriods = (grid?.periods || []).filter((p) => p.type === "lecture");
 
   const getSlot = (day: Weekday, periodId: string) =>

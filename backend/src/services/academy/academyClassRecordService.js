@@ -5,8 +5,6 @@ const AcademyStudent = require('../../models/academy/AcademyStudent');
 const AcademyFeeStructure = require('../../models/academy/AcademyFeeStructure');
 const AcademyFeeRecord = require('../../models/academy/AcademyFeeRecord');
 const AcademyClassTest = require('../../models/academy/AcademyClassTest');
-const AcademyClassTimetable = require('../../models/academy/AcademyClassTimetable');
-
 const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 async function getClassRecord(classId) {
@@ -38,10 +36,7 @@ async function getClassRecord(classId) {
       .sort({ examDate: -1 })
       .limit(30)
       .lean(),
-    AcademyClassTimetable.find({ classId })
-      .populate('subjectId', 'subjectName subjectCode')
-      .sort({ dayOfWeek: 1, startTime: 1 })
-      .lean(),
+    [],
     AcademyStudent.find({ classId }).distinct('_id'),
   ]);
 
@@ -67,10 +62,7 @@ async function getClassRecord(classId) {
     feeStructureHistory: feeStructures,
     students,
     classTests,
-    timetable: timetable.map((slot) => ({
-      ...slot,
-      dayName: WEEKDAY_NAMES[slot.dayOfWeek] || `Day ${slot.dayOfWeek}`,
-    })),
+    timetable: [],
     stats: {
       subjectCount: subjects.filter((s) => s.status === 'active').length,
       studentCount: students.length,

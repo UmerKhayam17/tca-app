@@ -14,9 +14,9 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
     const detailMsg =
       Array.isArray(body.details)
         ? (body.details as { message?: string; code?: string }[])
-            .map((d) => d.message || d.code)
-            .filter(Boolean)
-            .join("; ")
+          .map((d) => d.message || d.code)
+          .filter(Boolean)
+          .join("; ")
         : typeof body.details === "object" && body.details !== null
           ? JSON.stringify(body.details)
           : "";
@@ -37,7 +37,11 @@ export interface PeriodSlot {
 export interface PeriodTemplate {
   _id: string;
   session: string;
-  name: string;
+  name?: string;
+  academyStartTime: string;
+  academyEndTime: string;
+  periodDurationMinutes: number;
+  breaks: Array<{ breakName: string; startTime: string; endTime: string }>;
   slots: PeriodSlot[];
   isDefault: boolean;
   isActive: boolean;
@@ -171,8 +175,11 @@ export const fetchPeriodTemplates = (sessionId: string) =>
 
 export const createPeriodTemplate = (body: {
   session: string;
-  name: string;
-  slots: Omit<PeriodSlot, "_id">[];
+  name?: string;
+  academyStartTime: string;
+  academyEndTime: string;
+  periodDurationMinutes: number;
+  breaks: Array<{ breakName: string; startTime: string; endTime: string }>;
   isDefault?: boolean;
 }) => api<PeriodTemplate>("/setup/period-templates", { method: "POST", body: JSON.stringify(body) });
 

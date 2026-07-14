@@ -16,7 +16,6 @@ const expenseCtrl = require('../controllers/academy/academyExpenseController');
 const attendanceCtrl = require('../controllers/academy/academyAttendanceController');
 const assessmentCtrl = require('../controllers/academy/academyAssessmentController');
 const classTestCtrl = require('../controllers/academy/academyClassTestController');
-const timetableSlotCtrl = require('../controllers/academy/academyClassTimetableController');
 const { uploadImage } = require('../middleware/uploadImage');
 
 const router = Router();
@@ -146,30 +145,6 @@ router.delete(
   '/subject-choice-groups/:id',
   requirePermission('manage_academy_subjects'),
   choiceGroupCtrl.remove
-);
-
-// Class timetable (academy weekly slots)
-router.get(
-  '/classes/:classId/timetable',
-  requireAnyPermission('view_academy_students', 'manage_academy_classes'),
-  timetableSlotCtrl.list
-);
-router.post(
-  '/classes/:classId/timetable',
-  requirePermission('manage_academy_classes'),
-  validate(schemas.academyTimetableSlotBody),
-  timetableSlotCtrl.create
-);
-router.patch(
-  '/classes/:classId/timetable/:slotId',
-  requirePermission('manage_academy_classes'),
-  validate(schemas.academyTimetableSlotPatch),
-  timetableSlotCtrl.update
-);
-router.delete(
-  '/classes/:classId/timetable/:slotId',
-  requirePermission('manage_academy_classes'),
-  timetableSlotCtrl.remove
 );
 
 // Fee structure

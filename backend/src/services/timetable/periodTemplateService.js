@@ -2,6 +2,110 @@ const PeriodTemplate = require('../../models/timetable/PeriodTemplate');
 const ApiError = require('../../utils/ApiError');
 const { assertSessionWritable } = require('../session/sessionGuard');
 
+function parseTimeToMinutes(value) {
+  if (typeof value !== 'string') throw new ApiError(400, 'Invalid time format');
+  const match = value.match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+  if (!match) throw new ApiError(400, `Invalid time value "${value}"`);
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function formatMinutesToTime(minutes) {
+  const hour = Math.floor(minutes / 60);
+  const minute = minutes % 60;
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+}
+
+function sortBreaks(breaks) {
+  return [...breaks]
+    .map((br) => ({
+      ...br,
+      startMinutes: parseTimeToMinutes(br.startTime),
+      endMinutes: parseTimeToMinutes(br.endTime),
+    }))
+    .sort((a, b) => a.startMinutes - b.startMinutes);
+}
+
+function validateBreakRanges(startMinutes, endMinutes, breaks) {
+  const sorted = sortBreaks(breaks);
+  let previousEnd = startMinutes;
+  for (const br of sorted) {
+    if (br.startMinutes < startMinutes || br.endMinutes > endMinutes) {
+      throw new ApiError(400, `Break "${br.breakName}" must fall within academy hours`);
+    }
+    if (br.endMinutes <= br.startMinutes) {
+      throw new ApiError(400, `Break "${br.breakName}" end time must be later than its start time`);
+    }
+    if (br.startMinutes < previousEnd) {
+      throw new ApiError(400, `Break "${br.breakName}" overlaps with another break`);
+    }
+    previousEnd = br.endMinutes;
+  }
+  return sorted;
+}
+
+function generatePeriodSlots({ academyStartTime, academyEndTime, periodDurationMinutes, breaks = [] }) {
+  if (!academyStartTime || !academyEndTime) {
+    throw new ApiError(400, 'Academy start and end times are required');
+  }
+
+  const startMinutes = parseTimeToMinutes(academyStartTime);
+  const endMinutes = parseTimeToMinutes(academyEndTime);
+  if (endMinutes <= startMinutes) {
+    throw new ApiError(400, 'Academy end time must be later than academy start time');
+  }
+
+  if (!Number.isInteger(periodDurationMinutes) || periodDurationMinutes <= 0) {
+    throw new ApiError(400, 'Subject period duration must be a positive integer');
+  }
+
+  const sortedBreaks = validateBreakRanges(startMinutes, endMinutes, breaks);
+  const slots = [];
+  let periodCount = 1;
+  let cursor = startMinutes;
+
+  const addLectureSegment = (segmentEnd) => {
+    if (segmentEnd <= cursor) return cursor;
+    while (cursor + periodDurationMinutes <= segmentEnd) {
+      slots.push({
+        order: slots.length + 1,
+        label: `Period ${periodCount}`,
+        startTime: formatMinutesToTime(cursor),
+        endTime: formatMinutesToTime(cursor + periodDurationMinutes),
+        type: 'lecture',
+      });
+      cursor += periodDurationMinutes;
+      periodCount += 1;
+    }
+    if (cursor < segmentEnd) {
+      slots.push({
+        order: slots.length + 1,
+        label: `Period ${periodCount}`,
+        startTime: formatMinutesToTime(cursor),
+        endTime: formatMinutesToTime(segmentEnd),
+        type: 'lecture',
+      });
+      cursor = segmentEnd;
+      periodCount += 1;
+    }
+    return cursor;
+  };
+
+  for (const br of sortedBreaks) {
+    addLectureSegment(br.startMinutes);
+    slots.push({
+      order: slots.length + 1,
+      label: br.breakName,
+      startTime: formatMinutesToTime(br.startMinutes),
+      endTime: formatMinutesToTime(br.endMinutes),
+      type: 'break',
+    });
+    cursor = br.endMinutes;
+  }
+
+  addLectureSegment(endMinutes);
+  return slots;
+}
+
 async function listPeriodTemplates({ sessionId, isActive }) {
   const q = {};
   if (sessionId) q.session = sessionId;
@@ -17,10 +121,21 @@ async function getPeriodTemplate(id) {
 
 async function createPeriodTemplate(body, userId) {
   await assertSessionWritable(body.session);
+
   if (body.isDefault) {
     await PeriodTemplate.updateMany({ session: body.session }, { $set: { isDefault: false } });
   }
-  return PeriodTemplate.create({ ...body, createdBy: userId });
+
+  const payload = { ...body };
+  if (body.academyStartTime || body.academyEndTime || body.periodDurationMinutes || body.breaks) {
+    payload.slots = generatePeriodSlots(body);
+  } else if (Array.isArray(body.slots) && body.slots.length) {
+    payload.slots = body.slots;
+  } else {
+    throw new ApiError(400, 'Period template requires configuration or slots');
+  }
+
+  return PeriodTemplate.create({ ...payload, createdBy: userId });
 }
 
 async function updatePeriodTemplate(id, body) {
@@ -35,7 +150,25 @@ async function updatePeriodTemplate(id, body) {
     );
   }
 
-  const tpl = await PeriodTemplate.findByIdAndUpdate(id, body, { new: true, runValidators: true });
+  const payload = { ...body };
+  const hasConfigFields =
+    body.academyStartTime !== undefined ||
+    body.academyEndTime !== undefined ||
+    body.periodDurationMinutes !== undefined ||
+    body.breaks !== undefined;
+
+  if (hasConfigFields) {
+    payload.slots = generatePeriodSlots({
+      academyStartTime: body.academyStartTime ?? existing.academyStartTime,
+      academyEndTime: body.academyEndTime ?? existing.academyEndTime,
+      periodDurationMinutes: body.periodDurationMinutes ?? existing.periodDurationMinutes,
+      breaks: body.breaks ?? existing.breaks,
+    });
+  } else if (Array.isArray(body.slots) && body.slots.length) {
+    payload.slots = body.slots;
+  }
+
+  const tpl = await PeriodTemplate.findByIdAndUpdate(id, payload, { new: true, runValidators: true });
   return tpl;
 }
 

@@ -130,7 +130,7 @@ async function getVersionGrid(id) {
 
   return {
     version,
-    workingDays: session?.workingDays || [],
+    workingDays: session?.workingDays?.length ? session.workingDays : ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'],
     periods: template?.slots || [],
     slots,
     quotaProgress,

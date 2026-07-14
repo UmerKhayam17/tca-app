@@ -9,7 +9,6 @@ const Class = require('../models/Class');
 const Section = require('../models/Section');
 const Subject = require('../models/Subject');
 const Student = require('../models/Student');
-const Timetable = require('../models/Timetable');
 
 const listSessions = catchAsync(async (req, res) => {
   const { status } = req.query;
@@ -205,9 +204,9 @@ const listSections = catchAsync(async (req, res) => {
   const sectionIds = sections.map((s) => s._id);
   const counts = sectionIds.length
     ? await Student.aggregate([
-        { $match: { section: { $in: sectionIds } } },
-        { $group: { _id: '$section', count: { $sum: 1 } } },
-      ])
+      { $match: { section: { $in: sectionIds } } },
+      { $group: { _id: '$section', count: { $sum: 1 } } },
+    ])
     : [];
   const countMap = Object.fromEntries(counts.map((c) => [String(c._id), c.count]));
 
@@ -240,27 +239,6 @@ const patchSubject = catchAsync(async (req, res) => {
   res.json({ success: true, data: subject });
 });
 
-const createTimetable = catchAsync(async (req, res) => {
-  if (req.body.isActive) {
-    await Timetable.updateMany(
-      { class: req.body.class, section: req.body.section, session: req.body.session },
-      { $set: { isActive: false } }
-    );
-  }
-  const tt = await Timetable.create({ ...req.body, createdBy: req.user._id });
-  res.status(201).json({ success: true, data: tt });
-});
-
-const listTimetables = catchAsync(async (req, res) => {
-  const { classId, sectionId, sessionId } = req.query;
-  const q = {};
-  if (classId) q.class = classId;
-  if (sectionId) q.section = sectionId;
-  if (sessionId) q.session = sessionId;
-  const rows = await Timetable.find(q).populate('class').populate('section').populate('session');
-  res.json({ success: true, data: rows });
-});
-
 /** Canonical RBAC module list (same source as `moduleConfig` / staff matrix). */
 const listSystemModules = catchAsync(async (req, res) => {
   res.json({ success: true, data: { modules: getSystemModulesForApi() } });
@@ -280,7 +258,5 @@ module.exports = {
   listSubjects,
   patchSubject,
   listSections,
-  createTimetable,
-  listTimetables,
   listSystemModules,
 };

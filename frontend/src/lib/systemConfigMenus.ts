@@ -29,16 +29,16 @@ export const SYSTEM_CONFIG_SECTIONS: {
   label: string;
   icon: ComponentType<{ className?: string }>;
 }[] = [
-  { key: "academic", label: "Sessions", icon: GraduationCap },
-  { key: "sections", label: "Timetable sections", icon: Layers },
-  { key: "periods", label: "Periods & breaks", icon: Clock },
-  { key: "rooms", label: "Rooms", icon: DoorOpen },
-  { key: "teachers", label: "Teachers", icon: UserCircle },
-  { key: "teacher-assignments", label: "Teacher assignments", icon: Link2 },
-  { key: "requirements", label: "Weekly requirements", icon: ListChecks },
-  { key: "timetable-rules", label: "Timetable rules", icon: SlidersHorizontal },
-  { key: "history", label: "Session history", icon: History },
-];
+    { key: "academic", label: "Sessions", icon: GraduationCap },
+    { key: "sections", label: "Timetable sections", icon: Layers },
+    { key: "periods", label: "Academy time configuration", icon: Clock },
+    { key: "rooms", label: "Rooms", icon: DoorOpen },
+    { key: "teachers", label: "Teachers", icon: UserCircle },
+    { key: "teacher-assignments", label: "Teacher assignments", icon: Link2 },
+    { key: "requirements", label: "Weekly requirements", icon: ListChecks },
+    { key: "timetable-rules", label: "Timetable rules", icon: SlidersHorizontal },
+    { key: "history", label: "Session history", icon: History },
+  ];
 
 export const SYSTEM_CONFIG_SIDEBAR_GROUPS = buildSidebarSubmenuGroups(SYSTEM_CONFIG_SECTIONS, [
   { label: "Academic year", keys: ["academic", "history"] },

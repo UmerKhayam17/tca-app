@@ -278,15 +278,6 @@ const messageBody = Joi.object({
   fileName: Joi.string().allow('', null),
 });
 
-const timetableBody = Joi.object({
-  class: Joi.string().hex().length(24).required(),
-  section: Joi.string().hex().length(24).required(),
-  session: Joi.string().hex().length(24).required(),
-  schedule: Joi.array().required(),
-  effectiveFrom: Joi.date().required(),
-  isActive: Joi.boolean(),
-});
-
 const readMessages = Joi.object({
   messageIds: Joi.array().items(Joi.string().hex().length(24)).min(1).required(),
 });
@@ -323,6 +314,5 @@ module.exports = {
   announcementBody,
   conversationBody,
   messageBody,
-  timetableBody,
   readMessages,
 };

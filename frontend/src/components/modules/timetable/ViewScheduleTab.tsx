@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { fetchClasses, fetchSections } from "@/lib/configApi";
 import { fetchSectionSchedule } from "@/lib/timetableApi";
 import { Badge } from "@/components/ui/badge";
-import { DAY_LABELS, slotMatchesPeriod, subjectColor } from "./constants";
+import { DAY_LABELS, normalizeWorkingDays, slotMatchesPeriod, subjectColor } from "./constants";
 import type { Weekday } from "@/lib/configApi";
 
 export default function ViewScheduleTab({ sessionId }: { sessionId: string }) {
@@ -37,7 +37,7 @@ export default function ViewScheduleTab({ sessionId }: { sessionId: string }) {
 
   if (!sessionId) return null;
 
-  const workingDays = (grid?.workingDays || []) as Weekday[];
+  const workingDays = normalizeWorkingDays(grid?.workingDays);
   const lecturePeriods = (grid?.periods || []).filter((p) => p.type === "lecture");
 
   const getSlot = (day: Weekday, periodId: string) =>
@@ -80,42 +80,42 @@ export default function ViewScheduleTab({ sessionId }: { sessionId: string }) {
               <span className="text-muted-foreground">Published, but no lessons in the grid yet.</span>
             )}
           </div>
-        <Card className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[640px]">
-            <thead className="bg-muted/50">
-              <tr>
-                <th className="text-left p-3">Time</th>
-                {workingDays.map((d) => (
-                  <th key={d} className="text-left p-3">{DAY_LABELS[d]}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {lecturePeriods.map((period) => (
-                <tr key={period._id} className="border-t">
-                  <td className="p-3 font-mono text-xs text-muted-foreground">
-                    {period.startTime}–{period.endTime}
-                  </td>
-                  {workingDays.map((day) => {
-                    const slot = getSlot(day, period._id);
-                    return (
-                      <td key={day} className="p-2">
-                        {slot ? (
-                          <div className={`rounded-md border p-2 ${subjectColor(slot.subject._id)}`}>
-                            <div className="font-semibold">{slot.subject.name}</div>
-                            <div className="text-xs opacity-80">{slot.teacher.name}</div>
-                          </div>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                    );
-                  })}
+          <Card className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[640px]">
+              <thead className="bg-muted/50">
+                <tr>
+                  <th className="text-left p-3">Time</th>
+                  {workingDays.map((d) => (
+                    <th key={d} className="text-left p-3">{DAY_LABELS[d]}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
+              </thead>
+              <tbody>
+                {lecturePeriods.map((period) => (
+                  <tr key={period._id} className="border-t">
+                    <td className="p-3 font-mono text-xs text-muted-foreground">
+                      {period.startTime}–{period.endTime}
+                    </td>
+                    {workingDays.map((day) => {
+                      const slot = getSlot(day, period._id);
+                      return (
+                        <td key={day} className="p-2">
+                          {slot ? (
+                            <div className={`rounded-md border p-2 ${subjectColor(slot.subject._id)}`}>
+                              <div className="font-semibold">{slot.subject.name}</div>
+                              <div className="text-xs opacity-80">{slot.teacher.name}</div>
+                            </div>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Card>
         </>
       )}
     </div>

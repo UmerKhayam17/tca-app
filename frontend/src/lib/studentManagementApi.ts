@@ -223,6 +223,7 @@ export interface AcademyTimetableSlot {
   classId: string;
   subjectId: AcademySubject | string;
   dayOfWeek: number;
+  dayName?: string;
   startTime: string;
   endTime: string;
   room?: string;
@@ -235,6 +236,7 @@ export interface AcademyAttendanceRecord {
   status: "present" | "absent" | "late" | "leave";
   subjectId?: AcademySubject | string;
   notes?: string;
+  createdAt?: string;
 }
 
 export interface AcademyAssessmentRecord {
@@ -493,44 +495,6 @@ export const updateFeeStructure = (id: string, body: Partial<AcademyFeeStructure
 
 export const deleteFeeStructure = (id: string) =>
   api<{ deleted: boolean }>(`/fee-structures/${id}`, { method: "DELETE" });
-
-export const fetchClassTimetable = (classId: string) =>
-  api<AcademyTimetableSlot[]>(`/classes/${classId}/timetable`);
-
-export const createClassTimetableSlot = (
-  classId: string,
-  body: {
-    classId: string;
-    subjectId: string;
-    dayOfWeek: number;
-    startTime: string;
-    endTime: string;
-    room?: string;
-  }
-) =>
-  api<AcademyTimetableSlot>(`/classes/${classId}/timetable`, {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
-
-export const updateClassTimetableSlot = (
-  classId: string,
-  slotId: string,
-  body: Partial<{
-    subjectId: string;
-    dayOfWeek: number;
-    startTime: string;
-    endTime: string;
-    room: string;
-  }>
-) =>
-  api<AcademyTimetableSlot>(`/classes/${classId}/timetable/${slotId}`, {
-    method: "PATCH",
-    body: JSON.stringify(body),
-  });
-
-export const deleteClassTimetableSlot = (classId: string, slotId: string) =>
-  api<{ deleted: boolean }>(`/classes/${classId}/timetable/${slotId}`, { method: "DELETE" });
 
 export const previewFees = (body: {
   classId: string;

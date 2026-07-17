@@ -1,7 +1,10 @@
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { AcademySubjectChoiceGroup } from "@/lib/studentManagementApi";
+import type {
+  AcademySubject,
+  AcademySubjectChoiceGroup,
+} from "@/lib/studentManagementApi";
 import {
   generateSubjectCode,
   subjectCodePlaceholder,
@@ -10,6 +13,7 @@ import type { GroupSubjectRow } from "@/components/modules/student-management/gr
 
 export type SubjectEnrollmentForm = {
   enrollmentType: "required" | "choice";
+  /** Selected virtual group key (group name); empty = create/join by typed name */
   choiceGroupId: string;
   choiceGroupName: string;
   pickCount: string;
@@ -58,26 +62,43 @@ export function enrollmentFromGroup(group: AcademySubjectChoiceGroup): SubjectEn
     enrollmentType: "choice",
     choiceGroupId: group._id,
     choiceGroupName: group.groupName,
-    pickCount: String(group.pickCount),
+    pickCount: String(group.pickCount ?? 1),
     groupSubjectCount: String(group.subjectIds?.length ?? 2),
   };
+}
+
+/** Prefer fields stored on the subject; fall back to derived group list. */
+export function enrollmentFromSubject(
+  subject: AcademySubject,
+  groups: AcademySubjectChoiceGroup[] = [],
+): SubjectEnrollmentForm {
+  if (subject.enrollmentType === "choice" && subject.choiceGroupName) {
+    const group =
+      findGroupForSubject(groups, subject._id) ||
+      groups.find(
+        (g) => g.groupName.toLowerCase() === subject.choiceGroupName!.trim().toLowerCase(),
+      );
+    return {
+      enrollmentType: "choice",
+      choiceGroupId: group?._id ?? subject.choiceGroupName,
+      choiceGroupName: subject.choiceGroupName,
+      pickCount: String(subject.pickCount ?? group?.pickCount ?? 1),
+      groupSubjectCount: String(group?.subjectIds?.length ?? 2),
+    };
+  }
+  const group = findGroupForSubject(groups, subject._id);
+  return group ? enrollmentFromGroup(group) : defaultSubjectEnrollmentForm();
 }
 
 export function buildEnrollmentPayload(form: SubjectEnrollmentForm) {
   if (form.enrollmentType === "required") {
     return { enrollmentType: "required" as const };
   }
-  const pickCount = 1;
-  if (form.choiceGroupId) {
-    return {
-      enrollmentType: "choice" as const,
-      choiceGroupId: form.choiceGroupId,
-      pickCount,
-    };
-  }
+  const pickCount = Math.max(1, Number(form.pickCount) || 1);
+  const choiceGroupName = (form.choiceGroupName || form.choiceGroupId).trim();
   return {
     enrollmentType: "choice" as const,
-    choiceGroupName: form.choiceGroupName.trim(),
+    choiceGroupName,
     pickCount,
   };
 }
@@ -106,13 +127,6 @@ export function SubjectEnrollmentConfig({
   const bulkCreate = isBulkGroupCreate(value, Boolean(isEdit));
   const patch = (partial: Partial<SubjectEnrollmentForm>) => onChange({ ...value, ...partial });
 
-  const availableGroups = choiceGroups.filter((g) => {
-    if (value.choiceGroupId === g._id) return true;
-    const ids = subjectIdsOfGroup(g);
-    if (currentSubjectId && ids.includes(currentSubjectId)) return true;
-    return true;
-  });
-
   const selectedGroup = choiceGroups.find((g) => g._id === value.choiceGroupId);
 
   return (
@@ -126,12 +140,15 @@ export function SubjectEnrollmentConfig({
         />
         <div>
           <span className="text-sm font-medium">Group choice subject</span>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Electives that share a group name — students pick from that set.
+          </p>
         </div>
       </label>
 
       {isGroupChoice && (
         <div className="space-y-3 rounded-md border border-dashed p-3">
-          {availableGroups.length > 0 && !isEdit && (
+          {choiceGroups.length > 0 && !isEdit && (
             <div>
               <Label className="text-xs">Group</Label>
               <select
@@ -140,19 +157,23 @@ export function SubjectEnrollmentConfig({
                 onChange={(e) => {
                   const id = e.target.value;
                   if (id === "__new__") {
-                    patch({ choiceGroupId: "", choiceGroupName: "", groupSubjectCount: value.groupSubjectCount || "2" });
+                    patch({
+                      choiceGroupId: "",
+                      choiceGroupName: "",
+                      groupSubjectCount: value.groupSubjectCount || "2",
+                    });
                   } else {
                     const group = choiceGroups.find((g) => g._id === id);
                     patch({
                       choiceGroupId: id,
-                      choiceGroupName: group?.groupName ?? "",
-                      pickCount: "1",
+                      choiceGroupName: group?.groupName ?? id,
+                      pickCount: String(group?.pickCount ?? 1),
                     });
                   }
                 }}
               >
                 <option value="__new__">Create new group with multiple subjects…</option>
-                {availableGroups.map((g) => (
+                {choiceGroups.map((g) => (
                   <option key={g._id} value={g._id}>
                     Add one subject to: {g.groupName}
                   </option>
@@ -175,7 +196,7 @@ export function SubjectEnrollmentConfig({
             </div>
           )}
 
-          {!bulkCreate && availableGroups.length > 0 && isEdit && (
+          {!bulkCreate && choiceGroups.length > 0 && isEdit && (
             <div>
               <Label className="text-xs">Group</Label>
               <select
@@ -189,14 +210,14 @@ export function SubjectEnrollmentConfig({
                     const group = choiceGroups.find((g) => g._id === id);
                     patch({
                       choiceGroupId: id,
-                      choiceGroupName: group?.groupName ?? "",
-                      pickCount: "1",
+                      choiceGroupName: group?.groupName ?? id,
+                      pickCount: String(group?.pickCount ?? 1),
                     });
                   }
                 }}
               >
                 <option value="__new__">Create new group…</option>
-                {availableGroups.map((g) => (
+                {choiceGroups.map((g) => (
                   <option key={g._id} value={g._id}>
                     {g.groupName}
                   </option>
@@ -218,6 +239,28 @@ export function SubjectEnrollmentConfig({
             </div>
           )}
 
+          {value.choiceGroupId && !bulkCreate && (
+            <div>
+              <Label className="text-xs">Group name</Label>
+              <Input className="mt-1" value={value.choiceGroupName} disabled />
+            </div>
+          )}
+
+          <div>
+            <Label className="text-xs">Students must pick</Label>
+            <Input
+              className="mt-1 max-w-[6rem]"
+              type="number"
+              min={1}
+              max={bulkCreate ? Number(value.groupSubjectCount) || 10 : 10}
+              value={value.pickCount}
+              onChange={(e) => patch({ pickCount: e.target.value })}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              How many options from this group each student selects.
+            </p>
+          </div>
+
           {selectedGroup && !bulkCreate && (
             <p className="text-xs text-muted-foreground">
               Already in this group:{" "}
@@ -225,9 +268,9 @@ export function SubjectEnrollmentConfig({
                 .map((s) => (typeof s === "string" ? s : s.subjectName))
                 .filter(Boolean)
                 .join(", ")}
+              {currentSubjectId ? "" : ""}
             </p>
           )}
-
         </div>
       )}
     </div>

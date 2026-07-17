@@ -14,7 +14,6 @@ import PeriodsTab from "@/components/modules/timetable/PeriodsTab";
 import RoomsTab from "@/components/modules/timetable/RoomsTab";
 import TeacherProfilesTab from "@/components/modules/timetable/TeacherProfilesTab";
 import AssignmentsTab from "@/components/modules/timetable/AssignmentsTab";
-import RequirementsTab from "@/components/modules/timetable/RequirementsTab";
 import TimetableSettingsTab from "@/components/modules/timetable/TimetableSettingsTab";
 import SessionHistoryTab from "@/components/modules/timetable/SessionHistoryTab";
 import SessionDetailPage from "@/components/modules/timetable/SessionDetailPage";
@@ -79,7 +78,6 @@ const SystemConfigModule = ({
           {section === "rooms" && <RoomsTab sessionId={sessionId} caps={editCaps} />}
           {section === "teachers" && <TeacherProfilesTab sessionId={sessionId} caps={editCaps} />}
           {section === "teacher-assignments" && <AssignmentsTab sessionId={sessionId} caps={editCaps} />}
-          {section === "requirements" && <RequirementsTab sessionId={sessionId} caps={editCaps} />}
           {section === "timetable-rules" && <TimetableSettingsTab sessionId={sessionId} caps={editCaps} />}
           {section === "history" && <SessionHistoryTab caps={caps} />}
         </>

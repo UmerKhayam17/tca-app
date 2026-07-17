@@ -117,37 +117,6 @@ const subjectPatch = Joi.object({
   passingMarks: Joi.number(),
 }).min(1);
 
-const registerStudent = Joi.object({
-  studentName: Joi.string().required(),
-  fatherName: Joi.string().required(),
-  motherName: Joi.string().allow(''),
-  cnicOrBForm: Joi.string().required(),
-  contactNumber: Joi.string().required(),
-  desiredClass: Joi.string().hex().length(24).required(),
-  previousSchool: Joi.string().allow(''),
-  dateOfBirth: Joi.date().required(),
-  gender: Joi.string().valid('male', 'female', 'other').required(),
-  address: Joi.string().allow(''),
-  session: Joi.string().hex().length(24).required(),
-});
-
-const activateStudent = Joi.object({
-  sectionId: Joi.string().hex().length(24).required(),
-  classId: Joi.string().hex().length(24).optional(),
-  parentName: Joi.string().required(),
-  parentEmail: Joi.string().email({ tlds: { allow: false } }).required(),
-  parentPhone: Joi.string().required(),
-  parentPassword: Joi.string().min(8).optional(),
-  studentPassword: Joi.string().min(8).optional(),
-  admissionFeeAmount: Joi.number().optional(),
-  paymentDate: Joi.date().optional(),
-  paymentMethod: Joi.string().optional(),
-  receiptNumber: Joi.string().optional(),
-});
-
-const studentStatus = Joi.object({
-  status: Joi.string().valid('pending_fee', 'active', 'inactive', 'expelled', 'rejected').required(),
-});
 
 const markAttendance = Joi.object({
   classId: Joi.string().hex().length(24).required(),
@@ -278,15 +247,6 @@ const messageBody = Joi.object({
   fileName: Joi.string().allow('', null),
 });
 
-const timetableBody = Joi.object({
-  class: Joi.string().hex().length(24).required(),
-  section: Joi.string().hex().length(24).required(),
-  session: Joi.string().hex().length(24).required(),
-  schedule: Joi.array().required(),
-  effectiveFrom: Joi.date().required(),
-  isActive: Joi.boolean(),
-});
-
 const readMessages = Joi.object({
   messageIds: Joi.array().items(Joi.string().hex().length(24)).min(1).required(),
 });
@@ -307,9 +267,6 @@ module.exports = {
   sectionPatch,
   subjectBody,
   subjectPatch,
-  registerStudent,
-  activateStudent,
-  studentStatus,
   markAttendance,
   attendanceCorrect,
   feeStructureBody,
@@ -323,6 +280,5 @@ module.exports = {
   announcementBody,
   conversationBody,
   messageBody,
-  timetableBody,
   readMessages,
 };

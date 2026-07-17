@@ -16,7 +16,7 @@ const academyFeeRecordSchema = new mongoose.Schema(
     recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
-  { timestamps: true }
+  { timestamps: true, collection: 'feerecords' }
 );
 
 academyFeeRecordSchema.index({ studentId: 1, month: 1, year: 1, feeType: 1 }, { unique: true });

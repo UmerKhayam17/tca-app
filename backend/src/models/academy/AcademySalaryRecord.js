@@ -24,7 +24,7 @@ const academySalaryRecordSchema = new mongoose.Schema(
     recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
-  { timestamps: true }
+  { timestamps: true, collection: 'salaryrecords' }
 );
 
 academySalaryRecordSchema.index({ staffId: 1, month: 1, year: 1 }, { unique: true });

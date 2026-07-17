@@ -3,7 +3,15 @@ const ApiError = require('../../utils/ApiError');
 
 const populateOpts = [
   { path: 'user', select: 'name email phone isActive' },
-  { path: 'subjects', select: 'name code' },
+  {
+    path: 'subjects',
+    select: 'subjectName subjectCode',
+    transform: (doc) => {
+      if (!doc) return doc;
+      const o = typeof doc.toObject === 'function' ? doc.toObject() : doc;
+      return { ...o, name: o.subjectName || o.name, code: o.subjectCode || o.code };
+    },
+  },
   { path: 'preferredRooms', select: 'name code type' },
 ];
 

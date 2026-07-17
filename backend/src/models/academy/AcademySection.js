@@ -14,9 +14,19 @@ const academySectionSchema = new mongoose.Schema(
     status: { type: String, enum: ['active', 'inactive'], default: 'active', index: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
-  { timestamps: true }
+  { timestamps: true, collection: 'sections' }
 );
 
 academySectionSchema.index({ classId: 1, sectionName: 1 }, { unique: true });
+
+/** Timetable / legacy config API compatibility */
+academySectionSchema.virtual('name').get(function getName() {
+  return this.sectionName;
+});
+academySectionSchema.virtual('class').get(function getClass() {
+  return this.classId;
+});
+academySectionSchema.set('toJSON', { virtuals: true });
+academySectionSchema.set('toObject', { virtuals: true });
 
 module.exports = mongoose.model('AcademySection', academySectionSchema);

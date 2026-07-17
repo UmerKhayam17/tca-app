@@ -6,7 +6,6 @@ const schemas = require('../validators/academySchemas');
 
 const classCtrl = require('../controllers/academy/academyClassController');
 const subjectCtrl = require('../controllers/academy/academySubjectController');
-const choiceGroupCtrl = require('../controllers/academy/academySubjectChoiceGroupController');
 const sectionCtrl = require('../controllers/academy/academySectionController');
 const feeStructureCtrl = require('../controllers/academy/academyFeeStructureController');
 const studentCtrl = require('../controllers/academy/academyStudentController');
@@ -16,7 +15,6 @@ const expenseCtrl = require('../controllers/academy/academyExpenseController');
 const attendanceCtrl = require('../controllers/academy/academyAttendanceController');
 const assessmentCtrl = require('../controllers/academy/academyAssessmentController');
 const classTestCtrl = require('../controllers/academy/academyClassTestController');
-const timetableSlotCtrl = require('../controllers/academy/academyClassTimetableController');
 const { uploadImage } = require('../middleware/uploadImage');
 
 const router = Router();
@@ -106,6 +104,22 @@ router.post(
   validate(schemas.academySubjectBody),
   subjectCtrl.create
 );
+router.post(
+  '/classes/:classId/subjects/bulk-choice',
+  requirePermission('manage_academy_subjects'),
+  validate(schemas.academySubjectBulkChoiceBody),
+  subjectCtrl.createBulkChoice
+);
+router.get(
+  '/classes/:classId/enrollment-subjects',
+  requireAnyPermission('view_academy_students', 'manage_academy_students', 'manage_academy_subjects'),
+  subjectCtrl.enrollmentLayout
+);
+router.get(
+  '/classes/:classId/choice-groups',
+  requireAnyPermission('view_academy_students', 'manage_academy_subjects', 'manage_academy_students'),
+  subjectCtrl.listChoiceGroups
+);
 router.patch(
   '/subjects/:id',
   requirePermission('manage_academy_subjects'),
@@ -113,64 +127,6 @@ router.patch(
   subjectCtrl.update
 );
 router.delete('/subjects/:id', requirePermission('manage_academy_subjects'), subjectCtrl.remove);
-
-router.get(
-  '/classes/:classId/subject-choice-groups',
-  requireAnyPermission('view_academy_students', 'manage_academy_subjects', 'manage_academy_students'),
-  choiceGroupCtrl.listByClass
-);
-router.get(
-  '/classes/:classId/enrollment-subjects',
-  requireAnyPermission('view_academy_students', 'manage_academy_students', 'manage_academy_subjects'),
-  choiceGroupCtrl.enrollmentLayout
-);
-router.post(
-  '/classes/:classId/subject-choice-groups',
-  requirePermission('manage_academy_subjects'),
-  validate(schemas.academySubjectChoiceGroupBody),
-  choiceGroupCtrl.create
-);
-router.post(
-  '/classes/:classId/subject-choice-groups/bulk',
-  requirePermission('manage_academy_subjects'),
-  validate(schemas.academySubjectChoiceGroupBulkBody),
-  choiceGroupCtrl.createBulk
-);
-router.patch(
-  '/subject-choice-groups/:id',
-  requirePermission('manage_academy_subjects'),
-  validate(schemas.academySubjectChoiceGroupPatch),
-  choiceGroupCtrl.update
-);
-router.delete(
-  '/subject-choice-groups/:id',
-  requirePermission('manage_academy_subjects'),
-  choiceGroupCtrl.remove
-);
-
-// Class timetable (academy weekly slots)
-router.get(
-  '/classes/:classId/timetable',
-  requireAnyPermission('view_academy_students', 'manage_academy_classes'),
-  timetableSlotCtrl.list
-);
-router.post(
-  '/classes/:classId/timetable',
-  requirePermission('manage_academy_classes'),
-  validate(schemas.academyTimetableSlotBody),
-  timetableSlotCtrl.create
-);
-router.patch(
-  '/classes/:classId/timetable/:slotId',
-  requirePermission('manage_academy_classes'),
-  validate(schemas.academyTimetableSlotPatch),
-  timetableSlotCtrl.update
-);
-router.delete(
-  '/classes/:classId/timetable/:slotId',
-  requirePermission('manage_academy_classes'),
-  timetableSlotCtrl.remove
-);
 
 // Fee structure
 router.get(

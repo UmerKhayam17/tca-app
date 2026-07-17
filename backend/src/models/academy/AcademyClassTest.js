@@ -45,7 +45,7 @@ const academyClassTestSchema = new mongoose.Schema(
     occurrenceCount: { type: Number, min: 1, default: 1 },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
-  { timestamps: true }
+  { timestamps: true, collection: 'classtests' }
 );
 
 academyClassTestSchema.index({ seriesId: 1, occurrenceIndex: 1 });

@@ -20,6 +20,18 @@ export const DAY_ORDER: Weekday[] = [
   "sunday",
 ];
 
+export const DEFAULT_WORKING_DAYS: Weekday[] = DAY_ORDER.slice(0, 6);
+
+export function normalizeWorkingDays(days?: Weekday[]) {
+  if (!days?.length) return DEFAULT_WORKING_DAYS;
+  const uniqueDays = [...new Set(days)];
+  const isLegacyMondayToFriday =
+    uniqueDays.length === 5 &&
+    DAY_ORDER.slice(0, 5).every((day) => uniqueDays.includes(day));
+  if (isLegacyMondayToFriday) return DEFAULT_WORKING_DAYS;
+  return uniqueDays.sort((a, b) => DAY_ORDER.indexOf(a) - DAY_ORDER.indexOf(b)) as Weekday[];
+}
+
 export const SUBJECT_COLORS = [
   "bg-blue-500/15 text-blue-700 border-blue-200",
   "bg-emerald-500/15 text-emerald-700 border-emerald-200",

@@ -4,8 +4,8 @@ const { TIMETABLE_STATUSES } = require('./constants');
 const timetableVersionSchema = new mongoose.Schema(
   {
     session: { type: mongoose.Schema.Types.ObjectId, ref: 'Session', required: true, index: true },
-    class: { type: mongoose.Schema.Types.ObjectId, ref: 'Class', required: true },
-    section: { type: mongoose.Schema.Types.ObjectId, ref: 'Section', required: true },
+    class: { type: mongoose.Schema.Types.ObjectId, ref: 'AcademyClass', required: true },
+    section: { type: mongoose.Schema.Types.ObjectId, ref: 'AcademySection', required: true },
     periodTemplate: { type: mongoose.Schema.Types.ObjectId, ref: 'PeriodTemplate', required: true },
     status: { type: String, enum: TIMETABLE_STATUSES, default: 'draft', index: true },
     version: { type: Number, default: 1, min: 1 },

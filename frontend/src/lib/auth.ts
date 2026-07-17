@@ -105,14 +105,9 @@ function stopProactiveRefresh() {
   }
 }
 
-function scheduleProactiveRefresh(token: string) {
+function scheduleProactiveRefresh(_token: string) {
+  // Disabled: do not auto-refresh on a timer (avoids surprise logout/reload cycles).
   stopProactiveRefresh();
-  const exp = decodeTokenExpiryMs(token);
-  if (!exp) return;
-  const delay = Math.max(exp - Date.now() - REFRESH_BUFFER_MS, 5_000);
-  proactiveRefreshTimer = setTimeout(() => {
-    void refreshAccessToken();
-  }, delay);
 }
 
 function broadcastToken(token: string) {
@@ -248,9 +243,8 @@ export async function refreshAccessToken(): Promise<string | null> {
         return result.token;
       }
 
-      if (result.authFailed) {
-        invalidateSession();
-      }
+      // Do not auto-logout on refresh failure (network / cookie / transient 401).
+      // Keep the existing session; only explicit logout() clears it.
       return null;
     } finally {
       if (hasLock) releaseRefreshLock();
@@ -393,7 +387,7 @@ export async function authedFetch(path: string, init: RequestInit = {}, retried 
     if (refreshed) {
       return authedFetch(path, init, true);
     }
-    invalidateSession();
+    // Keep the session; caller can surface the API error without forcing logout.
   }
 
   return res;

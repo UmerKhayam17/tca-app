@@ -11,7 +11,7 @@ function loadEnv() {
 
 loadEnv();
 
-const clientOrigins = (process.env.CLIENT_URL || 'http://localhost:5173,http://localhost:8080')
+const clientOrigins = (process.env.CLIENT_URL)
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean);
@@ -22,8 +22,8 @@ module.exports = {
   mongoUri: process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/academy_management',
   jwtAccessSecret: process.env.JWT_ACCESS_SECRET || 'dev-access-secret-change-in-prod-32chars',
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || 'dev-refresh-secret-change-in-prod-32',
-  jwtAccessExpires: process.env.JWT_ACCESS_EXPIRES || '15m',
-  jwtRefreshExpires: process.env.JWT_REFRESH_EXPIRES || '7d',
+  jwtAccessExpires: process.env.JWT_ACCESS_EXPIRES || '12h',
+  jwtRefreshExpires: process.env.JWT_REFRESH_EXPIRES || '30d',
   /** @deprecated use clientOrigins — kept as first origin for Socket.io fallback */
   clientUrl: clientOrigins[0] || 'http://localhost:5173',
   clientOrigins,

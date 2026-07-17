@@ -2,14 +2,12 @@ const ApiError = require('../../utils/ApiError');
 const AcademySubject = require('../../models/academy/AcademySubject');
 const AcademySection = require('../../models/academy/AcademySection');
 const AcademyClass = require('../../models/academy/AcademyClass');
-const AcademySubjectChoiceGroup = require('../../models/academy/AcademySubjectChoiceGroup');
-const { populateCreatedBy } = require('../../utils/createdBy');
 
 async function getAllowedSubjects(classId, sectionId, status = 'active') {
   const cls = await AcademyClass.findById(classId);
   if (!cls) throw new ApiError(404, 'Class not found');
 
-  let q = { classId };
+  const q = { classId };
   if (status) q.status = status;
 
   if (sectionId) {
@@ -26,33 +24,37 @@ async function getAllowedSubjects(classId, sectionId, status = 'active') {
   return AcademySubject.find(q).sort({ subjectName: 1 });
 }
 
-async function getEnrollmentLayout(classId, sectionId) {
-  const subjects = await getAllowedSubjects(classId, sectionId, 'active');
-  const subjectMap = new Map(subjects.map((s) => [String(s._id), s]));
+/** Build choice groups from subjects that share choiceGroupName. */
+function buildChoiceGroupsFromSubjects(subjects) {
+  const byGroup = new Map();
 
-  const groups = await AcademySubjectChoiceGroup.find({ classId, status: 'active' })
-    .populate('subjectIds', 'subjectName subjectCode status classId')
-    .sort({ groupName: 1 });
-
-  const groupedIds = new Set();
-  const choiceGroups = [];
-
-  for (const group of groups) {
-    const groupSubjects = (group.subjectIds || [])
-      .filter((sub) => sub && sub.status === 'active' && subjectMap.has(String(sub._id)))
-      .map((sub) => subjectMap.get(String(sub._id)));
-
-    if (groupSubjects.length < 2) continue;
-
-    groupSubjects.forEach((sub) => groupedIds.add(String(sub._id)));
-    choiceGroups.push({
-      _id: group._id,
-      groupName: group.groupName,
-      pickCount: group.pickCount,
-      subjects: groupSubjects,
-    });
+  for (const sub of subjects) {
+    if (sub.enrollmentType !== 'choice') continue;
+    const groupName = String(sub.choiceGroupName || '').trim();
+    if (!groupName) continue;
+    const key = groupName.toLowerCase();
+    if (!byGroup.has(key)) {
+      byGroup.set(key, {
+        _id: groupName,
+        groupName,
+        pickCount: Math.max(1, Number(sub.pickCount) || 1),
+        subjects: [],
+      });
+    }
+    const group = byGroup.get(key);
+    group.subjects.push(sub);
+    group.pickCount = Math.max(group.pickCount, Math.max(1, Number(sub.pickCount) || 1));
   }
 
+  return [...byGroup.values()]
+    .filter((g) => g.subjects.length >= 2)
+    .sort((a, b) => a.groupName.localeCompare(b.groupName));
+}
+
+async function getEnrollmentLayout(classId, sectionId) {
+  const subjects = await getAllowedSubjects(classId, sectionId, 'active');
+  const choiceGroups = buildChoiceGroupsFromSubjects(subjects);
+  const groupedIds = new Set(choiceGroups.flatMap((g) => g.subjects.map((s) => String(s._id))));
   const coreSubjects = subjects.filter((s) => !groupedIds.has(String(s._id)));
 
   return {
@@ -68,8 +70,7 @@ async function validateEnrollmentSubjects(classId, sectionId, selectedSubjectIds
 
   if (isFullPackage) {
     if (!layout.hasChoiceGroups) {
-      const all = [...layout.coreSubjects];
-      return all.map((s) => s._id);
+      return layout.coreSubjects.map((s) => s._id);
     }
 
     const result = layout.coreSubjects.map((s) => s._id);
@@ -159,4 +160,5 @@ module.exports = {
   getAllowedSubjects,
   getEnrollmentLayout,
   validateEnrollmentSubjects,
+  buildChoiceGroupsFromSubjects,
 };

@@ -8,9 +8,19 @@ const academyClassSchema = new mongoose.Schema(
     status: { type: String, enum: ['active', 'inactive'], default: 'active', index: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
-  { timestamps: true }
+  { timestamps: true, collection: 'classes' }
 );
 
 academyClassSchema.index({ sessionId: 1, className: 1 }, { unique: true, sparse: true });
+
+/** Timetable / legacy config API compatibility */
+academyClassSchema.virtual('name').get(function getName() {
+  return this.className;
+});
+academyClassSchema.virtual('session').get(function getSession() {
+  return this.sessionId;
+});
+academyClassSchema.set('toJSON', { virtuals: true });
+academyClassSchema.set('toObject', { virtuals: true });
 
 module.exports = mongoose.model('AcademyClass', academyClassSchema);

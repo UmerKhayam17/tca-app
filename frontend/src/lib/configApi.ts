@@ -85,6 +85,7 @@ export interface SessionHistory {
 export interface SchoolClass {
   _id: string;
   name: string;
+  className?: string;
   session: string | AcademicSession;
   sections?: SchoolSection[];
   subjects?: SchoolSubject[];
@@ -95,6 +96,7 @@ export interface SchoolClass {
 export interface SchoolSection {
   _id: string;
   name: string;
+  sectionName?: string;
   class: string | { _id: string; name: string; session?: string };
   teacher?: { _id: string; name: string; email?: string } | null;
   maxStudents?: number;
@@ -104,9 +106,30 @@ export interface SchoolSection {
 export interface SchoolSubject {
   _id: string;
   name: string;
+  subjectName?: string;
   code: string;
+  subjectCode?: string;
   class: string | { _id: string; name: string };
   teacher?: { _id: string; name: string };
+  enrollmentType?: "required" | "choice";
+  choiceGroupName?: string;
+  pickCount?: number;
+}
+
+export function classDisplayName(c: { name?: string; className?: string } | null | undefined): string {
+  return c?.name || c?.className || "—";
+}
+
+export function sectionDisplayName(s: { name?: string; sectionName?: string } | null | undefined): string {
+  return s?.name || s?.sectionName || "—";
+}
+
+export function subjectDisplayName(s: { name?: string; subjectName?: string; code?: string; subjectCode?: string } | null | undefined): string {
+  return s?.name || s?.subjectName || "—";
+}
+
+export function subjectDisplayCode(s: { code?: string; subjectCode?: string } | null | undefined): string {
+  return s?.code || s?.subjectCode || "";
 }
 
 const SESSION_STATUSES: SessionStatus[] = ["active", "completed", "archived"];

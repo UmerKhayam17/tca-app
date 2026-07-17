@@ -22,13 +22,80 @@ import {
   fetchTimetableVersions,
   moveScheduleSlot,
   publishTimetableVersion,
+  scheduleSlotEntries,
   upsertScheduleSlot,
   validateTimetableVersion,
   type PeriodSlot,
   type ScheduleSlot,
 } from "@/lib/timetableApi";
-import { DAY_LABELS, DAY_ORDER, slotMatchesPeriod } from "./constants";
+import type { SchoolSubject } from "@/lib/configApi";
+import { DAY_LABELS, DAY_ORDER, normalizeWorkingDays, slotMatchesPeriod } from "./constants";
 import TimetableSlotCard from "./TimetableSlotCard";
+
+type SlotSubjectOption =
+  | { key: string; kind: "single"; label: string; subjectIds: [string] }
+  | { key: string; kind: "choice"; label: string; groupName: string; subjectIds: string[] };
+
+function buildSlotSubjectOptions(subjects: SchoolSubject[]): SlotSubjectOption[] {
+  const byGroup = new Map<string, SchoolSubject[]>();
+  const singles: SchoolSubject[] = [];
+
+  for (const s of subjects) {
+    const groupName = s.choiceGroupName?.trim();
+    if (s.enrollmentType === "choice" && groupName) {
+      const key = groupName.toLowerCase();
+      if (!byGroup.has(key)) byGroup.set(key, []);
+      byGroup.get(key)!.push(s);
+    } else {
+      singles.push(s);
+    }
+  }
+
+  const options: SlotSubjectOption[] = [];
+
+  for (const group of byGroup.values()) {
+    const sorted = [...group].sort((a, b) => a.name.localeCompare(b.name));
+    if (sorted.length >= 2) {
+      const groupName = sorted[0].choiceGroupName!.trim();
+      options.push({
+        key: `choice:${groupName.toLowerCase()}`,
+        kind: "choice",
+        groupName,
+        subjectIds: sorted.map((s) => s._id),
+        label: sorted.map((s) => s.name).join(" / "),
+      });
+    } else {
+      singles.push(...sorted);
+    }
+  }
+
+  for (const s of singles) {
+    options.push({
+      key: s._id,
+      kind: "single",
+      subjectIds: [s._id],
+      label: s.name,
+    });
+  }
+
+  return options.sort((a, b) => a.label.localeCompare(b.label));
+}
+
+function optionKeyForSlot(slot: ScheduleSlot | undefined, options: SlotSubjectOption[]): string {
+  if (!slot) return "";
+  const entryIds = scheduleSlotEntries(slot).map((e) => e.subject._id);
+  if (entryIds.length > 1) {
+    const match = options.find(
+      (o) =>
+        o.kind === "choice" &&
+        o.subjectIds.length === entryIds.length &&
+        o.subjectIds.every((id) => entryIds.includes(id))
+    );
+    if (match) return match.key;
+  }
+  return options.find((o) => o.kind === "single" && o.subjectIds[0] === slot.subject._id)?.key
+    || slot.subject._id;
+}
 
 export default function GridTab({
   sessionId,
@@ -47,7 +114,11 @@ export default function GridTab({
     period: PeriodSlot;
     existing?: ScheduleSlot;
   } | null>(null);
-  const [form, setForm] = useState({ subjectId: "", teacherId: "", roomId: "" });
+  const [form, setForm] = useState<{
+    optionKey: string;
+    teachersBySubject: Record<string, string>;
+    roomId: string;
+  }>({ optionKey: "", teachersBySubject: {}, roomId: "" });
   const [draggingSlotId, setDraggingSlotId] = useState<string | null>(null);
   const [dropOver, setDropOver] = useState<{ day: Weekday; periodId: string } | null>(null);
   const skipClickRef = useRef(false);
@@ -111,7 +182,7 @@ export default function GridTab({
   const createVersionMut = useMutation({
     mutationFn: () => {
       const tpl = templates.find((t) => t.isDefault) || templates[0];
-      if (!tpl) throw new Error("Create a period template in Setup first");
+      if (!tpl) throw new Error("Create an academy time configuration in Setup first");
       return createTimetableVersion({
         session: sessionId,
         class: classId,
@@ -130,16 +201,24 @@ export default function GridTab({
   const saveSlotMut = useMutation({
     mutationFn: () => {
       if (!slotDialog || !activeVersionId) throw new Error("No slot selected");
+      const option = subjectOptions.find((o) => o.key === form.optionKey);
+      if (!option) throw new Error("Select a subject");
+      const entries = option.subjectIds.map((subjectId) => {
+        const teacher = form.teachersBySubject[subjectId];
+        if (!teacher) throw new Error("Select a teacher for each subject");
+        return { subject: subjectId, teacher };
+      });
       return upsertScheduleSlot(activeVersionId, {
         day: slotDialog.day,
         periodId: slotDialog.period._id,
-        subject: form.subjectId,
-        teacher: form.teacherId,
+        entries,
         room: form.roomId || null,
       });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["timetable-grid", activeVersionId] });
+      qc.invalidateQueries({ queryKey: ["section-schedule", sessionId, sectionId] });
+      qc.invalidateQueries({ queryKey: ["my-teacher-schedule", sessionId] });
       setSlotDialog(null);
       toast({ title: "Slot saved" });
     },
@@ -149,7 +228,11 @@ export default function GridTab({
 
   const deleteSlotMut = useMutation({
     mutationFn: (id: string) => deleteScheduleSlot(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["timetable-grid", activeVersionId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["timetable-grid", activeVersionId] });
+      qc.invalidateQueries({ queryKey: ["section-schedule", sessionId, sectionId] });
+      qc.invalidateQueries({ queryKey: ["my-teacher-schedule", sessionId] });
+    },
   });
 
   const moveSlotMut = useMutation({
@@ -157,6 +240,8 @@ export default function GridTab({
       moveScheduleSlot(slotId, { day, periodId }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["timetable-grid", activeVersionId] });
+      qc.invalidateQueries({ queryKey: ["section-schedule", sessionId, sectionId] });
+      qc.invalidateQueries({ queryKey: ["my-teacher-schedule", sessionId] });
       toast({ title: "Lesson moved" });
     },
     onError: (e: Error) =>
@@ -178,10 +263,9 @@ export default function GridTab({
       qc.invalidateQueries({ queryKey: ["timetable-grid", activeVersionId] });
       qc.invalidateQueries({ queryKey: ["section-schedule", sessionId, sectionId] });
       qc.invalidateQueries({ queryKey: ["my-teacher-schedule", sessionId] });
-      setVersionId("");
       toast({
         title: "Timetable published",
-        description: "Open Class view in the sidebar to see the live schedule.",
+        description: "You can keep editing this published version — changes apply live.",
       });
     },
     onError: (e: Error) => toast({ title: "Cannot publish", description: e.message, variant: "destructive" }),
@@ -196,16 +280,15 @@ export default function GridTab({
     },
   });
 
-  const workingDays = (grid?.workingDays?.length ? grid.workingDays : DAY_ORDER.slice(0, 5)) as Weekday[];
+  const workingDays = normalizeWorkingDays(grid?.workingDays);
   const lecturePeriods = (grid?.periods || []).filter((p) => p.type === "lecture");
 
   const getSlot = (day: Weekday, periodId: string) =>
     grid?.slots.find((s) => s.day === day && slotMatchesPeriod(s, periodId));
 
-  const subjectOptions = useMemo(
-    () => [...subjects].sort((a, b) => a.name.localeCompare(b.name)),
-    [subjects]
-  );
+  const subjectOptions = useMemo(() => buildSlotSubjectOptions(subjects), [subjects]);
+
+  const selectedOption = subjectOptions.find((o) => o.key === form.optionKey);
 
   const panelTeachers = useMemo(
     () =>
@@ -223,17 +306,16 @@ export default function GridTab({
     if (!subjectId) return panelTeachers;
     const seen = new Set<string>();
     const suggested: { _id: string; name: string }[] = [];
-    const add = (t?: { _id: string; name: string } | null, front = false) => {
+    const add = (t?: { _id: string; name: string } | null) => {
       if (!t?._id || seen.has(t._id)) return;
       seen.add(t._id);
-      const entry = { _id: t._id, name: t.name };
-      if (front) suggested.push(entry);
+      suggested.push({ _id: t._id, name: t.name });
     };
 
-    add(subjects.find((s) => s._id === subjectId)?.teacher, true);
+    add(subjects.find((s) => s._id === subjectId)?.teacher);
     for (const profile of teacherProfiles) {
       if (profile.subjects?.some((s) => s._id === subjectId)) {
-        add(profile.user, true);
+        add(profile.user);
       }
     }
     const rest = panelTeachers.filter((t) => !seen.has(t._id));
@@ -241,11 +323,28 @@ export default function GridTab({
   };
 
   const defaultTeacherForSubject = (subjectId: string, existing?: ScheduleSlot) => {
-    if (existing?.teacher._id) return existing.teacher._id;
+    if (existing) {
+      const fromExisting = scheduleSlotEntries(existing).find(
+        (e) => e.subject._id === subjectId
+      )?.teacher._id;
+      if (fromExisting) return fromExisting;
+    }
     return teachersForSubject(subjectId)[0]?._id || "";
   };
 
-  const canEditGrid = caps.canEdit && activeVersion?.status === "draft" && grid?.version.status === "draft";
+  const teachersBySubjectForOption = (option: SlotSubjectOption | undefined, existing?: ScheduleSlot) => {
+    const next: Record<string, string> = {};
+    if (!option) return next;
+    for (const subjectId of option.subjectIds) {
+      next[subjectId] = defaultTeacherForSubject(subjectId, existing);
+    }
+    return next;
+  };
+
+  const canEditGrid =
+    caps.canEdit &&
+    (activeVersion?.status === "draft" || activeVersion?.status === "published") &&
+    (grid?.version.status === "draft" || grid?.version.status === "published");
   const canPublishVersion =
     caps.canEdit &&
     activeVersion &&
@@ -273,14 +372,19 @@ export default function GridTab({
   const openCell = (day: Weekday, period: PeriodSlot) => {
     if (!canEditGrid) return;
     const existing = getSlot(day, period._id);
-    const subjectId = existing?.subject._id || "";
+    const optionKey = optionKeyForSlot(existing, subjectOptions);
+    const option = subjectOptions.find((o) => o.key === optionKey);
     setForm({
-      subjectId,
-      teacherId: defaultTeacherForSubject(subjectId, existing),
+      optionKey,
+      teachersBySubject: teachersBySubjectForOption(option, existing),
       roomId: existing?.room?._id || "",
     });
     setSlotDialog({ day, period, existing });
   };
+
+  const canSaveSlot =
+    Boolean(selectedOption) &&
+    (selectedOption?.subjectIds.every((id) => form.teachersBySubject[id]) ?? false);
 
   const sectionLabel = sections.find((s) => s._id === sectionId);
   const classLabel = classes.find((c) => c._id === classId);
@@ -362,15 +466,9 @@ export default function GridTab({
             <Badge variant={grid.version.status === "published" ? "default" : "secondary"}>
               v{grid.version.version} · {grid.version.status}
             </Badge>
-            {grid.quotaProgress.map((q) => (
-              <Badge
-                key={q.subject._id}
-                variant="outline"
-                className={q.complete ? "border-emerald-400 text-emerald-700" : "border-amber-400 text-amber-700"}
-              >
-                {q.subject.name}: {q.actual}/{q.required}
-              </Badge>
-            ))}
+            {canEditGrid && grid.version.status === "published" && (
+              <span className="text-xs text-muted-foreground">Click a cell to edit — changes go live</span>
+            )}
           </div>
 
           <Card className="overflow-x-auto">
@@ -470,36 +568,65 @@ export default function GridTab({
               <Label>Subject</Label>
               <select
                 className="w-full h-10 rounded-md border px-3 text-sm"
-                value={form.subjectId}
+                value={form.optionKey}
                 onChange={(e) => {
-                  const sub = e.target.value;
+                  const key = e.target.value;
+                  const option = subjectOptions.find((o) => o.key === key);
                   setForm({
-                    subjectId: sub,
-                    teacherId: defaultTeacherForSubject(sub),
+                    optionKey: key,
+                    teachersBySubject: teachersBySubjectForOption(option),
                     roomId: "",
                   });
                 }}
               >
                 <option value="">Select subject</option>
-                {subjectOptions.map((s) => (
-                  <option key={s._id} value={s._id}>{s.name}</option>
+                {subjectOptions.map((o) => (
+                  <option key={o.key} value={o.key}>
+                    {o.label}
+                  </option>
                 ))}
               </select>
+              {selectedOption?.kind === "choice" && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Choice group — students split across these subjects in the same period. Assign one
+                  teacher for each.
+                </p>
+              )}
             </div>
-            <div>
-              <Label>Teacher</Label>
-              <select
-                className="w-full h-10 rounded-md border px-3 text-sm"
-                value={form.teacherId}
-                onChange={(e) => setForm((f) => ({ ...f, teacherId: e.target.value }))}
-                disabled={!form.subjectId}
-              >
-                <option value="">Select teacher</option>
-                {teachersForSubject(form.subjectId).map((t) => (
-                  <option key={t._id} value={t._id}>{t.name}</option>
-                ))}
-              </select>
-            </div>
+
+            {selectedOption &&
+              selectedOption.subjectIds.map((subjectId) => {
+                const sub = subjects.find((s) => s._id === subjectId);
+                const label =
+                  selectedOption.kind === "choice"
+                    ? `Teacher · ${sub?.name || "Subject"}`
+                    : "Teacher";
+                return (
+                  <div key={subjectId}>
+                    <Label>{label}</Label>
+                    <select
+                      className="w-full h-10 rounded-md border px-3 text-sm"
+                      value={form.teachersBySubject[subjectId] || ""}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          teachersBySubject: {
+                            ...f.teachersBySubject,
+                            [subjectId]: e.target.value,
+                          },
+                        }))
+                      }
+                    >
+                      <option value="">Select teacher</option>
+                      {teachersForSubject(subjectId).map((t) => (
+                        <option key={t._id} value={t._id}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              })}
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
             {slotDialog?.existing && (
@@ -514,7 +641,7 @@ export default function GridTab({
               </Button>
             )}
             <Button variant="outline" onClick={() => setSlotDialog(null)}>Cancel</Button>
-            <Button disabled={!form.subjectId || !form.teacherId || saveSlotMut.isPending} onClick={() => saveSlotMut.mutate()}>
+            <Button disabled={!canSaveSlot || saveSlotMut.isPending} onClick={() => saveSlotMut.mutate()}>
               Save
             </Button>
           </DialogFooter>

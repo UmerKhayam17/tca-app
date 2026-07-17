@@ -2,14 +2,70 @@ const catchAsync = require('../utils/catchAsync');
 const ApiError = require('../utils/ApiError');
 const { getSystemModulesForApi } = require('../config/systemModules');
 const { logAudit } = require('../services/session/auditService');
-const { assertSessionWritable, syncSessionFlags, resolveSessionStatus, healSessionFlags } = require('../services/session/sessionGuard');
+const {
+  assertSessionWritable,
+  syncSessionFlags,
+  resolveSessionStatus,
+  healSessionFlags,
+} = require('../services/session/sessionGuard');
 const Session = require('../models/Session');
-const { ensureDefaultAcademyStructure, syncAcademyToTimetableStructure } = require('../services/academy/academyDefaultStructureService');
-const Class = require('../models/Class');
-const Section = require('../models/Section');
-const Subject = require('../models/Subject');
-const Student = require('../models/Student');
-const Timetable = require('../models/Timetable');
+const { ensureDefaultAcademyStructure } = require('../services/academy/academyDefaultStructureService');
+const AcademyClass = require('../models/academy/AcademyClass');
+const AcademySection = require('../models/academy/AcademySection');
+const AcademySubject = require('../models/academy/AcademySubject');
+const AcademyStudent = require('../models/academy/AcademyStudent');
+const academyClassService = require('../services/academy/academyClassService');
+const academySectionService = require('../services/academy/academySectionService');
+const academySubjectService = require('../services/academy/academySubjectService');
+
+/** Shape Academy class for timetable UI (name/session aliases). */
+function shapeClass(cls, sections = [], subjects = []) {
+  const plain = typeof cls.toObject === 'function' ? cls.toObject() : { ...cls };
+  return {
+    ...plain,
+    name: plain.className || plain.name,
+    session: plain.sessionId || plain.session,
+    sections,
+    subjects,
+  };
+}
+
+function shapeSection(sec, classDoc) {
+  const plain = typeof sec.toObject === 'function' ? sec.toObject() : { ...sec };
+  const classId = plain.classId?._id || plain.classId || plain.class;
+  return {
+    ...plain,
+    name: plain.sectionName || plain.name,
+    class: classDoc
+      ? {
+          _id: classDoc._id,
+          name: classDoc.className || classDoc.name,
+          session: classDoc.sessionId || classDoc.session,
+        }
+      : plain.classId && typeof plain.classId === 'object'
+        ? {
+            _id: plain.classId._id,
+            name: plain.classId.className,
+            session: plain.classId.sessionId,
+          }
+        : classId,
+    studentCount: plain.studentCount || 0,
+  };
+}
+
+function shapeSubject(sub, classDoc) {
+  const plain = typeof sub.toObject === 'function' ? sub.toObject() : { ...sub };
+  return {
+    ...plain,
+    name: plain.subjectName || plain.name,
+    code: plain.subjectCode || plain.code,
+    class: classDoc
+      ? { _id: classDoc._id, name: classDoc.className || classDoc.name }
+      : plain.classId && typeof plain.classId === 'object'
+        ? { _id: plain.classId._id, name: plain.classId.className }
+        : plain.classId || plain.class,
+  };
+}
 
 const listSessions = catchAsync(async (req, res) => {
   const { status } = req.query;
@@ -106,113 +162,158 @@ const patchSession = catchAsync(async (req, res) => {
 
 const listClasses = catchAsync(async (req, res) => {
   const { sessionId } = req.query;
-  if (sessionId) {
-    await syncAcademyToTimetableStructure(sessionId, req.user?._id);
-  }
-  const q = sessionId ? { session: sessionId } : {};
-  const classes = await Class.find(q).populate('sections').populate('subjects').populate('classTeacher');
-  res.json({ success: true, data: classes });
+  const q = sessionId ? { sessionId } : {};
+  const classes = await AcademyClass.find(q).sort({ className: 1 });
+  const classIds = classes.map((c) => c._id);
+  const [sections, subjects] = await Promise.all([
+    AcademySection.find({ classId: { $in: classIds } }).sort({ sectionName: 1 }),
+    AcademySubject.find({ classId: { $in: classIds }, status: 'active' }).sort({ subjectName: 1 }),
+  ]);
+
+  const sectionsByClass = new Map();
+  const subjectsByClass = new Map();
+  sections.forEach((s) => {
+    const key = String(s.classId);
+    if (!sectionsByClass.has(key)) sectionsByClass.set(key, []);
+    sectionsByClass.get(key).push(shapeSection(s));
+  });
+  subjects.forEach((s) => {
+    const key = String(s.classId);
+    if (!subjectsByClass.has(key)) subjectsByClass.set(key, []);
+    subjectsByClass.get(key).push(shapeSubject(s));
+  });
+
+  const data = classes.map((c) =>
+    shapeClass(c, sectionsByClass.get(String(c._id)) || [], subjectsByClass.get(String(c._id)) || [])
+  );
+  res.json({ success: true, data });
 });
 
 const createClass = catchAsync(async (req, res) => {
-  await assertSessionWritable(req.body.session);
-  const cls = await Class.create({ ...req.body, createdBy: req.user._id });
-  res.status(201).json({ success: true, data: cls });
+  const sessionId = req.body.session || req.body.sessionId;
+  await assertSessionWritable(sessionId);
+  const cls = await academyClassService.createClass(
+    {
+      sessionId,
+      className: (req.body.name || req.body.className || '').trim(),
+      totalSubjects: req.body.totalSubjects,
+      status: req.body.status || 'active',
+    },
+    req.user._id
+  );
+  res.status(201).json({ success: true, data: shapeClass(cls, [], []) });
 });
 
 const patchClass = catchAsync(async (req, res) => {
-  const existing = await Class.findById(req.params.id);
+  const existing = await AcademyClass.findById(req.params.id);
   if (!existing) throw new ApiError(404, 'Class not found');
-  await assertSessionWritable(existing.session);
-  const cls = await Class.findByIdAndUpdate(req.params.id, req.body, { new: true });
-  res.json({ success: true, data: cls });
+  await assertSessionWritable(existing.sessionId);
+  const cls = await academyClassService.updateClass(req.params.id, {
+    className: req.body.name || req.body.className,
+    totalSubjects: req.body.totalSubjects,
+    status: req.body.status,
+  });
+  res.json({ success: true, data: shapeClass(cls) });
 });
 
 const createSection = catchAsync(async (req, res) => {
-  const parentClass = await Class.findById(req.body.class);
+  const classId = req.body.class || req.body.classId;
+  const parentClass = await AcademyClass.findById(classId);
   if (!parentClass) throw new ApiError(404, 'Class not found');
-  await assertSessionWritable(parentClass.session);
-  const body = { ...req.body };
-  if (body.teacher === '') body.teacher = null;
-  const section = await Section.create({ ...body, createdBy: req.user._id });
-  await Class.findByIdAndUpdate(body.class, { $addToSet: { sections: section._id } });
-  const populated = await Section.findById(section._id)
-    .populate('class', 'name session')
-    .populate('teacher', 'name email');
-  res.status(201).json({ success: true, data: { ...populated.toObject(), studentCount: 0 } });
+  await assertSessionWritable(parentClass.sessionId);
+  const section = await academySectionService.createSection(
+    {
+      classId,
+      sectionName: (req.body.name || req.body.sectionName || '').trim(),
+      useClassSubjects: true,
+      status: 'active',
+    },
+    req.user._id
+  );
+  const populated = await AcademySection.findById(section._id).populate('classId', 'className sessionId');
+  res.status(201).json({
+    success: true,
+    data: { ...shapeSection(populated, parentClass), studentCount: 0 },
+  });
 });
 
 const patchSection = catchAsync(async (req, res) => {
-  const existing = await Section.findById(req.params.id).populate('class', 'session');
+  const existing = await AcademySection.findById(req.params.id);
   if (!existing) throw new ApiError(404, 'Section not found');
-  await assertSessionWritable(existing.class.session);
-  const updates = { ...req.body };
-  if (updates.teacher === '') updates.teacher = null;
-  const section = await Section.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true })
-    .populate('class', 'name session')
-    .populate('teacher', 'name email');
-  if (!section) throw new ApiError(404, 'Section not found');
-  const studentCount = await Student.countDocuments({ section: section._id });
-  res.json({ success: true, data: { ...section.toObject(), studentCount } });
+  const parentClass = await AcademyClass.findById(existing.classId);
+  if (!parentClass) throw new ApiError(404, 'Class not found');
+  await assertSessionWritable(parentClass.sessionId);
+
+  const updates = {};
+  if (req.body.name || req.body.sectionName) {
+    updates.sectionName = (req.body.name || req.body.sectionName).trim();
+  }
+  if (req.body.status) updates.status = req.body.status;
+  const section = await academySectionService.updateSection(req.params.id, updates);
+  const studentCount = await AcademyStudent.countDocuments({ sectionId: section._id });
+  res.json({
+    success: true,
+    data: { ...shapeSection(section, parentClass), studentCount },
+  });
 });
 
 const deleteSection = catchAsync(async (req, res) => {
-  const section = await Section.findById(req.params.id).populate('class', 'session');
+  const section = await AcademySection.findById(req.params.id);
   if (!section) throw new ApiError(404, 'Section not found');
-  await assertSessionWritable(section.class.session);
+  const parentClass = await AcademyClass.findById(section.classId);
+  if (!parentClass) throw new ApiError(404, 'Class not found');
+  await assertSessionWritable(parentClass.sessionId);
 
-  const enrolled = await Student.countDocuments({ section: section._id });
+  const enrolled = await AcademyStudent.countDocuments({ sectionId: section._id });
   if (enrolled > 0) {
     throw new ApiError(400, `Cannot delete section: ${enrolled} student(s) are enrolled. Move or remove them first.`);
   }
 
-  await Class.findByIdAndUpdate(section.class, { $pull: { sections: section._id } });
-  await Section.findByIdAndDelete(section._id);
+  await academySectionService.deleteSection(req.params.id);
   res.json({ success: true, data: { deleted: true } });
 });
 
 const createSubject = catchAsync(async (req, res) => {
-  const parentClass = await Class.findById(req.body.class);
+  const classId = req.body.class || req.body.classId;
+  const parentClass = await AcademyClass.findById(classId);
   if (!parentClass) throw new ApiError(404, 'Class not found');
-  await assertSessionWritable(parentClass.session);
-  const subject = await Subject.create({ ...req.body, createdBy: req.user._id });
-  await Class.findByIdAndUpdate(req.body.class, { $addToSet: { subjects: subject._id } });
-  res.status(201).json({ success: true, data: subject });
+  await assertSessionWritable(parentClass.sessionId);
+  const subject = await academySubjectService.createSubject(
+    {
+      classId,
+      subjectName: (req.body.name || req.body.subjectName || '').trim(),
+      subjectCode: (req.body.code || req.body.subjectCode || '').trim().toUpperCase(),
+      status: 'active',
+    },
+    req.user._id
+  );
+  res.status(201).json({ success: true, data: shapeSubject(subject, parentClass) });
 });
 
 const listSections = catchAsync(async (req, res) => {
   const { classId, sessionId } = req.query;
-  if (sessionId) {
-    await syncAcademyToTimetableStructure(sessionId, req.user?._id);
-  } else if (classId) {
-    const parent = await Class.findById(classId).select('session');
-    if (parent?.session) {
-      await syncAcademyToTimetableStructure(parent.session, req.user?._id);
-    }
-  }
   const q = {};
   if (classId) {
-    q.class = classId;
+    q.classId = classId;
   } else if (sessionId) {
-    const classes = await Class.find({ session: sessionId }).select('_id');
-    q.class = { $in: classes.map((c) => c._id) };
+    const classes = await AcademyClass.find({ sessionId }).select('_id');
+    q.classId = { $in: classes.map((c) => c._id) };
   }
-  const sections = await Section.find(q)
-    .populate('class', 'name session')
-    .populate('teacher', 'name email')
-    .sort({ class: 1, name: 1 });
+  const sections = await AcademySection.find(q)
+    .populate('classId', 'className sessionId')
+    .sort({ classId: 1, sectionName: 1 });
 
   const sectionIds = sections.map((s) => s._id);
   const counts = sectionIds.length
-    ? await Student.aggregate([
-        { $match: { section: { $in: sectionIds } } },
-        { $group: { _id: '$section', count: { $sum: 1 } } },
+    ? await AcademyStudent.aggregate([
+        { $match: { sectionId: { $in: sectionIds } } },
+        { $group: { _id: '$sectionId', count: { $sum: 1 } } },
       ])
     : [];
   const countMap = Object.fromEntries(counts.map((c) => [String(c._id), c.count]));
 
   const data = sections.map((s) => ({
-    ...s.toObject(),
+    ...shapeSection(s),
     studentCount: countMap[String(s._id)] || 0,
   }));
 
@@ -221,44 +322,20 @@ const listSections = catchAsync(async (req, res) => {
 
 const listSubjects = catchAsync(async (req, res) => {
   const { classId } = req.query;
-  if (classId) {
-    const parent = await Class.findById(classId).select('session');
-    if (parent?.session) {
-      await syncAcademyToTimetableStructure(parent.session, req.user?._id);
-    }
-  }
-  const q = classId ? { class: classId } : {};
-  const subjects = await Subject.find(q).populate('teacher').populate('class');
-  res.json({ success: true, data: subjects });
+  const q = classId ? { classId } : {};
+  if (!req.query.includeInactive) q.status = 'active';
+  const subjects = await AcademySubject.find(q).populate('classId', 'className sessionId');
+  res.json({ success: true, data: subjects.map((s) => shapeSubject(s)) });
 });
 
 const patchSubject = catchAsync(async (req, res) => {
-  const subject = await Subject.findByIdAndUpdate(req.params.id, req.body, { new: true })
-    .populate('teacher')
-    .populate('class');
-  if (!subject) throw new ApiError(404, 'Subject not found');
-  res.json({ success: true, data: subject });
-});
-
-const createTimetable = catchAsync(async (req, res) => {
-  if (req.body.isActive) {
-    await Timetable.updateMany(
-      { class: req.body.class, section: req.body.section, session: req.body.session },
-      { $set: { isActive: false } }
-    );
-  }
-  const tt = await Timetable.create({ ...req.body, createdBy: req.user._id });
-  res.status(201).json({ success: true, data: tt });
-});
-
-const listTimetables = catchAsync(async (req, res) => {
-  const { classId, sectionId, sessionId } = req.query;
-  const q = {};
-  if (classId) q.class = classId;
-  if (sectionId) q.section = sectionId;
-  if (sessionId) q.session = sessionId;
-  const rows = await Timetable.find(q).populate('class').populate('section').populate('session');
-  res.json({ success: true, data: rows });
+  const subject = await academySubjectService.updateSubject(req.params.id, {
+    subjectName: req.body.name || req.body.subjectName,
+    subjectCode: req.body.code || req.body.subjectCode,
+    status: req.body.status,
+  });
+  const populated = await AcademySubject.findById(subject._id).populate('classId', 'className sessionId');
+  res.json({ success: true, data: shapeSubject(populated) });
 });
 
 /** Canonical RBAC module list (same source as `moduleConfig` / staff matrix). */
@@ -280,7 +357,5 @@ module.exports = {
   listSubjects,
   patchSubject,
   listSections,
-  createTimetable,
-  listTimetables,
   listSystemModules,
 };

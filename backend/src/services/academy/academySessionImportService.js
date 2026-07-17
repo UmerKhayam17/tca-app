@@ -3,7 +3,6 @@ const Session = require('../../models/Session');
 const AcademyClass = require('../../models/academy/AcademyClass');
 const AcademySection = require('../../models/academy/AcademySection');
 const AcademySubject = require('../../models/academy/AcademySubject');
-const AcademySubjectChoiceGroup = require('../../models/academy/AcademySubjectChoiceGroup');
 const AcademyFeeStructure = require('../../models/academy/AcademyFeeStructure');
 const { assertSessionWritable, getSessionOrThrow } = require('../session/sessionGuard');
 const { syncSubjectCount } = require('./academyClassService');
@@ -86,6 +85,9 @@ async function importEnrollmentFromSession(targetSessionId, opts, userId) {
         subjectCode: sub.subjectCode,
         classId: newClass._id,
         status: sub.status,
+        enrollmentType: sub.enrollmentType === 'choice' ? 'choice' : 'required',
+        choiceGroupName: sub.enrollmentType === 'choice' ? sub.choiceGroupName : undefined,
+        pickCount: sub.enrollmentType === 'choice' ? Math.max(1, Number(sub.pickCount) || 1) : 1,
         createdBy: userId,
       });
       subjectMap.set(String(sub._id), createdSub._id);
@@ -155,36 +157,6 @@ async function importEnrollmentFromSession(targetSessionId, opts, userId) {
       createdBy: userId,
     });
     sectionsCreated += 1;
-  }
-
-  const sourceChoiceGroups = await AcademySubjectChoiceGroup.find({
-    classId: { $in: sourceClassIds },
-    status: 'active',
-  });
-
-  for (const grp of sourceChoiceGroups) {
-    const newClassId = classMap.get(String(grp.classId));
-    if (!newClassId) continue;
-
-    const mappedSubjects = (grp.subjectIds || [])
-      .map((id) => subjectMap.get(String(id)))
-      .filter(Boolean);
-    if (mappedSubjects.length < 2) continue;
-
-    const exists = await AcademySubjectChoiceGroup.findOne({
-      classId: newClassId,
-      groupName: grp.groupName,
-    });
-    if (exists) continue;
-
-    await AcademySubjectChoiceGroup.create({
-      classId: newClassId,
-      groupName: grp.groupName,
-      subjectIds: mappedSubjects,
-      pickCount: grp.pickCount,
-      status: grp.status,
-      createdBy: userId,
-    });
   }
 
   return {

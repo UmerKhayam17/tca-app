@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getSession, restoreSession, restoreSessionOnce, refreshAccessToken, SessionUser } from "@/lib/auth";
+import { getSession, restoreSessionOnce, SessionUser } from "@/lib/auth";
 
 export type AuthState = {
   user: SessionUser | null;
@@ -26,29 +26,13 @@ export const useAuth = (): AuthState => {
     void (async () => {
       const restored = await restoreSessionOnce();
       if (cancelled) return;
-      setUser(restored);
+      setUser(restored ?? getSession());
       setLoading(false);
     })();
     return () => {
       cancelled = true;
     };
   }, []);
-
-  useEffect(() => {
-    if (!user) return;
-
-    const onVisible = () => {
-      if (document.visibilityState !== "visible") return;
-      void (async () => {
-        await refreshAccessToken();
-        const restored = await restoreSession();
-        setUser(restored);
-      })();
-    };
-
-    document.addEventListener("visibilitychange", onVisible);
-    return () => document.removeEventListener("visibilitychange", onVisible);
-  }, [user?.id]);
 
   return { user, loading };
 };

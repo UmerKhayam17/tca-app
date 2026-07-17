@@ -19,7 +19,7 @@ import type { ModuleActionCaps } from "@/lib/permissions";
 import { studentManagementHref } from "@/lib/studentManagementMenus";
 import {
   createAcademySubject,
-  createSubjectChoiceGroupBulk,
+  createBulkChoiceSubjects,
   deleteAcademySubject,
   fetchAcademyClasses,
   fetchSubjectChoiceGroups,
@@ -40,12 +40,11 @@ import {
   resizeGroupSubjectRows,
   type GroupSubjectRow,
 } from "@/components/modules/student-management/groupSubjectFormUtils";
-import SubjectEnrollmentFields, {
+import {
   buildEnrollmentPayload,
   choiceGroupValid,
   defaultSubjectEnrollmentForm,
-  enrollmentFromGroup,
-  findGroupForSubject,
+  enrollmentFromSubject,
   GroupSubjectRowsEditor,
   isBulkGroupCreate,
   SubjectEnrollmentConfig,
@@ -90,7 +89,7 @@ export default function SubjectsTab({ caps, sessionId }: { caps: ModuleActionCap
   });
 
   const { data: choiceGroups = [] } = useQuery({
-    queryKey: ["subject-choice-groups", classId],
+    queryKey: ["choice-groups", classId],
     queryFn: () => fetchSubjectChoiceGroups(classId),
     enabled: Boolean(classId),
   });
@@ -103,17 +102,6 @@ export default function SubjectsTab({ caps, sessionId }: { caps: ModuleActionCap
     setGroupSubjectRows((prev) => resizeGroupSubjectRows(count, prev));
   }, [bulkGroupCreate, enrollmentForm.groupSubjectCount]);
 
-  const subjectGroupMap = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const group of choiceGroups) {
-      for (const sub of group.subjectIds || []) {
-        const id = typeof sub === "string" ? sub : sub._id;
-        map.set(id, group.groupName);
-      }
-    }
-    return map;
-  }, [choiceGroups]);
-
   const subjectsFiltered = useMemo(() => {
     if (!search.trim()) return subjects;
     return subjects.filter((s) =>
@@ -122,10 +110,10 @@ export default function SubjectsTab({ caps, sessionId }: { caps: ModuleActionCap
         s.subjectName,
         s.subjectCode,
         s.status,
-        subjectGroupMap.get(s._id) ?? "standard",
+        s.enrollmentType === "choice" ? s.choiceGroupName : "standard",
       ),
     );
-  }, [subjects, search, subjectGroupMap]);
+  }, [subjects, search]);
 
   const resetDialog = () => {
     setForm({ subjectName: "", subjectCode: "", status: "active" });
@@ -148,21 +136,20 @@ export default function SubjectsTab({ caps, sessionId }: { caps: ModuleActionCap
     setEdit(s);
     setCodeManuallyEdited(true);
     setForm({ subjectName: s.subjectName, subjectCode: s.subjectCode, status: s.status });
-    const group = findGroupForSubject(choiceGroups, s._id);
-    setEnrollmentForm(group ? enrollmentFromGroup(group) : defaultSubjectEnrollmentForm());
+    setEnrollmentForm(enrollmentFromSubject(s, choiceGroups));
     setOpen(true);
   };
 
   const saveMut = useMutation({
     mutationFn: async () => {
       if (bulkGroupCreate) {
-        return createSubjectChoiceGroupBulk(classId, {
+        return createBulkChoiceSubjects(classId, {
           groupName: enrollmentForm.choiceGroupName.trim(),
           subjects: groupSubjectRows.map((r) => ({
             subjectName: r.subjectName.trim(),
             subjectCode: r.subjectCode.trim().toUpperCase(),
           })),
-          pickCount: 1,
+          pickCount: Math.max(1, Number(enrollmentForm.pickCount) || 1),
         });
       }
       const enrollment = buildEnrollmentPayload(enrollmentForm);
@@ -172,7 +159,7 @@ export default function SubjectsTab({ caps, sessionId }: { caps: ModuleActionCap
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["academy-subjects", classId] });
-      qc.invalidateQueries({ queryKey: ["subject-choice-groups", classId] });
+      qc.invalidateQueries({ queryKey: ["choice-groups", classId] });
       qc.invalidateQueries({ queryKey: ["enrollment-subjects"] });
       qc.invalidateQueries({ queryKey: ["academy-classes"] });
       setOpen(false);
@@ -187,7 +174,7 @@ export default function SubjectsTab({ caps, sessionId }: { caps: ModuleActionCap
     mutationFn: (id: string) => deleteAcademySubject(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["academy-subjects", classId] });
-      qc.invalidateQueries({ queryKey: ["subject-choice-groups", classId] });
+      qc.invalidateQueries({ queryKey: ["choice-groups", classId] });
       qc.invalidateQueries({ queryKey: ["academy-classes"] });
       toast({ title: "Subject deleted" });
     },
@@ -275,13 +262,20 @@ export default function SubjectsTab({ caps, sessionId }: { caps: ModuleActionCap
                   </tr>
                 )}
                 {subjectsFiltered.map((s) => {
-                  const groupName = subjectGroupMap.get(s._id);
+                  const isChoice = s.enrollmentType === "choice" && s.choiceGroupName;
                   return (
                     <tr key={s._id} className="border-b hover:bg-muted/30">
                       <td className="p-3 font-medium">{s.subjectName}</td>
                       <td className="p-3">{s.subjectCode}</td>
                       <td className="p-3 text-muted-foreground">
-                        {groupName ? <span>Choice: {groupName}</span> : <span>Standard</span>}
+                        {isChoice ? (
+                          <span>
+                            Choice: {s.choiceGroupName}
+                            {s.pickCount && s.pickCount > 1 ? ` (pick ${s.pickCount})` : ""}
+                          </span>
+                        ) : (
+                          <span>Standard</span>
+                        )}
                       </td>
                       <td className="p-3">{s.status}</td>
                       {hasActions && (

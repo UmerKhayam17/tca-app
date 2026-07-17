@@ -13,7 +13,7 @@ const sessionSchema = new mongoose.Schema(
     isActive: { type: Boolean, default: false, index: true },
     workingDays: {
       type: [{ type: String, enum: WEEKDAYS }],
-      default: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
+      default: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'],
     },
     timezone: { type: String, default: 'Asia/Karachi', trim: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

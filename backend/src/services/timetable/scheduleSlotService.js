@@ -4,11 +4,55 @@ const ApiError = require('../../utils/ApiError');
 const { validateSlot } = require('./timetableConflictService');
 const { assertSessionWritable } = require('../session/sessionGuard');
 
+const subjectPopulate = {
+  path: 'subject',
+  select: 'subjectName subjectCode enrollmentType choiceGroupName',
+  transform: (doc) => {
+    if (!doc) return doc;
+    const o = typeof doc.toObject === 'function' ? doc.toObject() : doc;
+    return { ...o, name: o.subjectName || o.name, code: o.subjectCode || o.code };
+  },
+};
+
 const slotPopulate = [
-  { path: 'subject', select: 'name code' },
+  subjectPopulate,
   { path: 'teacher', select: 'name email' },
+  {
+    path: 'parallelEntries.subject',
+    select: 'subjectName subjectCode enrollmentType choiceGroupName',
+    transform: (doc) => {
+      if (!doc) return doc;
+      const o = typeof doc.toObject === 'function' ? doc.toObject() : doc;
+      return { ...o, name: o.subjectName || o.name, code: o.subjectCode || o.code };
+    },
+  },
+  { path: 'parallelEntries.teacher', select: 'name email' },
   { path: 'room', select: 'name code type' },
 ];
+
+function normalizeEntries(body) {
+  if (Array.isArray(body.entries) && body.entries.length) {
+    return body.entries.map((e) => ({
+      subject: e.subject,
+      teacher: e.teacher,
+    }));
+  }
+  if (body.subject && body.teacher) {
+    return [{ subject: body.subject, teacher: body.teacher }];
+  }
+  throw new ApiError(400, 'Provide subject/teacher or entries[]');
+}
+
+function assertUniqueEntries(entries) {
+  const subjects = entries.map((e) => String(e.subject));
+  const teachers = entries.map((e) => String(e.teacher));
+  if (new Set(subjects).size !== subjects.length) {
+    throw new ApiError(400, 'Duplicate subjects in the same period slot');
+  }
+  if (new Set(teachers).size !== teachers.length) {
+    throw new ApiError(400, 'Each parallel subject needs a different teacher');
+  }
+}
 
 async function listSlots(timetableVersionId) {
   return ScheduleSlot.find({ timetableVersion: timetableVersionId, cancelled: { $ne: true } })
@@ -19,10 +63,15 @@ async function listSlots(timetableVersionId) {
 async function upsertSlot(timetableVersionId, body, { excludeSlotId, userId } = {}) {
   const version = await TimetableVersion.findById(timetableVersionId);
   if (!version) throw new ApiError(404, 'Timetable version not found');
-  if (version.status !== 'draft') {
-    throw new ApiError(400, 'Can only edit slots on draft timetables');
+  if (version.status !== 'draft' && version.status !== 'published') {
+    throw new ApiError(400, 'Can only edit slots on draft or published timetables');
   }
   await assertSessionWritable(version.session);
+
+  const entries = normalizeEntries(body);
+  assertUniqueEntries(entries);
+  const primary = entries[0];
+  const parallelEntries = entries.slice(1);
 
   const payload = {
     timetableVersion: timetableVersionId,
@@ -31,8 +80,9 @@ async function upsertSlot(timetableVersionId, body, { excludeSlotId, userId } = 
     section: version.section,
     day: body.day,
     periodId: body.periodId,
-    subject: body.subject,
-    teacher: body.teacher,
+    subject: primary.subject,
+    teacher: primary.teacher,
+    parallelEntries,
     room: body.room || null,
     source: body.source || 'manual',
     locked: body.locked ?? false,
@@ -46,21 +96,25 @@ async function upsertSlot(timetableVersionId, body, { excludeSlotId, userId } = 
     periodId: payload.periodId,
   });
 
-  const validation = await validateSlot({
-    sessionId: version.session,
-    timetableVersionId,
-    day: payload.day,
-    periodId: payload.periodId,
-    subjectId: payload.subject,
-    teacherId: payload.teacher,
-    roomId: payload.room,
-    sectionId: version.section,
-    excludeSlotId: excludeSlotId || existing?._id,
-  });
+  const excludeId = excludeSlotId || existing?._id;
 
-  if (!validation.valid) {
-    const summary = validation.errors.map((e) => e.message).filter(Boolean).join('; ');
-    throw new ApiError(400, summary || 'Slot validation failed', validation.errors);
+  for (const entry of entries) {
+    const validation = await validateSlot({
+      sessionId: version.session,
+      timetableVersionId,
+      day: payload.day,
+      periodId: payload.periodId,
+      subjectId: entry.subject,
+      teacherId: entry.teacher,
+      roomId: payload.room,
+      sectionId: version.section,
+      excludeSlotId: excludeId,
+    });
+
+    if (!validation.valid) {
+      const summary = validation.errors.map((e) => e.message).filter(Boolean).join('; ');
+      throw new ApiError(400, summary || 'Slot validation failed', validation.errors);
+    }
   }
 
   if (excludeSlotId) {
@@ -84,6 +138,15 @@ async function upsertSlot(timetableVersionId, body, { excludeSlotId, userId } = 
   return ScheduleSlot.findById(slot._id).populate(slotPopulate).populate('createdBy', 'name email');
 }
 
+function slotEntriesPlain(slotDoc) {
+  const primary = {
+    subject: slotDoc.subject,
+    teacher: slotDoc.teacher,
+  };
+  const parallel = Array.isArray(slotDoc.parallelEntries) ? slotDoc.parallelEntries : [];
+  return [primary, ...parallel.map((e) => ({ subject: e.subject, teacher: e.teacher }))];
+}
+
 async function moveSlot(slotId, body) {
   const slot = await ScheduleSlot.findById(slotId);
   if (!slot) throw new ApiError(404, 'Schedule slot not found');
@@ -105,15 +168,14 @@ async function moveSlot(slotId, body) {
     cancelled: { $ne: true },
   });
 
-  // Swap two occupied cells (unique index on day+period prevents simple two-step update)
   if (targetExisting && String(targetExisting._id) !== String(slotId)) {
     if (targetExisting.locked) {
       throw new ApiError(400, 'Target slot is locked and cannot be swapped');
     }
 
     const versionId = slot.timetableVersion;
-    const a = slot.toObject();
-    const b = targetExisting.toObject();
+    const aEntries = slotEntriesPlain(slot);
+    const bEntries = slotEntriesPlain(targetExisting);
 
     await ScheduleSlot.deleteOne({ _id: slotId });
     await ScheduleSlot.deleteOne({ _id: targetExisting._id });
@@ -121,24 +183,37 @@ async function moveSlot(slotId, body) {
     await upsertSlot(versionId, {
       day: toDay,
       periodId: toPeriodId,
-      subject: a.subject,
-      teacher: a.teacher,
-      room: a.room,
-      source: a.source,
-      locked: a.locked,
+      entries: aEntries,
+      room: slot.room,
+      source: slot.source,
+      locked: slot.locked,
     });
 
     const swapped = await upsertSlot(versionId, {
       day: fromDay,
       periodId: fromPeriodId,
-      subject: b.subject,
-      teacher: b.teacher,
-      room: b.room,
-      source: b.source,
-      locked: b.locked,
+      entries: bEntries,
+      room: targetExisting.room,
+      source: targetExisting.source,
+      locked: targetExisting.locked,
     });
 
     return swapped;
+  }
+
+  let entries;
+  if (Array.isArray(body.entries) && body.entries.length) {
+    entries = body.entries;
+  } else if (body.subject || body.teacher) {
+    entries = [
+      {
+        subject: body.subject ?? slot.subject,
+        teacher: body.teacher ?? slot.teacher,
+      },
+      ...(slot.parallelEntries || []),
+    ];
+  } else {
+    entries = slotEntriesPlain(slot);
   }
 
   return upsertSlot(
@@ -146,8 +221,7 @@ async function moveSlot(slotId, body) {
     {
       day: toDay,
       periodId: toPeriodId,
-      subject: body.subject ?? slot.subject,
-      teacher: body.teacher ?? slot.teacher,
+      entries,
       room: body.room !== undefined ? body.room : slot.room,
       source: slot.source,
       locked: slot.locked,
@@ -161,12 +235,18 @@ async function deleteSlot(slotId) {
   if (!slot) throw new ApiError(404, 'Schedule slot not found');
 
   const version = await TimetableVersion.findById(slot.timetableVersion);
-  if (version?.status !== 'draft') {
-    throw new ApiError(400, 'Can only delete slots on draft timetables');
+  if (version?.status !== 'draft' && version?.status !== 'published') {
+    throw new ApiError(400, 'Can only delete slots on draft or published timetables');
   }
 
   await ScheduleSlot.findByIdAndDelete(slotId);
   return { deleted: true };
+}
+
+function teacherInSlotQuery(teacherId) {
+  return {
+    $or: [{ teacher: teacherId }, { 'parallelEntries.teacher': teacherId }],
+  };
 }
 
 async function getTeacherSchedule(sessionId, teacherId, { status = 'published' } = {}) {
@@ -176,13 +256,29 @@ async function getTeacherSchedule(sessionId, teacherId, { status = 'published' }
 
   const slots = await ScheduleSlot.find({
     session: sessionId,
-    teacher: teacherId,
+    ...teacherInSlotQuery(teacherId),
     timetableVersion: { $in: versionIds },
     cancelled: { $ne: true },
   })
     .populate(slotPopulate)
-    .populate('section', 'name')
-    .populate('class', 'name')
+    .populate({
+      path: 'section',
+      select: 'sectionName',
+      transform: (doc) => {
+        if (!doc) return doc;
+        const o = typeof doc.toObject === 'function' ? doc.toObject() : doc;
+        return { ...o, name: o.sectionName || o.name };
+      },
+    })
+    .populate({
+      path: 'class',
+      select: 'className',
+      transform: (doc) => {
+        if (!doc) return doc;
+        const o = typeof doc.toObject === 'function' ? doc.toObject() : doc;
+        return { ...o, name: o.className || o.name };
+      },
+    })
     .sort({ day: 1 });
 
   return { slots, versions };
@@ -199,8 +295,24 @@ async function getRoomSchedule(sessionId, roomId, { status = 'published' } = {})
     cancelled: { $ne: true },
   })
     .populate(slotPopulate)
-    .populate('section', 'name')
-    .populate('class', 'name')
+    .populate({
+      path: 'section',
+      select: 'sectionName',
+      transform: (doc) => {
+        if (!doc) return doc;
+        const o = typeof doc.toObject === 'function' ? doc.toObject() : doc;
+        return { ...o, name: o.sectionName || o.name };
+      },
+    })
+    .populate({
+      path: 'class',
+      select: 'className',
+      transform: (doc) => {
+        if (!doc) return doc;
+        const o = typeof doc.toObject === 'function' ? doc.toObject() : doc;
+        return { ...o, name: o.className || o.name };
+      },
+    })
     .sort({ day: 1 });
 
   return slots;
@@ -218,17 +330,25 @@ async function createSubstitution(body, userId) {
     timetableVersion: version._id,
     day: body.day,
     periodId: body.periodId,
-    teacher: body.originalTeacherId,
+    ...teacherInSlotQuery(body.originalTeacherId),
     cancelled: { $ne: true },
   });
   if (!original) throw new ApiError(404, 'Original slot not found');
+
+  const entries = slotEntriesPlain(original).map((e) => {
+    if (String(e.teacher) === String(body.originalTeacherId)) {
+      return { subject: e.subject, teacher: body.substituteTeacherId };
+    }
+    return e;
+  });
 
   const validation = await validateSlot({
     sessionId: version.session,
     timetableVersionId: version._id,
     day: body.day,
     periodId: body.periodId,
-    subjectId: original.subject,
+    subjectId: entries.find((e) => String(e.teacher) === String(body.substituteTeacherId))?.subject
+      || original.subject,
     teacherId: body.substituteTeacherId,
     roomId: original.room,
     sectionId: version.section,
@@ -240,6 +360,7 @@ async function createSubstitution(body, userId) {
   original.cancelled = true;
   await original.save();
 
+  const primary = entries[0];
   const slot = await ScheduleSlot.create({
     timetableVersion: version._id,
     session: version.session,
@@ -247,8 +368,9 @@ async function createSubstitution(body, userId) {
     section: version.section,
     day: body.day,
     periodId: body.periodId,
-    subject: original.subject,
-    teacher: body.substituteTeacherId,
+    subject: primary.subject,
+    teacher: primary.teacher,
+    parallelEntries: entries.slice(1),
     room: original.room,
     isSubstitute: true,
     substituteForTeacher: body.originalTeacherId,
@@ -266,4 +388,5 @@ module.exports = {
   getTeacherSchedule,
   getRoomSchedule,
   createSubstitution,
+  slotPopulate,
 };

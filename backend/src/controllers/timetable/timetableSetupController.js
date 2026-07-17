@@ -3,7 +3,6 @@ const roomService = require('../../services/timetable/roomService');
 const periodTemplateService = require('../../services/timetable/periodTemplateService');
 const teacherProfileService = require('../../services/timetable/teacherProfileService');
 const teacherAssignmentService = require('../../services/timetable/teacherAssignmentService');
-const subjectRequirementService = require('../../services/timetable/subjectRequirementService');
 const timetableSettingsService = require('../../services/timetable/timetableSettingsService');
 
 // Rooms
@@ -105,27 +104,6 @@ const deleteTeacherAssignment = catchAsync(async (req, res) => {
   res.json({ success: true, data });
 });
 
-// Subject requirements
-const listSubjectRequirements = catchAsync(async (req, res) => {
-  const data = await subjectRequirementService.listSubjectRequirements(req.query);
-  res.json({ success: true, data });
-});
-
-const createSubjectRequirement = catchAsync(async (req, res) => {
-  const data = await subjectRequirementService.createSubjectRequirement(req.body, req.user._id);
-  res.status(201).json({ success: true, data });
-});
-
-const updateSubjectRequirement = catchAsync(async (req, res) => {
-  const data = await subjectRequirementService.updateSubjectRequirement(req.params.id, req.body);
-  res.json({ success: true, data });
-});
-
-const deleteSubjectRequirement = catchAsync(async (req, res) => {
-  const data = await subjectRequirementService.deleteSubjectRequirement(req.params.id);
-  res.json({ success: true, data });
-});
-
 // Settings
 const getSettings = catchAsync(async (req, res) => {
   const data = await timetableSettingsService.getSettings(req.params.sessionId);
@@ -157,10 +135,6 @@ module.exports = {
   createTeacherAssignment,
   updateTeacherAssignment,
   deleteTeacherAssignment,
-  listSubjectRequirements,
-  createSubjectRequirement,
-  updateSubjectRequirement,
-  deleteSubjectRequirement,
   getSettings,
   upsertSettings,
 };

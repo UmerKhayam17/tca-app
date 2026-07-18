@@ -26,6 +26,8 @@ import {
 } from "@/lib/userSchemaFields";
 import {
   createStaffUser,
+  TEACHER_DEFAULT_MODULE_PERMISSIONS,
+  ACCOUNTANT_DEFAULT_MODULE_PERMISSIONS,
   fetchAllUsers,
   fetchAllRoles,
   fetchParentStudents,
@@ -265,7 +267,19 @@ const UsersModule = ({
   }, [rolesRaw, scope]);
   const selectedRole = roleOptions.find((r) => r._id === form.role);
   const isParentRole = (selectedRole?.name || "").toLowerCase() === "parent";
+  const isTeacherRole = (selectedRole?.name || "").toLowerCase() === "teacher";
+  const isAccountantRole = (selectedRole?.name || "").toLowerCase() === "accountant";
   const isParentCreate = open && mode === "create" && isParentRole;
+
+  // Seed default RBAC matrix when creating teacher / accountant (admin can still override).
+  useEffect(() => {
+    if (!open || mode !== "create" || isParentRole) return;
+    if (isTeacherRole) {
+      setModulePerms({ ...TEACHER_DEFAULT_MODULE_PERMISSIONS });
+    } else if (isAccountantRole) {
+      setModulePerms({ ...ACCOUNTANT_DEFAULT_MODULE_PERMISSIONS });
+    }
+  }, [open, mode, isTeacherRole, isAccountantRole, isParentRole, form.role]);
 
   const { data: parentStudentChoices = [], isLoading: parentStudentChoicesLoading } = useQuery({
     queryKey: ["academy-student-choices", isParentRole, mode],
@@ -547,6 +561,12 @@ const UsersModule = ({
                         const roleName = roleOptions.find((r) => r._id === nextRole)?.name?.toLowerCase() || "";
                         if (roleName === "parent" && mode === "create") {
                           setParentCreate(emptyParentCreateSelection());
+                        }
+                        if (mode === "create" && roleName === "teacher") {
+                          setModulePerms({ ...TEACHER_DEFAULT_MODULE_PERMISSIONS });
+                        }
+                        if (mode === "create" && roleName === "accountant") {
+                          setModulePerms({ ...ACCOUNTANT_DEFAULT_MODULE_PERMISSIONS });
                         }
                       }}
                       required

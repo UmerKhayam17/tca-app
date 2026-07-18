@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -64,9 +64,18 @@ import {
   choiceGroupValid,
   defaultSubjectEnrollmentForm,
   enrollmentFromSubject,
+  GroupSubjectRowsEditor,
+  isEditNewChoiceGroup,
   SubjectEnrollmentConfig,
   type SubjectEnrollmentForm,
 } from "@/components/modules/student-management/SubjectEnrollmentFields";
+import {
+  emptyGroupSubjectRow,
+  parseGroupSubjectCount,
+  resizeSiblingSubjectRows,
+  siblingSubjectRowsValid,
+  type GroupSubjectRow,
+} from "@/components/modules/student-management/groupSubjectFormUtils";
 import CreatedByLine from "@/components/modules/CreatedByLine";
 
 const RECORD_KEY = (classId: string) => ["academy-class-record", classId] as const;
@@ -142,11 +151,20 @@ export default function ClassDetailPage({
   const [subjectEnrollmentForm, setSubjectEnrollmentForm] = useState<SubjectEnrollmentForm>(
     defaultSubjectEnrollmentForm,
   );
+  const [siblingSubjectRows, setSiblingSubjectRows] = useState<GroupSubjectRow[]>([emptyGroupSubjectRow()]);
 
   const { data: choiceGroups = [] } = useQuery({
     queryKey: ["choice-groups", classId],
     queryFn: () => fetchSubjectChoiceGroups(classId),
   });
+
+  const editNewChoiceGroup = isEditNewChoiceGroup(subjectEnrollmentForm, Boolean(editSubject));
+
+  useEffect(() => {
+    if (!editNewChoiceGroup) return;
+    const count = parseGroupSubjectCount(subjectEnrollmentForm.groupSubjectCount);
+    setSiblingSubjectRows((prev) => resizeSiblingSubjectRows(count, prev));
+  }, [editNewChoiceGroup, subjectEnrollmentForm.groupSubjectCount]);
 
   // Fee dialog
   const [feeOpen, setFeeOpen] = useState(false);
@@ -186,7 +204,21 @@ export default function ClassDetailPage({
     mutationFn: async () => {
       const enrollment = buildEnrollmentPayload(subjectEnrollmentForm);
       const body = { ...subjectForm, ...enrollment };
-      if (editSubject) return updateAcademySubject(editSubject._id, body);
+      if (editSubject) {
+        const updated = await updateAcademySubject(editSubject._id, body);
+        if (editNewChoiceGroup) {
+          for (const row of siblingSubjectRows) {
+            await createAcademySubject({
+              classId,
+              subjectName: row.subjectName.trim(),
+              subjectCode: row.subjectCode.trim().toUpperCase(),
+              status: subjectForm.status,
+              ...enrollment,
+            });
+          }
+        }
+        return updated;
+      }
       return createAcademySubject({ ...body, classId });
     },
     onSuccess: () => {
@@ -195,7 +227,13 @@ export default function ClassDetailPage({
       qc.invalidateQueries({ queryKey: ["choice-groups", classId] });
       qc.invalidateQueries({ queryKey: ["enrollment-subjects"] });
       setSubjectOpen(false);
-      toast({ title: editSubject ? "Subject updated" : "Subject added" });
+      toast({
+        title: editNewChoiceGroup
+          ? "Choice group saved"
+          : editSubject
+            ? "Subject updated"
+            : "Subject added",
+      });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -290,6 +328,7 @@ export default function ClassDetailPage({
     setSubjectCodeManuallyEdited(false);
     setSubjectForm({ subjectName: "", subjectCode: "", status: "active" });
     setSubjectEnrollmentForm(defaultSubjectEnrollmentForm());
+    setSiblingSubjectRows([emptyGroupSubjectRow()]);
     setSubjectOpen(true);
   };
 
@@ -302,6 +341,7 @@ export default function ClassDetailPage({
       status: s.status,
     });
     setSubjectEnrollmentForm(enrollmentFromSubject(s, choiceGroups));
+    setSiblingSubjectRows([emptyGroupSubjectRow()]);
     setSubjectOpen(true);
   };
 
@@ -771,7 +811,7 @@ export default function ClassDetailPage({
               isEdit={Boolean(editSubject)}
             />
             <div>
-              <Label>Subject name</Label>
+              <Label>{editNewChoiceGroup ? "Subject 1 — name" : "Subject name"}</Label>
               <Input
                 value={subjectForm.subjectName}
                 onChange={(e) => {
@@ -788,7 +828,7 @@ export default function ClassDetailPage({
               />
             </div>
             <div>
-              <Label>Code</Label>
+              <Label>{editNewChoiceGroup ? "Subject 1 — code" : "Code"}</Label>
               <Input
                 value={subjectForm.subjectCode}
                 onChange={(e) => {
@@ -798,6 +838,15 @@ export default function ClassDetailPage({
                 placeholder={subjectCodePlaceholder(cls.className)}
               />
             </div>
+            {editNewChoiceGroup && (
+              <GroupSubjectRowsEditor
+                rows={siblingSubjectRows}
+                onChange={setSiblingSubjectRows}
+                className={cls.className}
+                startIndex={2}
+                title="Other subjects in this group"
+              />
+            )}
             <div>
               <Label>Status</Label>
               <select
@@ -824,6 +873,7 @@ export default function ClassDetailPage({
                 !subjectForm.subjectName.trim() ||
                 !subjectForm.subjectCode.trim() ||
                 !choiceGroupValid(subjectEnrollmentForm) ||
+                (editNewChoiceGroup && !siblingSubjectRowsValid(siblingSubjectRows)) ||
                 subjectMut.isPending
               }
               onClick={() => subjectMut.mutate()}

@@ -28,9 +28,23 @@ export type ModuleKey =
   | "staff-management"
   | "student-management"
   | "students"
+  | "my-classes"
+  | "my-subjects"
   | "attendance"
+  | "staff-attendance"
   | "timetable"
+  | "homework"
+  | "study-materials"
+  | "lesson-plans"
   | "exams"
+  | "student-progress"
+  | "behaviour"
+  | "parent-meetings"
+  | "online-classes"
+  | "library"
+  | "school-calendar"
+  | "notifications"
+  | "leave"
   | "fees"
   | "salary"
   | "expenses"
@@ -72,25 +86,103 @@ export const MODULES: ModuleDef[] = [
   },
   {
     key: "students",
-    label: "Student records",
+    label: "My Students",
     shortLabel: "Students",
     icon: "GraduationCap",
-    desc: "Browse and manage enrolled students",
+    desc: "View assigned students",
   },
-  { key: "attendance", label: "Attendance", icon: "ClipboardList", desc: "Daily attendance" },
-  { key: "timetable", label: "Timetable", icon: "Calendar", desc: "Build, publish & view class schedules" },
+  { key: "my-classes", label: "My Classes", icon: "School", desc: "View assigned classes" },
+  { key: "my-subjects", label: "My Subjects", icon: "BookOpen", desc: "View assigned subjects" },
+  { key: "attendance", label: "Attendance", icon: "ClipboardList", desc: "Daily student attendance" },
+  {
+    key: "staff-attendance",
+    label: "My Attendance",
+    icon: "Clock",
+    desc: "Own attendance and correction requests",
+  },
+  { key: "timetable", label: "Timetable", icon: "Calendar", desc: "View class and own schedules" },
+  {
+    key: "homework",
+    label: "Homework / Assignments",
+    shortLabel: "Homework",
+    icon: "NotebookPen",
+    desc: "Create and manage own homework",
+  },
+  {
+    key: "study-materials",
+    label: "Study Materials",
+    icon: "FolderOpen",
+    desc: "Upload and manage study materials",
+  },
+  {
+    key: "lesson-plans",
+    label: "Lesson Plans",
+    icon: "ListChecks",
+    desc: "Create and view lesson plans",
+  },
   {
     key: "exams",
-    label: "Tests & exams",
+    label: "Exams & Marks",
     shortLabel: "Exams",
     icon: "Award",
-    desc: "Ongoing tests and term exam results",
+    desc: "Enter and update marks for assigned subjects",
+  },
+  {
+    key: "student-progress",
+    label: "Student Progress",
+    icon: "TrendingUp",
+    desc: "Progress reports for assigned students",
+  },
+  {
+    key: "behaviour",
+    label: "Behaviour / Discipline",
+    shortLabel: "Behaviour",
+    icon: "ShieldAlert",
+    desc: "Behaviour notes and disciplinary remarks",
+  },
+  {
+    key: "parent-meetings",
+    label: "Parent Meetings",
+    icon: "UsersRound",
+    desc: "Schedule and manage PTM records",
+  },
+  {
+    key: "online-classes",
+    label: "Online Classes",
+    icon: "Video",
+    desc: "Create and manage online sessions",
+  },
+  { key: "library", label: "Library", icon: "Library", desc: "View own issued books" },
+  {
+    key: "school-calendar",
+    label: "School Calendar",
+    icon: "CalendarRange",
+    desc: "School events calendar",
+  },
+  {
+    key: "notifications",
+    label: "Notifications",
+    icon: "BellRing",
+    desc: "In-app notifications",
+  },
+  {
+    key: "leave",
+    label: "Leave Management",
+    shortLabel: "Leave",
+    icon: "Palmtree",
+    desc: "Apply for leave and track status",
   },
   { key: "fees", label: "Fee management", icon: "Wallet", desc: "Collect and track fees" },
   { key: "salary", label: "Staff salary", icon: "DollarSign", desc: "Monthly teacher & staff payroll" },
   { key: "expenses", label: "Academy expenses", icon: "Receipt", desc: "Operating costs & expenses" },
-  { key: "chat", label: "Chat", icon: "MessageSquare", desc: "Real-time messaging" },
-  { key: "announcements", label: "Announcements", icon: "Bell", desc: "Publish notices" },
+  { key: "chat", label: "Messages", icon: "MessageSquare", desc: "Messaging with students, parents, and staff" },
+  {
+    key: "announcements",
+    label: "Class Announcements",
+    shortLabel: "Announcements",
+    icon: "Bell",
+    desc: "Announcements for assigned classes",
+  },
   { key: "reports", label: "Reports", icon: "BarChart3", desc: "Analytics & exports" },
   { key: "datasheets", label: "Datasheets", icon: "FileText", desc: "Create & manage spreadsheets" },
   { key: "users", label: "Users management", shortLabel: "Users", icon: "Users", desc: "All accounts including parents" },
@@ -104,7 +196,7 @@ export const MODULES: ModuleDef[] = [
     desc: "Full table of permission definitions",
     showInNav: false,
   },
-  { key: "settings", label: "Settings", icon: "Settings", desc: "Account summary", showInNav: false },
+  { key: "settings", label: "My Profile", icon: "User", desc: "Update profile and change password" },
 ];
 
 /** Dashboard tile groups (sidebar uses `sidebarNav.ts`). */
@@ -138,33 +230,48 @@ export const SIDEBAR_NAV_GROUPS: { id: string; label: string; modules: ModuleKey
 // Default matrix — mirrors the reference spec sheet
 export const DEFAULT_PERMISSIONS: Record<Role, Record<ModuleKey, PermLevel>> = {
   admin: {
-    dashboard: "full", users: "crud", "staff-management": "crud", "student-management": "crud", students: "crud", attendance: "crud",
-    timetable: "crud", exams: "crud", fees: "crud",
-    salary: "crud", expenses: "crud", chat: "full", announcements: "crud",
+    dashboard: "full", users: "crud", "staff-management": "crud", "student-management": "crud", students: "crud",
+    "my-classes": "full", "my-subjects": "full", attendance: "crud", "staff-attendance": "full",
+    timetable: "crud", homework: "full", "study-materials": "full", "lesson-plans": "full",
+    exams: "crud", "student-progress": "full", behaviour: "full", "parent-meetings": "full",
+    "online-classes": "full", library: "full", "school-calendar": "full", notifications: "full", leave: "full",
+    fees: "crud", salary: "crud", expenses: "crud", chat: "full", announcements: "crud",
     reports: "full", datasheets: "full", "system-config": "crud", settings: "full", permissions: "full", "permission-catalog": "full",
   },
   accountant: {
-    dashboard: "view", users: "none", "staff-management": "none", "student-management": "process", students: "view", attendance: "none",
-    timetable: "none", exams: "none", fees: "crud",
-    salary: "process", expenses: "crud", chat: "view", announcements: "none",
-    reports: "view", datasheets: "crud", "system-config": "none", settings: "none", permissions: "none", "permission-catalog": "none",
+    dashboard: "view", users: "none", "staff-management": "none", "student-management": "process", students: "view",
+    "my-classes": "none", "my-subjects": "none", attendance: "view", "staff-attendance": "view",
+    timetable: "none", homework: "none", "study-materials": "none", "lesson-plans": "none",
+    exams: "view", "student-progress": "none", behaviour: "none", "parent-meetings": "none",
+    "online-classes": "none", library: "none", "school-calendar": "view", notifications: "view", leave: "mark",
+    fees: "crud", salary: "process", expenses: "crud", chat: "view", announcements: "none",
+    reports: "view", datasheets: "crud", "system-config": "none", settings: "view", permissions: "none", "permission-catalog": "none",
   },
   teacher: {
-    dashboard: "view", users: "none", "staff-management": "none", "student-management": "view", students: "grade", attendance: "mark",
-    timetable: "view", exams: "grade", fees: "none",
-    salary: "view", expenses: "none", chat: "view", announcements: "view",
-    reports: "view", datasheets: "crud", "system-config": "none", settings: "none", permissions: "none", "permission-catalog": "none",
+    dashboard: "full", users: "none", "staff-management": "none", "student-management": "view", students: "view",
+    "my-classes": "view", "my-subjects": "view", attendance: "mark", "staff-attendance": "view",
+    timetable: "view", homework: "crud", "study-materials": "crud", "lesson-plans": "grade",
+    exams: "grade", "student-progress": "view", behaviour: "grade", "parent-meetings": "grade",
+    "online-classes": "crud", library: "view", "school-calendar": "view", notifications: "view", leave: "mark",
+    fees: "none", salary: "view", expenses: "none", chat: "view", announcements: "grade",
+    reports: "view", datasheets: "none", "system-config": "none", settings: "view", permissions: "none", "permission-catalog": "none",
   },
   parent: {
-    dashboard: "view", users: "none", "staff-management": "none", "student-management": "none", students: "view", attendance: "view",
-    timetable: "view", exams: "view", fees: "view",
-    salary: "none", expenses: "none", chat: "view", announcements: "none",
+    dashboard: "view", users: "none", "staff-management": "none", "student-management": "none", students: "view",
+    "my-classes": "none", "my-subjects": "none", attendance: "view", "staff-attendance": "none",
+    timetable: "view", homework: "view", "study-materials": "view", "lesson-plans": "none",
+    exams: "view", "student-progress": "view", behaviour: "none", "parent-meetings": "view",
+    "online-classes": "view", library: "none", "school-calendar": "view", notifications: "view", leave: "none",
+    fees: "view", salary: "none", expenses: "none", chat: "view", announcements: "none",
     reports: "none", datasheets: "none", "system-config": "none", settings: "none", permissions: "none", "permission-catalog": "none",
   },
   student: {
-    dashboard: "view", users: "none", "staff-management": "none", "student-management": "none", students: "view", attendance: "view",
-    timetable: "view", exams: "view", fees: "view",
-    salary: "none", expenses: "none", chat: "view", announcements: "view",
+    dashboard: "view", users: "none", "staff-management": "none", "student-management": "none", students: "view",
+    "my-classes": "none", "my-subjects": "none", attendance: "view", "staff-attendance": "none",
+    timetable: "view", homework: "view", "study-materials": "view", "lesson-plans": "none",
+    exams: "view", "student-progress": "view", behaviour: "none", "parent-meetings": "none",
+    "online-classes": "view", library: "view", "school-calendar": "view", notifications: "view", leave: "none",
+    fees: "view", salary: "none", expenses: "none", chat: "view", announcements: "view",
     reports: "none", datasheets: "view", "system-config": "none", settings: "view", permissions: "none", "permission-catalog": "none",
   },
 };
@@ -177,6 +284,21 @@ export const BACKEND_MODULE_KEY_MAP: Record<string, ModuleKey> = {
   attendance: "attendance",
   student: "students",
   studentManagement: "student-management",
+  myClasses: "my-classes",
+  mySubjects: "my-subjects",
+  homework: "homework",
+  studyMaterials: "study-materials",
+  lessonPlans: "lesson-plans",
+  studentProgress: "student-progress",
+  behaviour: "behaviour",
+  parentMeetings: "parent-meetings",
+  onlineClasses: "online-classes",
+  library: "library",
+  schoolCalendar: "school-calendar",
+  notifications: "notifications",
+  profile: "settings",
+  leave: "leave",
+  staffAttendance: "staff-attendance",
   fee: "fees",
   timetable: "timetable",
   announcement: "announcements",

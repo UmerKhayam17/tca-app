@@ -38,6 +38,8 @@ import {
   groupSubjectRowsValid,
   parseGroupSubjectCount,
   resizeGroupSubjectRows,
+  resizeSiblingSubjectRows,
+  siblingSubjectRowsValid,
   type GroupSubjectRow,
 } from "@/components/modules/student-management/groupSubjectFormUtils";
 import {
@@ -47,6 +49,7 @@ import {
   enrollmentFromSubject,
   GroupSubjectRowsEditor,
   isBulkGroupCreate,
+  isEditNewChoiceGroup,
   SubjectEnrollmentConfig,
   type SubjectEnrollmentForm,
 } from "@/components/modules/student-management/SubjectEnrollmentFields";
@@ -66,6 +69,7 @@ export default function SubjectsTab({ caps, sessionId }: { caps: ModuleActionCap
     emptyGroupSubjectRow(),
     emptyGroupSubjectRow(),
   ]);
+  const [siblingSubjectRows, setSiblingSubjectRows] = useState<GroupSubjectRow[]>([emptyGroupSubjectRow()]);
   const [codeManuallyEdited, setCodeManuallyEdited] = useState(false);
   const [search, setSearch] = useState("");
   const { apiSessionId, writable, hasScope, isAll } = useSessionScope(sessionId);
@@ -95,12 +99,19 @@ export default function SubjectsTab({ caps, sessionId }: { caps: ModuleActionCap
   });
 
   const bulkGroupCreate = isBulkGroupCreate(enrollmentForm, Boolean(edit));
+  const editNewChoiceGroup = isEditNewChoiceGroup(enrollmentForm, Boolean(edit));
 
   useEffect(() => {
     if (!bulkGroupCreate) return;
     const count = parseGroupSubjectCount(enrollmentForm.groupSubjectCount);
     setGroupSubjectRows((prev) => resizeGroupSubjectRows(count, prev));
   }, [bulkGroupCreate, enrollmentForm.groupSubjectCount]);
+
+  useEffect(() => {
+    if (!editNewChoiceGroup) return;
+    const count = parseGroupSubjectCount(enrollmentForm.groupSubjectCount);
+    setSiblingSubjectRows((prev) => resizeSiblingSubjectRows(count, prev));
+  }, [editNewChoiceGroup, enrollmentForm.groupSubjectCount]);
 
   const subjectsFiltered = useMemo(() => {
     if (!search.trim()) return subjects;
@@ -119,6 +130,7 @@ export default function SubjectsTab({ caps, sessionId }: { caps: ModuleActionCap
     setForm({ subjectName: "", subjectCode: "", status: "active" });
     setEnrollmentForm(defaultSubjectEnrollmentForm());
     setGroupSubjectRows([emptyGroupSubjectRow(), emptyGroupSubjectRow()]);
+    setSiblingSubjectRows([emptyGroupSubjectRow()]);
     setCodeManuallyEdited(false);
   };
 
@@ -137,6 +149,7 @@ export default function SubjectsTab({ caps, sessionId }: { caps: ModuleActionCap
     setCodeManuallyEdited(true);
     setForm({ subjectName: s.subjectName, subjectCode: s.subjectCode, status: s.status });
     setEnrollmentForm(enrollmentFromSubject(s, choiceGroups));
+    setSiblingSubjectRows([emptyGroupSubjectRow()]);
     setOpen(true);
   };
 
@@ -154,7 +167,21 @@ export default function SubjectsTab({ caps, sessionId }: { caps: ModuleActionCap
       }
       const enrollment = buildEnrollmentPayload(enrollmentForm);
       const body = { ...form, ...enrollment };
-      if (edit) return updateAcademySubject(edit._id, body);
+      if (edit) {
+        const updated = await updateAcademySubject(edit._id, body);
+        if (editNewChoiceGroup) {
+          for (const row of siblingSubjectRows) {
+            await createAcademySubject({
+              classId,
+              subjectName: row.subjectName.trim(),
+              subjectCode: row.subjectCode.trim().toUpperCase(),
+              status: form.status,
+              ...enrollment,
+            });
+          }
+        }
+        return updated;
+      }
       return createAcademySubject({ ...body, classId });
     },
     onSuccess: () => {
@@ -164,7 +191,13 @@ export default function SubjectsTab({ caps, sessionId }: { caps: ModuleActionCap
       qc.invalidateQueries({ queryKey: ["academy-classes"] });
       setOpen(false);
       toast({
-        title: bulkGroupCreate ? "Choice group created" : edit ? "Subject updated" : "Subject added",
+        title: bulkGroupCreate
+          ? "Choice group created"
+          : editNewChoiceGroup
+            ? "Choice group saved"
+            : edit
+              ? "Subject updated"
+              : "Subject added",
       });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -186,7 +219,11 @@ export default function SubjectsTab({ caps, sessionId }: { caps: ModuleActionCap
 
   const canSave = bulkGroupCreate
     ? choiceGroupValid(enrollmentForm) && groupSubjectRowsValid(groupSubjectRows)
-    : form.subjectName.trim() && form.subjectCode.trim() && choiceGroupValid(enrollmentForm);
+    : editNewChoiceGroup
+      ? Boolean(form.subjectName.trim() && form.subjectCode.trim()) &&
+        choiceGroupValid(enrollmentForm) &&
+        siblingSubjectRowsValid(siblingSubjectRows)
+      : form.subjectName.trim() && form.subjectCode.trim() && choiceGroupValid(enrollmentForm);
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-4">
@@ -346,7 +383,9 @@ export default function SubjectsTab({ caps, sessionId }: { caps: ModuleActionCap
                   />
                 )}
                 <div>
-                  <Label htmlFor="subject-name">Subject name</Label>
+                  <Label htmlFor="subject-name">
+                    {editNewChoiceGroup ? "Subject 1 — name" : "Subject name"}
+                  </Label>
                   <Input
                     id="subject-name"
                     value={form.subjectName}
@@ -364,7 +403,9 @@ export default function SubjectsTab({ caps, sessionId }: { caps: ModuleActionCap
                   />
                 </div>
                 <div>
-                  <Label htmlFor="subject-code">Subject code</Label>
+                  <Label htmlFor="subject-code">
+                    {editNewChoiceGroup ? "Subject 1 — code" : "Subject code"}
+                  </Label>
                   <Input
                     id="subject-code"
                     value={form.subjectCode}
@@ -375,6 +416,15 @@ export default function SubjectsTab({ caps, sessionId }: { caps: ModuleActionCap
                     placeholder={selectedClass ? subjectCodePlaceholder(selectedClass.className) : "e.g. MATH-09"}
                   />
                 </div>
+                {editNewChoiceGroup && selectedClass && (
+                  <GroupSubjectRowsEditor
+                    rows={siblingSubjectRows}
+                    onChange={setSiblingSubjectRows}
+                    className={selectedClass.className}
+                    startIndex={2}
+                    title="Other subjects in this group"
+                  />
+                )}
                 <div>
                   <Label htmlFor="subject-status">Status</Label>
                   <select

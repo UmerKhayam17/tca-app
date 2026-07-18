@@ -107,10 +107,56 @@ export function userCreateRoles(roles: RoleOption[]): RoleOption[] {
 
 export function roleDisplayLabel(name: string): string {
   const n = String(name || "").toLowerCase();
-  if (n === "accountant") return "Staff";
+  if (n === "accountant") return "Accountant";
   if (n === "admin") return "Admin";
   return n ? n.charAt(0).toUpperCase() + n.slice(1) : name;
 }
+
+/** Default module grants for a new teacher account (matches seeded teacher role). */
+export const TEACHER_DEFAULT_MODULE_PERMISSIONS: Record<string, string[]> = {
+  student: ["view"],
+  studentManagement: ["view"],
+  myClasses: ["view"],
+  mySubjects: ["view"],
+  timetable: ["view"],
+  homework: ["view", "create", "edit", "delete"],
+  studyMaterials: ["view", "create", "edit", "delete"],
+  lessonPlans: ["view", "create", "edit"],
+  exam: ["view", "create", "edit"],
+  studentProgress: ["view"],
+  chat: ["view", "create", "participate"],
+  announcement: ["view", "create", "edit"],
+  behaviour: ["view", "create", "edit"],
+  parentMeetings: ["view", "create", "edit"],
+  onlineClasses: ["view", "create", "edit", "delete"],
+  library: ["view"],
+  schoolCalendar: ["view"],
+  notifications: ["view"],
+  profile: ["view", "edit"],
+  leave: ["view", "create"],
+  staffAttendance: ["view", "create"],
+  attendance: ["view", "create", "edit", "correct"],
+  reports: ["view"],
+};
+
+/** Default module grants for a new accountant account (matches seeded accountant role). */
+export const ACCOUNTANT_DEFAULT_MODULE_PERMISSIONS: Record<string, string[]> = {
+  student: ["view", "activate"],
+  studentManagement: ["view", "create", "edit", "record", "generate"],
+  fee: ["view", "create", "edit", "generate", "record"],
+  salary: ["view", "process", "generate", "record"],
+  academyExpense: ["view", "create", "edit", "delete", "record"],
+  attendance: ["view"],
+  exam: ["view"],
+  chat: ["view", "create", "participate"],
+  datasheets: ["view", "create", "edit", "delete"],
+  reports: ["view"],
+  notifications: ["view"],
+  profile: ["view", "edit"],
+  schoolCalendar: ["view"],
+  leave: ["view", "create"],
+  staffAttendance: ["view", "create"],
+};
 
 /** Default module grants for a new parent account (matches seeded parent role). */
 export const PARENT_DEFAULT_MODULE_PERMISSIONS: Record<string, string[]> = {

@@ -2,7 +2,8 @@ import {
   ShieldCheck, Calculator, GraduationCap, Users, LayoutDashboard,
   BookOpen, DollarSign, Calendar, Bell, BarChart3, UserCog, ClipboardList,
   Wallet, MessageSquare, Award, Receipt, Settings as SettingsIcon, FileText, School, KeyRound, ListTree,
-  SlidersHorizontal,
+  SlidersHorizontal, NotebookPen, FolderOpen, ListChecks, TrendingUp, ShieldAlert, UsersRound,
+  Video, Library, CalendarRange, BellRing, Palmtree, Clock, User,
 } from "lucide-react";
 import { Role } from "./auth";
 import { systemConfigHref } from "./systemConfigMenus";
@@ -23,6 +24,8 @@ export const ICONS: Record<string, React.ComponentType<{ className?: string }>> 
   LayoutDashboard, Users, UserCog, GraduationCap, ClipboardList, Calendar,
   BookOpen, Award, Wallet, DollarSign, MessageSquare, Bell, BarChart3,
   Settings: SettingsIcon, FileText, KeyRound, ListTree, School, SlidersHorizontal, Receipt,
+  NotebookPen, FolderOpen, ListChecks, TrendingUp, ShieldAlert, UsersRound,
+  Video, Library, CalendarRange, BellRing, Palmtree, Clock, User,
 };
 
 export type MenuItem = ModuleDef & {

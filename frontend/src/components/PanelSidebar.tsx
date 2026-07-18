@@ -31,7 +31,7 @@ import { Role, SessionUser, logout, panelPathFor } from "@/lib/auth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { applyBackendModulePermissions, resolveModuleCaps } from "@/lib/permissions";
 import {
-  SIDEBAR_NAV,
+  sidebarNavForRole,
   groupIsOpen,
   navItemIsActive,
   type SidebarNavGroup,
@@ -70,10 +70,15 @@ const PanelSidebar = ({ user }: { user: SessionUser }) => {
     return true;
   };
 
-  const visibleGroups = SIDEBAR_NAV.map((group) => ({
-    ...group,
-    items: group.items.filter(canView),
-  })).filter((group) => group.items.length > 0);
+  const visibleGroups = sidebarNavForRole(user.role)
+    .map((group) => ({
+      ...group,
+      items: group.items.filter(canView),
+    }))
+    .filter((group) => group.items.length > 0);
+
+  const activeLinkClass =
+    "!bg-primary !text-primary-foreground font-semibold shadow-sm hover:!bg-primary hover:!text-primary-foreground [&>svg]:!text-primary-foreground data-[active=true]:!bg-primary data-[active=true]:!text-primary-foreground";
 
   const renderLink = (item: SidebarNavItem, compact = false) => {
     const href = item.href(user.role);
@@ -82,7 +87,11 @@ const PanelSidebar = ({ user }: { user: SessionUser }) => {
     if (compact) {
       return (
         <SidebarMenuSubItem key={item.id}>
-          <SidebarMenuSubButton asChild isActive={active} className="h-7 text-xs">
+          <SidebarMenuSubButton
+            asChild
+            isActive={active}
+            className={cn("h-7 text-xs", active && activeLinkClass)}
+          >
             <NavLink to={href} end={item.id === "dashboard"}>
               <Icon className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">{item.label}</span>
@@ -93,7 +102,12 @@ const PanelSidebar = ({ user }: { user: SessionUser }) => {
     }
     return (
       <SidebarMenuItem key={item.id}>
-        <SidebarMenuButton asChild isActive={active} tooltip={item.label} className="h-8">
+        <SidebarMenuButton
+          asChild
+          isActive={active}
+          tooltip={item.label}
+          className={cn("h-8", active && activeLinkClass)}
+        >
           <NavLink to={href} end={item.id === "dashboard"}>
             <Icon className="h-4 w-4 shrink-0" />
             <span className="text-sm truncate">{item.label}</span>
@@ -112,7 +126,6 @@ const PanelSidebar = ({ user }: { user: SessionUser }) => {
           <CollapsibleTrigger asChild>
             <SidebarMenuButton
               tooltip={group.label}
-              isActive={routeOpen}
               className={cn(
                 "!h-8 min-h-8 py-1.5 items-center overflow-hidden [&>span]:truncate [&>span]:text-sm",
                 "group-data-[state=open]/collapsible:bg-sidebar-accent/50",

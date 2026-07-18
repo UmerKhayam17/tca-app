@@ -376,6 +376,393 @@ export const SIDEBAR_NAV: SidebarNavGroup[] = [
   },
 ];
 
+/** Teacher portal sidebar — only modules from the Teacher RBAC defaults (+ admin overrides). */
+export const TEACHER_SIDEBAR_NAV: SidebarNavGroup[] = [
+  {
+    id: "dashboard",
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    collapsible: false,
+    items: [
+      {
+        id: "dashboard",
+        label: "Dashboard",
+        icon: LayoutDashboard,
+        moduleKey: "dashboard",
+        href: (role) => moduleHref(role, "dashboard"),
+        isActive: (pathname, role) => pathname === `/panel/${role}`,
+      },
+    ],
+  },
+  {
+    id: "teaching",
+    label: "Teaching",
+    icon: BookOpen,
+    collapsible: true,
+    items: [
+      {
+        id: "my-students",
+        label: "My Students",
+        icon: GraduationCap,
+        moduleKey: "students",
+        href: (role) => moduleHref(role, "students"),
+      },
+      {
+        id: "my-classes",
+        label: "My Classes",
+        icon: School,
+        moduleKey: "my-classes",
+        href: (role) => moduleHref(role, "my-classes"),
+      },
+      {
+        id: "my-subjects",
+        label: "My Subjects",
+        icon: BookOpen,
+        moduleKey: "my-subjects",
+        href: (role) => moduleHref(role, "my-subjects"),
+      },
+      {
+        id: "timetable-mine",
+        label: "Timetable",
+        icon: Calendar,
+        moduleKey: "timetable",
+        href: (role) => timetableHref(role, "mine"),
+      },
+      {
+        id: "class-view",
+        label: "Class View",
+        icon: CalendarDays,
+        moduleKey: "timetable",
+        href: (role) => timetableHref(role, "view"),
+      },
+      {
+        id: "homework",
+        label: "Homework / Assignments",
+        icon: BookOpen,
+        moduleKey: "homework",
+        href: (role) => moduleHref(role, "homework"),
+      },
+      {
+        id: "study-materials",
+        label: "Study Materials",
+        icon: BookOpen,
+        moduleKey: "study-materials",
+        href: (role) => moduleHref(role, "study-materials"),
+      },
+      {
+        id: "lesson-plans",
+        label: "Lesson Plans",
+        icon: BookOpen,
+        moduleKey: "lesson-plans",
+        href: (role) => moduleHref(role, "lesson-plans"),
+      },
+      {
+        id: "exams",
+        label: "Exams & Marks",
+        icon: Award,
+        moduleKey: "exams",
+        href: (role) => testExamsHref(role),
+      },
+      {
+        id: "student-progress",
+        label: "Student Progress",
+        icon: BarChart3,
+        moduleKey: "student-progress",
+        href: (role) => moduleHref(role, "student-progress"),
+      },
+      {
+        id: "attendance",
+        label: "Student Attendance",
+        icon: ClipboardList,
+        moduleKey: "attendance",
+        href: (role) => moduleHref(role, "attendance"),
+      },
+    ],
+  },
+  {
+    id: "communication",
+    label: "Communication",
+    icon: MessageSquare,
+    collapsible: true,
+    items: [
+      {
+        id: "chat",
+        label: "Messages",
+        icon: MessageSquare,
+        moduleKey: "chat",
+        href: (role) => moduleHref(role, "chat"),
+      },
+      {
+        id: "announcements",
+        label: "Class Announcements",
+        icon: Bell,
+        moduleKey: "announcements",
+        href: (role) => moduleHref(role, "announcements"),
+      },
+      {
+        id: "behaviour",
+        label: "Behaviour / Discipline",
+        icon: ClipboardList,
+        moduleKey: "behaviour",
+        href: (role) => moduleHref(role, "behaviour"),
+      },
+      {
+        id: "parent-meetings",
+        label: "Parent Meetings",
+        icon: Users,
+        moduleKey: "parent-meetings",
+        href: (role) => moduleHref(role, "parent-meetings"),
+      },
+    ],
+  },
+  {
+    id: "resources",
+    label: "Resources",
+    icon: Calendar,
+    collapsible: true,
+    items: [
+      {
+        id: "online-classes",
+        label: "Online Classes",
+        icon: LayoutGrid,
+        moduleKey: "online-classes",
+        href: (role) => moduleHref(role, "online-classes"),
+      },
+      {
+        id: "library",
+        label: "Library",
+        icon: BookOpen,
+        moduleKey: "library",
+        href: (role) => moduleHref(role, "library"),
+      },
+      {
+        id: "school-calendar",
+        label: "School Calendar",
+        icon: CalendarDays,
+        moduleKey: "school-calendar",
+        href: (role) => moduleHref(role, "school-calendar"),
+      },
+      {
+        id: "notifications",
+        label: "Notifications",
+        icon: Bell,
+        moduleKey: "notifications",
+        href: (role) => moduleHref(role, "notifications"),
+      },
+    ],
+  },
+  {
+    id: "account-tools",
+    label: "My Account",
+    icon: UserCircle,
+    collapsible: true,
+    items: [
+      {
+        id: "profile",
+        label: "My Profile",
+        icon: UserCircle,
+        moduleKey: "settings",
+        href: (role) => moduleHref(role, "settings"),
+      },
+      {
+        id: "leave",
+        label: "Leave Management",
+        icon: Calendar,
+        moduleKey: "leave",
+        href: (role) => moduleHref(role, "leave"),
+      },
+      {
+        id: "staff-attendance",
+        label: "My Attendance",
+        icon: Clock,
+        moduleKey: "staff-attendance",
+        href: (role) => moduleHref(role, "staff-attendance"),
+      },
+    ],
+  },
+];
+
+/** Accountant portal sidebar — finance-focused modules from accountant RBAC defaults. */
+export const ACCOUNTANT_SIDEBAR_NAV: SidebarNavGroup[] = [
+  {
+    id: "dashboard",
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    collapsible: false,
+    items: [
+      {
+        id: "dashboard",
+        label: "Dashboard",
+        icon: LayoutDashboard,
+        moduleKey: "dashboard",
+        href: (role) => moduleHref(role, "dashboard"),
+        isActive: (pathname, role) => pathname === `/panel/${role}`,
+      },
+    ],
+  },
+  {
+    id: "students",
+    label: "Students",
+    icon: GraduationCap,
+    collapsible: true,
+    items: [
+      {
+        id: "register-student",
+        label: "Register Student",
+        icon: UserPlus,
+        moduleKey: "student-management",
+        href: (role) => studentManagementHref(role, "registration"),
+        isActive: (pathname, role) =>
+          pathname.startsWith(`${p(role)}/student-management/registration`),
+      },
+      {
+        id: "students",
+        label: "Students",
+        icon: GraduationCap,
+        moduleKey: "students",
+        href: (role) => moduleHref(role, "students"),
+      },
+      {
+        id: "student-attendance",
+        label: "Student Attendance",
+        icon: ClipboardList,
+        moduleKey: "attendance",
+        href: (role) => moduleHref(role, "attendance"),
+      },
+    ],
+  },
+  {
+    id: "finance",
+    label: "Finance",
+    icon: Wallet,
+    collapsible: true,
+    items: [
+      {
+        id: "fee-structure",
+        label: "Fee Structure",
+        icon: Wallet,
+        moduleKey: "student-management",
+        href: (role) => studentManagementHref(role, "fees-structure"),
+      },
+      {
+        id: "fee-management",
+        label: "Fee Management",
+        icon: DollarSign,
+        moduleKey: "fees",
+        href: (role) => moduleHref(role, "fees"),
+      },
+      {
+        id: "staff-salary",
+        label: "Staff Salary",
+        icon: DollarSign,
+        moduleKey: "salary",
+        href: (role) => moduleHref(role, "salary"),
+      },
+      {
+        id: "academy-expenses",
+        label: "Academy Expenses",
+        icon: Receipt,
+        moduleKey: "expenses",
+        href: (role) => moduleHref(role, "expenses"),
+      },
+    ],
+  },
+  {
+    id: "reports",
+    label: "Reports",
+    icon: BarChart3,
+    collapsible: true,
+    items: [
+      {
+        id: "reports",
+        label: "Reports",
+        icon: BarChart3,
+        moduleKey: "reports",
+        href: (role) => moduleHref(role, "reports"),
+      },
+      {
+        id: "datasheets",
+        label: "Datasheets",
+        icon: FileText,
+        moduleKey: "datasheets",
+        href: (role) => moduleHref(role, "datasheets"),
+      },
+    ],
+  },
+  {
+    id: "communication",
+    label: "Communication",
+    icon: MessageSquare,
+    collapsible: true,
+    items: [
+      {
+        id: "chat",
+        label: "Chat",
+        icon: MessageSquare,
+        moduleKey: "chat",
+        href: (role) => moduleHref(role, "chat"),
+      },
+    ],
+  },
+  {
+    id: "resources",
+    label: "Resources",
+    icon: Calendar,
+    collapsible: true,
+    items: [
+      {
+        id: "school-calendar",
+        label: "School Calendar",
+        icon: CalendarDays,
+        moduleKey: "school-calendar",
+        href: (role) => moduleHref(role, "school-calendar"),
+      },
+      {
+        id: "notifications",
+        label: "Notifications",
+        icon: Bell,
+        moduleKey: "notifications",
+        href: (role) => moduleHref(role, "notifications"),
+      },
+    ],
+  },
+  {
+    id: "account-tools",
+    label: "My Account",
+    icon: UserCircle,
+    collapsible: true,
+    items: [
+      {
+        id: "profile",
+        label: "My Profile",
+        icon: UserCircle,
+        moduleKey: "settings",
+        href: (role) => moduleHref(role, "settings"),
+      },
+      {
+        id: "leave",
+        label: "Leave Management",
+        icon: Calendar,
+        moduleKey: "leave",
+        href: (role) => moduleHref(role, "leave"),
+      },
+      {
+        id: "staff-attendance",
+        label: "My Attendance",
+        icon: Clock,
+        moduleKey: "staff-attendance",
+        href: (role) => moduleHref(role, "staff-attendance"),
+      },
+    ],
+  },
+];
+
+export function sidebarNavForRole(role: Role): SidebarNavGroup[] {
+  if (role === "teacher") return TEACHER_SIDEBAR_NAV;
+  if (role === "accountant") return ACCOUNTANT_SIDEBAR_NAV;
+  return SIDEBAR_NAV;
+}
+
 export function navItemIsActive(item: SidebarNavItem, pathname: string, role: Role): boolean {
   if (item.isActive) return item.isActive(pathname, role);
   const href = item.href(role);

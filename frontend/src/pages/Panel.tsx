@@ -31,6 +31,7 @@ import DatasheetsModule from "@/components/modules/DatasheetsModule";
 import PermissionsModule from "@/components/modules/PermissionsModule";
 import StudentManagementModule from "@/components/modules/StudentManagementModule";
 import PermissionCatalogModule from "@/components/modules/PermissionCatalogModule";
+import TeacherFeatureModule from "@/components/modules/TeacherFeatureModule";
 import { fetchExams } from "@/lib/examApi";
 import { fetchAnnouncements } from "@/lib/announcementApi";
 import {
@@ -40,6 +41,23 @@ import {
   fetchAcademyExpenseSummary,
   fetchAcademyStudents,
 } from "@/lib/studentManagementApi";
+
+const TEACHER_FEATURE_KEYS = new Set<ModuleKey>([
+  "my-classes",
+  "my-subjects",
+  "homework",
+  "study-materials",
+  "lesson-plans",
+  "student-progress",
+  "behaviour",
+  "parent-meetings",
+  "online-classes",
+  "library",
+  "school-calendar",
+  "notifications",
+  "leave",
+  "staff-attendance",
+]);
 
 const Dashboard = ({
   role,
@@ -292,7 +310,11 @@ const Panel = () => {
       case "permissions":   return <PermissionsModule perm={perm} caps={caps} />;
       case "permission-catalog": return <PermissionCatalogModule role={r} />;
       case "settings":      return <SettingsModule />;
-      default:              return <div className="p-6 text-muted-foreground">Module coming soon.</div>;
+      default:
+        if (TEACHER_FEATURE_KEYS.has(mod.key as ModuleKey)) {
+          return <TeacherFeatureModule moduleKey={mod.key as ModuleKey} caps={caps} />;
+        }
+        return <div className="p-6 text-muted-foreground">Module coming soon.</div>;
     }
   };
 

@@ -32,8 +32,19 @@ export function isGroupChoiceSubject(form: SubjectEnrollmentForm): boolean {
   return form.enrollmentType === "choice";
 }
 
+/** New choice group with multiple subjects (create dialog). */
 export function isBulkGroupCreate(form: SubjectEnrollmentForm, isEdit: boolean): boolean {
   return !isEdit && form.enrollmentType === "choice" && !form.choiceGroupId;
+}
+
+/** Converting/editing into a brand-new choice group (need sibling subject names). */
+export function isEditNewChoiceGroup(form: SubjectEnrollmentForm, isEdit: boolean): boolean {
+  return Boolean(isEdit) && form.enrollmentType === "choice" && !form.choiceGroupId;
+}
+
+/** Show “how many subjects” + multi-name rows. */
+export function needsGroupSubjectCount(form: SubjectEnrollmentForm, isEdit: boolean): boolean {
+  return isBulkGroupCreate(form, isEdit) || isEditNewChoiceGroup(form, isEdit);
 }
 
 export function setGroupChoiceEnabled(
@@ -125,6 +136,8 @@ export function SubjectEnrollmentConfig({
 }: EnrollmentConfigProps) {
   const isGroupChoice = isGroupChoiceSubject(value);
   const bulkCreate = isBulkGroupCreate(value, Boolean(isEdit));
+  const editNewGroup = isEditNewChoiceGroup(value, Boolean(isEdit));
+  const showSubjectCount = needsGroupSubjectCount(value, Boolean(isEdit));
   const patch = (partial: Partial<SubjectEnrollmentForm>) => onChange({ ...value, ...partial });
 
   const selectedGroup = choiceGroups.find((g) => g._id === value.choiceGroupId);
@@ -136,7 +149,7 @@ export function SubjectEnrollmentConfig({
           checked={isGroupChoice}
           onCheckedChange={(checked) => onChange(setGroupChoiceEnabled(value, checked === true))}
           className="mt-0.5"
-          disabled={Boolean(isEdit && isGroupChoice)}
+          disabled={Boolean(isEdit && isGroupChoice && value.choiceGroupId)}
         />
         <div>
           <span className="text-sm font-medium">Group choice subject</span>
@@ -182,7 +195,7 @@ export function SubjectEnrollmentConfig({
             </div>
           )}
 
-          {bulkCreate && (
+          {showSubjectCount && (
             <div>
               <Label className="text-xs">How many subjects in this group?</Label>
               <Input
@@ -193,6 +206,11 @@ export function SubjectEnrollmentConfig({
                 value={value.groupSubjectCount}
                 onChange={(e) => patch({ groupSubjectCount: e.target.value })}
               />
+              {editNewGroup && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Subject 1 is this subject — enter the other option(s) below.
+                </p>
+              )}
             </div>
           )}
 
@@ -205,7 +223,11 @@ export function SubjectEnrollmentConfig({
                 onChange={(e) => {
                   const id = e.target.value;
                   if (id === "__new__") {
-                    patch({ choiceGroupId: "", choiceGroupName: "" });
+                    patch({
+                      choiceGroupId: "",
+                      choiceGroupName: "",
+                      groupSubjectCount: value.groupSubjectCount || "2",
+                    });
                   } else {
                     const group = choiceGroups.find((g) => g._id === id);
                     patch({
@@ -226,7 +248,7 @@ export function SubjectEnrollmentConfig({
             </div>
           )}
 
-          {(bulkCreate || !value.choiceGroupId) && (
+          {(bulkCreate || editNewGroup || !value.choiceGroupId) && (
             <div>
               <Label className="text-xs">Group name</Label>
               <Input
@@ -234,12 +256,12 @@ export function SubjectEnrollmentConfig({
                 value={value.choiceGroupName}
                 onChange={(e) => patch({ choiceGroupName: e.target.value })}
                 placeholder="e.g. Computer or Biology"
-                disabled={!bulkCreate && Boolean(value.choiceGroupId)}
+                disabled={!bulkCreate && !editNewGroup && Boolean(value.choiceGroupId)}
               />
             </div>
           )}
 
-          {value.choiceGroupId && !bulkCreate && (
+          {value.choiceGroupId && !bulkCreate && !editNewGroup && (
             <div>
               <Label className="text-xs">Group name</Label>
               <Input className="mt-1" value={value.choiceGroupName} disabled />
@@ -252,7 +274,7 @@ export function SubjectEnrollmentConfig({
               className="mt-1 max-w-[6rem]"
               type="number"
               min={1}
-              max={bulkCreate ? Number(value.groupSubjectCount) || 10 : 10}
+              max={showSubjectCount ? Number(value.groupSubjectCount) || 10 : 10}
               value={value.pickCount}
               onChange={(e) => patch({ pickCount: e.target.value })}
             />
@@ -261,14 +283,13 @@ export function SubjectEnrollmentConfig({
             </p>
           </div>
 
-          {selectedGroup && !bulkCreate && (
+          {selectedGroup && !bulkCreate && !editNewGroup && (
             <p className="text-xs text-muted-foreground">
               Already in this group:{" "}
               {selectedGroup.subjectIds
                 .map((s) => (typeof s === "string" ? s : s.subjectName))
                 .filter(Boolean)
                 .join(", ")}
-              {currentSubjectId ? "" : ""}
             </p>
           )}
         </div>
@@ -281,19 +302,28 @@ type BulkRowsProps = {
   rows: GroupSubjectRow[];
   onChange: (rows: GroupSubjectRow[]) => void;
   className: string;
+  /** 1-based label offset (e.g. 2 → “Subject 2”) */
+  startIndex?: number;
+  title?: string;
 };
 
-export function GroupSubjectRowsEditor({ rows, onChange, className }: BulkRowsProps) {
+export function GroupSubjectRowsEditor({
+  rows,
+  onChange,
+  className,
+  startIndex = 1,
+  title = "Subjects in this group",
+}: BulkRowsProps) {
   const updateRow = (index: number, patch: Partial<GroupSubjectRow>) => {
     onChange(rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
   };
 
   return (
     <div className="space-y-3">
-      <Label className="text-sm font-medium">Subjects in this group</Label>
+      <Label className="text-sm font-medium">{title}</Label>
       {rows.map((row, index) => (
         <div key={index} className="rounded-md border p-3 space-y-2 bg-background">
-          <p className="text-xs font-medium text-muted-foreground">Subject {index + 1}</p>
+          <p className="text-xs font-medium text-muted-foreground">Subject {startIndex + index}</p>
           <div>
             <Label className="text-xs">Subject name</Label>
             <Input

@@ -141,6 +141,15 @@ function buildDefaultRoleDefs(allPermissionIds) {
     adminModulePerms.set(moduleName, MODULES[moduleName].actions);
   });
 
+  const {
+    TEACHER_PERMISSION_NAMES,
+    teacherModulePermissionsMap,
+  } = require('../config/teacherDefaults');
+  const {
+    ACCOUNTANT_PERMISSION_NAMES,
+    accountantModulePermissionsMap,
+  } = require('../config/accountantDefaults');
+
   return {
     admin: {
       name: 'admin',
@@ -150,30 +159,9 @@ function buildDefaultRoleDefs(allPermissionIds) {
     },
     teacher: {
       name: 'teacher',
-      permissionNames: [
-        'mark_attendance',
-        'correct_attendance',
-        'view_attendance',
-        'enter_exam_marks',
-        'view_results',
-        'manage_announcements',
-        'use_chat',
-        'view_students',
-        'view_timetables',
-        'view_datasheets',
-        'manage_datasheets',
-      ],
+      permissionNames: TEACHER_PERMISSION_NAMES,
       description: 'Academic',
-      modulePermissions: new Map([
-        ['attendance', ['view', 'create', 'edit', 'correct']],
-        ['exam', ['view', 'create', 'edit']],
-        ['announcement', ['view', 'create', 'edit', 'delete']],
-        ['student', ['view']],
-        ['studentManagement', ['view']],
-        ['timetable', ['view']],
-        ['chat', ['view', 'create', 'participate']],
-        ['datasheets', ['view', 'create', 'edit', 'delete']],
-      ]),
+      modulePermissions: teacherModulePermissionsMap(),
     },
     student: {
       name: 'student',
@@ -209,37 +197,9 @@ function buildDefaultRoleDefs(allPermissionIds) {
     },
     accountant: {
       name: 'accountant',
-      permissionNames: [
-        'activate_student',
-        'view_students',
-        'generate_vouchers',
-        'record_fee_payment',
-        'view_fee_reports',
-        'view_academy_students',
-        'manage_academy_fees',
-        'view_academy_fee_reports',
-        'manage_academy_salaries',
-        'view_academy_salaries',
-        'manage_academy_expenses',
-        'view_academy_expenses',
-        'use_chat',
-        'view_attendance',
-        'view_results',
-        'view_datasheets',
-        'manage_datasheets',
-      ],
+      permissionNames: ACCOUNTANT_PERMISSION_NAMES,
       description: 'Finance',
-      modulePermissions: new Map([
-        ['student', ['view', 'activate']],
-        ['fee', ['view', 'create', 'edit', 'generate', 'record']],
-        ['studentManagement', ['view', 'record', 'generate', 'create', 'edit', 'delete']],
-        ['salary', ['view', 'process', 'generate', 'record']],
-        ['academyExpense', ['view', 'create', 'edit', 'delete', 'record']],
-        ['attendance', ['view']],
-        ['exam', ['view']],
-        ['chat', ['view', 'create', 'participate']],
-        ['datasheets', ['view', 'create', 'edit', 'delete']],
-      ]),
+      modulePermissions: accountantModulePermissionsMap(),
     },
   };
 }
@@ -294,29 +254,24 @@ async function syncBuiltInRolePermissions() {
 
   const accountantRole = await Role.findOne({ name: 'accountant' });
   if (accountantRole) {
-    const extra = await permissionIdsByNames([
-      'view_academy_students',
-      'manage_academy_fees',
-      'view_academy_fee_reports',
-      'manage_academy_salaries',
-      'view_academy_salaries',
-      'manage_academy_expenses',
-      'view_academy_expenses',
-    ]);
-    const set = new Set((accountantRole.permissions || []).map(String));
-    extra.forEach((id) => set.add(String(id)));
-    accountantRole.permissions = [...set];
-    const mp = accountantRole.modulePermissions || new Map();
-    if (!mp.has('studentManagement')) {
-      mp.set('studentManagement', ['view', 'record', 'generate', 'create', 'edit']);
-    }
-    if (!mp.has('salary')) {
-      mp.set('salary', ['view', 'process', 'generate', 'record']);
-    }
-    if (!mp.has('academyExpense')) {
-      mp.set('academyExpense', ['view', 'create', 'edit', 'record']);
-    }
+    const {
+      ACCOUNTANT_PERMISSION_NAMES,
+      ACCOUNTANT_DEFAULT_MODULE_PERMISSIONS,
+      accountantModulePermissionsMap,
+    } = require('../config/accountantDefaults');
+    const accountantPerms = await permissionIdsByNames(ACCOUNTANT_PERMISSION_NAMES);
+    accountantRole.permissions = accountantPerms;
+    const mp = accountantModulePermissionsMap();
+    const existing = accountantRole.modulePermissions || new Map();
+    Object.entries(ACCOUNTANT_DEFAULT_MODULE_PERMISSIONS).forEach(([key, actions]) => {
+      if (!existing.has(key) || !Array.isArray(existing.get(key)) || existing.get(key).length === 0) {
+        mp.set(key, actions);
+      } else {
+        mp.set(key, existing.get(key));
+      }
+    });
     accountantRole.modulePermissions = mp;
+    accountantRole.description = 'Finance — default accountant portal access';
     await accountantRole.save();
   }
 
@@ -340,6 +295,30 @@ async function syncBuiltInRolePermissions() {
       ['fee', ['view']],
     ]);
     await parentRole.save();
+  }
+
+  const teacherRole = await Role.findOne({ name: 'teacher' });
+  if (teacherRole) {
+    const {
+      TEACHER_PERMISSION_NAMES,
+      TEACHER_DEFAULT_MODULE_PERMISSIONS,
+      teacherModulePermissionsMap,
+    } = require('../config/teacherDefaults');
+    const teacherPerms = await permissionIdsByNames(TEACHER_PERMISSION_NAMES);
+    teacherRole.permissions = teacherPerms;
+    const mp = teacherModulePermissionsMap();
+    // Keep any admin-added extras on the role, but ensure defaults exist
+    const existing = teacherRole.modulePermissions || new Map();
+    Object.entries(TEACHER_DEFAULT_MODULE_PERMISSIONS).forEach(([key, actions]) => {
+      if (!existing.has(key) || !Array.isArray(existing.get(key)) || existing.get(key).length === 0) {
+        mp.set(key, actions);
+      } else {
+        mp.set(key, existing.get(key));
+      }
+    });
+    teacherRole.modulePermissions = mp;
+    teacherRole.description = 'Academic — default teacher portal access';
+    await teacherRole.save();
   }
 }
 

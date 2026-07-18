@@ -184,7 +184,31 @@ const createUser = catchAsync(async (req, res) => {
   const exists = await User.findOne({ email });
   if (exists) throw new ApiError(409, 'Email already in use');
   const hash = await bcrypt.hash(password, 12);
-  const userModulePerms = modulePermissionsToMap(modulePermissions);
+  let userModulePerms = modulePermissionsToMap(modulePermissions);
+
+  const Role = require('../models/Role');
+  const roleDoc = await Role.findById(role);
+  const roleName = String(roleDoc?.name || '').toLowerCase();
+
+  // New teachers / accountants inherit role defaults when none provided.
+  if (
+    (roleName === 'teacher' || roleName === 'accountant') &&
+    (!userModulePerms || userModulePerms.size === 0)
+  ) {
+    if (roleName === 'teacher') {
+      const { teacherModulePermissionsMap } = require('../config/teacherDefaults');
+      userModulePerms =
+        roleDoc?.modulePermissions instanceof Map && roleDoc.modulePermissions.size > 0
+          ? new Map(roleDoc.modulePermissions)
+          : teacherModulePermissionsMap();
+    } else {
+      const { accountantModulePermissionsMap } = require('../config/accountantDefaults');
+      userModulePerms =
+        roleDoc?.modulePermissions instanceof Map && roleDoc.modulePermissions.size > 0
+          ? new Map(roleDoc.modulePermissions)
+          : accountantModulePermissionsMap();
+    }
+  }
 
   const user = await User.create({
     name,
@@ -192,7 +216,7 @@ const createUser = catchAsync(async (req, res) => {
     password: hash,
     phone,
     role,
-    permissions: permissionIds || [],
+    permissions: permissionIds || roleDoc?.permissions || [],
     modulePermissions: userModulePerms,
     isActive: typeof isActive === 'boolean' ? isActive : true,
     salary: typeof salary === 'number' && !Number.isNaN(salary) ? Math.max(0, salary) : 0,

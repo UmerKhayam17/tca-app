@@ -8,18 +8,35 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { ModuleActionCaps } from "@/lib/permissions";
+import { fetchClasses, classDisplayName } from "@/lib/configApi";
 import { createRoom, deleteRoom, fetchRooms, updateRoom, type Room } from "@/lib/timetableApi";
 import PanelSearchBar from "@/components/modules/PanelSearchBar";
 import { usePanelListSearch } from "@/hooks/usePanelListSearch";
 
 const QK = (sid: string) => ["timetable-rooms", sid] as const;
 
+function assignedClassId(room: Room): string {
+  if (!room.assignedClass) return "";
+  return typeof room.assignedClass === "string" ? room.assignedClass : room.assignedClass._id;
+}
+
+function assignedClassLabel(room: Room): string {
+  if (!room.assignedClass || typeof room.assignedClass === "string") return "—";
+  return classDisplayName(room.assignedClass) || "—";
+}
+
 export default function RoomsTab({ sessionId, caps }: { sessionId: string; caps: ModuleActionCaps }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [edit, setEdit] = useState<Room | null>(null);
-  const [form, setForm] = useState({ name: "", code: "", capacity: 35, type: "classroom" });
+  const [form, setForm] = useState({
+    name: "",
+    code: "",
+    capacity: 35,
+    type: "classroom",
+    assignedClass: "",
+  });
 
   const { data: rooms = [], isLoading } = useQuery({
     queryKey: QK(sessionId),
@@ -27,17 +44,38 @@ export default function RoomsTab({ sessionId, caps }: { sessionId: string; caps:
     enabled: !!sessionId,
   });
 
+  const { data: classes = [] } = useQuery({
+    queryKey: ["config-classes", sessionId],
+    queryFn: () => fetchClasses(sessionId),
+    enabled: !!sessionId,
+  });
+
+  const assignedClassIds = new Set(
+    rooms
+      .filter((r) => !edit || r._id !== edit._id)
+      .map((r) => assignedClassId(r))
+      .filter(Boolean),
+  );
+
   const { search, setSearch, filtered: roomsFiltered } = usePanelListSearch(rooms, (r) => [
     r.code,
     r.name,
     r.type,
     r.capacity,
+    assignedClassLabel(r),
   ]);
 
   const saveMut = useMutation({
     mutationFn: async () => {
-      if (edit) return updateRoom(edit._id, form);
-      return createRoom({ session: sessionId, ...form });
+      const body = {
+        name: form.name,
+        code: form.code,
+        capacity: form.capacity,
+        type: form.type,
+        assignedClass: form.assignedClass || null,
+      };
+      if (edit) return updateRoom(edit._id, body);
+      return createRoom({ session: sessionId, ...body });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QK(sessionId) });
@@ -62,14 +100,17 @@ export default function RoomsTab({ sessionId, caps }: { sessionId: string; caps:
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-4">
+      <p className="text-sm text-muted-foreground">
+        Assign each room to at most one class. A class can only use its own room on the timetable.
+      </p>
       <div className="flex flex-wrap items-center gap-2 justify-between">
-        <PanelSearchBar value={search} onChange={setSearch} placeholder="Search code, name, type…" className="max-w-md" />
+        <PanelSearchBar value={search} onChange={setSearch} placeholder="Search code, name, class…" className="max-w-md" />
         {caps.canCreate && (
           <Button
             className="gap-2 shrink-0"
             onClick={() => {
               setEdit(null);
-              setForm({ name: "", code: "", capacity: 35, type: "classroom" });
+              setForm({ name: "", code: "", capacity: 35, type: "classroom", assignedClass: "" });
               setOpen(true);
             }}
           >
@@ -84,6 +125,7 @@ export default function RoomsTab({ sessionId, caps }: { sessionId: string; caps:
               <th className="text-left p-3">Code</th>
               <th className="text-left p-3">Name</th>
               <th className="text-left p-3">Type</th>
+              <th className="text-left p-3">Assigned class</th>
               <th className="text-left p-3">Capacity</th>
               {(caps.canEdit || caps.canDelete) && <th className="text-right p-3">Actions</th>}
             </tr>
@@ -91,14 +133,14 @@ export default function RoomsTab({ sessionId, caps }: { sessionId: string; caps:
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={5} className="p-6 text-center text-muted-foreground">
+                <td colSpan={6} className="p-6 text-center text-muted-foreground">
                   Loading…
                 </td>
               </tr>
             )}
             {!isLoading && roomsFiltered.length === 0 && (
               <tr>
-                <td colSpan={5} className="p-6 text-center text-muted-foreground">
+                <td colSpan={6} className="p-6 text-center text-muted-foreground">
                   {rooms.length === 0 ? "No rooms" : "No rooms match your search."}
                 </td>
               </tr>
@@ -108,6 +150,7 @@ export default function RoomsTab({ sessionId, caps }: { sessionId: string; caps:
                 <td className="p-3 font-mono text-xs">{r.code}</td>
                 <td className="p-3 font-medium">{r.name}</td>
                 <td className="p-3 capitalize">{r.type}</td>
+                <td className="p-3">{assignedClassLabel(r)}</td>
                 <td className="p-3">{r.capacity}</td>
                 {(caps.canEdit || caps.canDelete) && (
                   <td className="p-3 text-right space-x-1">
@@ -117,7 +160,13 @@ export default function RoomsTab({ sessionId, caps }: { sessionId: string; caps:
                         size="icon"
                         onClick={() => {
                           setEdit(r);
-                          setForm({ name: r.name, code: r.code, capacity: r.capacity, type: r.type });
+                          setForm({
+                            name: r.name,
+                            code: r.code,
+                            capacity: r.capacity,
+                            type: r.type,
+                            assignedClass: assignedClassId(r),
+                          });
                           setOpen(true);
                         }}
                       >
@@ -172,6 +221,28 @@ export default function RoomsTab({ sessionId, caps }: { sessionId: string; caps:
               </select>
             </div>
             <div>
+              <Label>Assigned class</Label>
+              <select
+                className="w-full h-10 rounded-md border px-3 text-sm"
+                value={form.assignedClass}
+                onChange={(e) => setForm((f) => ({ ...f, assignedClass: e.target.value }))}
+              >
+                <option value="">Not assigned</option>
+                {classes.map((c) => {
+                  const taken = assignedClassIds.has(c._id) && form.assignedClass !== c._id;
+                  return (
+                    <option key={c._id} value={c._id} disabled={taken}>
+                      {classDisplayName(c)}
+                      {taken ? " (already has a room)" : ""}
+                    </option>
+                  );
+                })}
+              </select>
+              <p className="mt-1 text-xs text-muted-foreground">
+                One class per room. Shared halls can stay unassigned.
+              </p>
+            </div>
+            <div>
               <Label>Capacity</Label>
               <Input
                 type="number"
@@ -193,7 +264,3 @@ export default function RoomsTab({ sessionId, caps }: { sessionId: string; caps:
     </div>
   );
 }
-
-
-
-

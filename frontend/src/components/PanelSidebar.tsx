@@ -1,31 +1,42 @@
 import { Link, NavLink, useLocation } from "react-router-dom";
 import {
-  ShieldCheck, Calculator, GraduationCap, Users, LogOut, Home, School, ChevronDown,
+  ShieldCheck,
+  Calculator,
+  GraduationCap,
+  Users,
+  LogOut,
+  Home,
+  School,
+  ChevronDown,
 } from "lucide-react";
 import {
-  Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
-  SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter,
-  SidebarMenuSub, SidebarMenuSubButton, SidebarMenuSubItem, SidebarSeparator,
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarHeader,
+  SidebarFooter,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
+  SidebarSeparator,
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Role, SessionUser, logout, panelPathFor } from "@/lib/auth";
-import { buildGroupedMenu, moduleHref, type MenuItem } from "@/lib/panelMenus";
-import {
-  SYSTEM_CONFIG_SIDEBAR_GROUPS,
-  systemConfigHref,
-  type SystemConfigSection,
-} from "@/lib/systemConfigMenus";
-import {
-  STUDENT_MANAGEMENT_SIDEBAR_GROUPS,
-  studentManagementHref,
-  type StudentManagementSection,
-} from "@/lib/studentManagementMenus";
-import { TEST_EXAMS_SECTIONS, testExamsHref } from "@/lib/testExamsMenus";
-import { getTimetableSections, timetableHref } from "@/lib/timetableMenus";
 import { usePermissions } from "@/hooks/usePermissions";
-import { applyBackendModulePermissions, resolveModuleCaps, type ModuleKey } from "@/lib/permissions";
-import type { SidebarSubmenuGroup } from "@/lib/sidebarSubmenu";
+import { applyBackendModulePermissions, resolveModuleCaps } from "@/lib/permissions";
+import {
+  SIDEBAR_NAV,
+  groupIsOpen,
+  navItemIsActive,
+  type SidebarNavGroup,
+  type SidebarNavItem,
+} from "@/lib/sidebarNav";
 import { cn } from "@/lib/utils";
 import logo from "@/assets/logo.png";
 
@@ -37,15 +48,6 @@ const roleHeader: Record<Role, { title: string; Icon: React.ComponentType<{ clas
   student: { title: "Student", Icon: School },
 };
 
-const COLLAPSIBLE_MODULE_KEYS = new Set<ModuleKey>([
-  "system-config",
-  "student-management",
-  "timetable",
-  "exams",
-]);
-
-type SubmenuSection = { key: string; label: string; icon: React.ComponentType<{ className?: string }> };
-
 const PanelSidebar = ({ user }: { user: SessionUser }) => {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
@@ -54,144 +56,80 @@ const PanelSidebar = ({ user }: { user: SessionUser }) => {
   const HeadIcon = head.Icon;
   const { perms } = usePermissions();
   const rolePerms = applyBackendModulePermissions(perms[user.role], user.modulePermissions);
-  const groups = buildGroupedMenu(rolePerms, user.modulePermissions);
   const rootPath = panelPathFor(user.role);
-  const systemConfigBase = `/panel/${user.role}/system-config`;
-  const systemConfigOpen = pathname.startsWith(systemConfigBase);
-  const studentMgmtBase = `/panel/${user.role}/student-management`;
-  const studentMgmtOpen = pathname.startsWith(studentMgmtBase);
-  const timetableBase = `/panel/${user.role}/timetable`;
-  const timetableOpen = pathname.startsWith(timetableBase);
-  const testExamsBase = `/panel/${user.role}/exams`;
-  const testExamsOpen = pathname.startsWith(testExamsBase);
-  const timetableCaps = resolveModuleCaps("timetable", rolePerms.timetable, user.modulePermissions);
-  const timetableSections = getTimetableSections({ caps: timetableCaps, role: user.role });
 
-  const collapsibleTriggerClass =
-    "!h-8 min-h-8 py-1.5 items-center overflow-hidden [&>span]:truncate [&>span]:text-sm";
+  const canView = (item: SidebarNavItem) => {
+    if (item.moduleKey === "dashboard") return true;
+    const caps = resolveModuleCaps(item.moduleKey, rolePerms[item.moduleKey], user.modulePermissions);
+    if (!caps.canView) return false;
+    if (item.requireManage && !(caps.canEdit || caps.canCreate)) return false;
+    // My Schedule is mainly for teachers (and managers who teach)
+    if (item.id === "my-schedule" && user.role !== "teacher" && !(caps.canEdit || caps.canCreate)) {
+      return false;
+    }
+    return true;
+  };
 
-  const isSubActive = (
-    subHref: string,
-    subKey: string,
-    moduleKey: ModuleKey,
-  ) =>
-    pathname === subHref ||
-    pathname.startsWith(`${subHref}/`) ||
-    (moduleKey === "exams" &&
-      subKey === "enter-tests" &&
-      /^\/panel\/[^/]+\/exams\/enter-tests\/[a-f0-9]{24}/i.test(pathname));
+  const visibleGroups = SIDEBAR_NAV.map((group) => ({
+    ...group,
+    items: group.items.filter(canView),
+  })).filter((group) => group.items.length > 0);
 
-  const renderSubmenuItems = (
-    sections: SubmenuSection[],
-    hrefFor: (role: Role, key: string) => string,
-    moduleKey: ModuleKey,
-  ) =>
-    sections.map((sub) => {
-      const subHref = hrefFor(user.role, sub.key);
-      const SubIcon = sub.icon;
+  const renderLink = (item: SidebarNavItem, compact = false) => {
+    const href = item.href(user.role);
+    const active = navItemIsActive(item, pathname, user.role);
+    const Icon = item.icon;
+    if (compact) {
       return (
-        <SidebarMenuSubItem key={sub.key}>
-          <SidebarMenuSubButton asChild isActive={isSubActive(subHref, sub.key, moduleKey)} className="h-7 text-xs">
-            <NavLink to={subHref}>
-              <SubIcon className="h-3.5 w-3.5" />
-              <span>{sub.label}</span>
+        <SidebarMenuSubItem key={item.id}>
+          <SidebarMenuSubButton asChild isActive={active} className="h-7 text-xs">
+            <NavLink to={href} end={item.id === "dashboard"}>
+              <Icon className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{item.label}</span>
             </NavLink>
           </SidebarMenuSubButton>
         </SidebarMenuSubItem>
       );
-    });
-
-  const renderGroupedSubmenu = (
-    submenuGroups: SidebarSubmenuGroup<string>[],
-    hrefFor: (role: Role, key: string) => string,
-    moduleKey: ModuleKey,
-  ) =>
-    submenuGroups.map((group, groupIndex) => (
-      <div key={group.label} className={groupIndex > 0 ? "mt-2 pt-2 border-t border-sidebar-border/60" : ""}>
-        <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/45">
-          {group.label}
-        </div>
-        {renderSubmenuItems(group.items, hrefFor, moduleKey)}
-      </div>
-    ));
-
-  const renderCollapsibleModule = (m: MenuItem) => {
-    const isSystemConfig = m.key === "system-config";
-    const isStudentMgmt = m.key === "student-management";
-    const isTestExams = m.key === "exams";
-    const open = isSystemConfig
-      ? systemConfigOpen
-      : isStudentMgmt
-        ? studentMgmtOpen
-        : isTestExams
-          ? testExamsOpen
-          : timetableOpen;
-
-    const hrefFor = isSystemConfig
-      ? (role: Role, key: string) => systemConfigHref(role, key as SystemConfigSection)
-      : isStudentMgmt
-        ? (role: Role, key: string) => studentManagementHref(role, key as StudentManagementSection)
-        : isTestExams
-          ? testExamsHref
-          : timetableHref;
-
-    const submenuBody = isSystemConfig
-      ? renderGroupedSubmenu(SYSTEM_CONFIG_SIDEBAR_GROUPS, hrefFor, m.key)
-      : isStudentMgmt
-        ? renderGroupedSubmenu(STUDENT_MANAGEMENT_SIDEBAR_GROUPS, hrefFor, m.key)
-        : renderSubmenuItems(
-            isTestExams ? TEST_EXAMS_SECTIONS : timetableSections,
-            hrefFor,
-            m.key,
-          );
-
+    }
     return (
-      <Collapsible key={m.key} defaultOpen={open} className="group/collapsible">
+      <SidebarMenuItem key={item.id}>
+        <SidebarMenuButton asChild isActive={active} tooltip={item.label} className="h-8">
+          <NavLink to={href} end={item.id === "dashboard"}>
+            <Icon className="h-4 w-4 shrink-0" />
+            <span className="text-sm truncate">{item.label}</span>
+          </NavLink>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    );
+  };
+
+  const renderCollapsibleGroup = (group: SidebarNavGroup) => {
+    const routeOpen = groupIsOpen(group, pathname, user.role);
+    const GroupIcon = group.icon;
+    return (
+      <Collapsible key={group.id} defaultOpen={routeOpen} className="group/collapsible">
         <SidebarMenuItem>
           <CollapsibleTrigger asChild>
             <SidebarMenuButton
-              tooltip={m.label}
-              isActive={open}
+              tooltip={group.label}
+              isActive={routeOpen}
               className={cn(
-                collapsibleTriggerClass,
+                "!h-8 min-h-8 py-1.5 items-center overflow-hidden [&>span]:truncate [&>span]:text-sm",
                 "group-data-[state=open]/collapsible:bg-sidebar-accent/50",
               )}
             >
-              <m.Icon className="h-4 w-4 shrink-0" />
-              <span>{m.shortLabel ?? m.label}</span>
+              <GroupIcon className="h-4 w-4 shrink-0" />
+              <span>{group.label}</span>
               <ChevronDown className="ml-auto h-3.5 w-3.5 shrink-0 transition-transform group-data-[state=open]/collapsible:rotate-180" />
             </SidebarMenuButton>
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <SidebarMenuSub className="mx-0 border-l border-sidebar-border pl-2 py-1">
-              {submenuBody}
+            <SidebarMenuSub className="mx-0 ml-2 border-l border-sidebar-border pl-2.5 py-1 gap-0.5">
+              {group.items.map((item) => renderLink(item, true))}
             </SidebarMenuSub>
           </CollapsibleContent>
         </SidebarMenuItem>
       </Collapsible>
-    );
-  };
-
-  const renderFlatModule = (m: MenuItem) => {
-    const href = moduleHref(
-      user.role,
-      m.key,
-      m.key === "timetable" ? { caps: timetableCaps } : undefined,
-    );
-    const active =
-      m.key === "dashboard"
-        ? pathname === rootPath
-        : pathname === href || pathname.startsWith(`${href}/`);
-
-    return (
-      <SidebarMenuItem key={m.key}>
-        <SidebarMenuButton asChild isActive={active} tooltip={m.label} className="h-8">
-          <NavLink to={href} end={m.key === "dashboard"}>
-            <m.Icon className="h-4 w-4" />
-            <span className="text-sm">{m.shortLabel ?? m.label}</span>
-          </NavLink>
-        </SidebarMenuButton>
-      </SidebarMenuItem>
     );
   };
 
@@ -203,27 +141,29 @@ const PanelSidebar = ({ user }: { user: SessionUser }) => {
           {!collapsed && (
             <div className="leading-tight min-w-0">
               <div className="font-display text-sm font-bold truncate">The Concept Academy</div>
-              <div className="text-[10px] uppercase tracking-wide text-sidebar-foreground/60 truncate">{head.title}</div>
+              <div className="text-[10px] uppercase tracking-wide text-sidebar-foreground/60 truncate">
+                {head.title}
+              </div>
             </div>
           )}
         </Link>
       </SidebarHeader>
 
       <SidebarContent className="gap-0 py-1">
-        {groups.map((group, index) => (
+        {visibleGroups.map((group, index) => (
           <div key={group.id}>
             {index > 0 && <SidebarSeparator className="mx-2 my-1" />}
             <SidebarGroup className="p-1">
-              <SidebarGroupLabel className="h-6 px-2 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/55">
-                {group.label}
-              </SidebarGroupLabel>
+              {!group.collapsible && group.id !== "dashboard" && (
+                <SidebarGroupLabel className="h-6 px-2 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/55">
+                  {group.label}
+                </SidebarGroupLabel>
+              )}
               <SidebarGroupContent>
                 <SidebarMenu className="gap-0.5">
-                  {group.items.map((m) =>
-                    COLLAPSIBLE_MODULE_KEYS.has(m.key)
-                      ? renderCollapsibleModule(m)
-                      : renderFlatModule(m),
-                  )}
+                  {group.collapsible
+                    ? renderCollapsibleGroup(group)
+                    : group.items.map((item) => renderLink(item, false))}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
@@ -239,12 +179,16 @@ const PanelSidebar = ({ user }: { user: SessionUser }) => {
             <SidebarMenu className="gap-0.5">
               <SidebarMenuItem>
                 <SidebarMenuButton asChild tooltip="Back to website" className="h-8">
-                  <Link to="/"><Home className="h-4 w-4" /><span className="text-sm">Website</span></Link>
+                  <Link to="/">
+                    <Home className="h-4 w-4" />
+                    <span className="text-sm">Website</span>
+                  </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton onClick={() => void logout()} tooltip="Sign out" className="h-8">
-                  <LogOut className="h-4 w-4" /><span className="text-sm">Sign out</span>
+                  <LogOut className="h-4 w-4" />
+                  <span className="text-sm">Sign out</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>

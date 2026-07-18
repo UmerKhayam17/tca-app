@@ -107,22 +107,27 @@ export const MODULES: ModuleDef[] = [
   { key: "settings", label: "Settings", icon: "Settings", desc: "Account summary", showInNav: false },
 ];
 
-/** Sidebar groups — top-level structure shown in the panel sidebar. */
+/** Dashboard tile groups (sidebar uses `sidebarNav.ts`). */
 export const SIDEBAR_NAV_GROUPS: { id: string; label: string; modules: ModuleKey[] }[] = [
-  { id: "overview", label: "Overview", modules: ["dashboard"] },
+  { id: "overview", label: "Dashboard", modules: ["dashboard"] },
   {
-    id: "setup",
-    label: "School setup",
-    modules: ["system-config", "student-management"],
+    id: "academic-setup",
+    label: "Academic Setup",
+    modules: ["system-config", "student-management", "timetable"],
   },
   {
-    id: "academics",
-    label: "Teaching & students",
-    modules: ["students", "attendance", "timetable", "exams"],
+    id: "student-management",
+    label: "Student Management",
+    modules: ["students", "attendance"],
+  },
+  {
+    id: "teaching",
+    label: "Teaching",
+    modules: ["exams"],
   },
   { id: "finance", label: "Finance", modules: ["fees", "salary", "expenses"] },
   { id: "communication", label: "Communication", modules: ["chat", "announcements"] },
-  { id: "resources", label: "Reports & data", modules: ["reports", "datasheets"] },
+  { id: "reports", label: "Reports", modules: ["reports", "datasheets"] },
   {
     id: "administration",
     label: "Administration",

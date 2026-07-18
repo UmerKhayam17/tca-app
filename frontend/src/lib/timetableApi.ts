@@ -54,6 +54,7 @@ export interface Room {
   code: string;
   capacity: number;
   type: string;
+  assignedClass?: { _id: string; className?: string; name?: string } | string | null;
   equipment?: string[];
   isActive: boolean;
 }
@@ -156,10 +157,13 @@ export const createRoom = (body: {
   code: string;
   capacity?: number;
   type?: string;
+  assignedClass?: string | null;
 }) => api<Room>("/setup/rooms", { method: "POST", body: JSON.stringify(body) });
 
-export const updateRoom = (id: string, body: Partial<Room>) =>
-  api<Room>(`/setup/rooms/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+export const updateRoom = (
+  id: string,
+  body: Partial<Omit<Room, "assignedClass">> & { assignedClass?: string | null },
+) => api<Room>(`/setup/rooms/${id}`, { method: "PATCH", body: JSON.stringify(body) });
 
 export const deleteRoom = (id: string) =>
   api<{ deleted: boolean }>(`/setup/rooms/${id}`, { method: "DELETE" });

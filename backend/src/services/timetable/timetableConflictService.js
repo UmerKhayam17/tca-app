@@ -94,8 +94,22 @@ async function validateSlot({
     });
   }
 
-  // R2: Room conflict
+  // R2: Room conflict + exclusive class assignment
   if (roomId) {
+    const Room = require('../../models/timetable/Room');
+    const roomDoc = await Room.findById(roomId).select('assignedClass name code isActive');
+    if (!roomDoc || roomDoc.isActive === false) {
+      errors.push({ code: 'INVALID_ROOM', message: 'Room not found or inactive' });
+    } else if (roomDoc.assignedClass) {
+      const versionClassId = version.class?._id || version.class;
+      if (String(roomDoc.assignedClass) !== String(versionClassId)) {
+        errors.push({
+          code: 'ROOM_CLASS_MISMATCH',
+          message: `Room ${roomDoc.code || roomDoc.name} is reserved for another class`,
+        });
+      }
+    }
+
     const roomConflictQuery = {
       ...baseQuery,
       session: sessionId,

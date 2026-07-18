@@ -29,6 +29,7 @@ const roomBody = Joi.object({
   code: Joi.string().required().trim(),
   capacity: Joi.number().integer().min(1),
   type: Joi.string().valid(...ROOM_TYPES),
+  assignedClass: objectId.allow(null),
   equipment: Joi.array().items(Joi.string().trim()),
   isActive: Joi.boolean(),
 });

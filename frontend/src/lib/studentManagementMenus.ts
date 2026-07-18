@@ -26,8 +26,9 @@ export const STUDENT_MANAGEMENT_SECTIONS: {
 ];
 
 export const STUDENT_MANAGEMENT_SIDEBAR_GROUPS = buildSidebarSubmenuGroups(STUDENT_MANAGEMENT_SECTIONS, [
-  { label: "1. Structure", keys: ["classes", "sections", "subjects", "fees-structure"] },
+  { label: "1. Structure", keys: ["classes", "sections", "subjects"] },
   { label: "2. Enrollment", keys: ["registration"] },
+  { label: "3. Fees", keys: ["fees-structure"] },
 ]);
 
 export const DEFAULT_STUDENT_MANAGEMENT_SECTION: StudentManagementSection = "classes";
